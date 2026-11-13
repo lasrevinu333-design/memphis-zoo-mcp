@@ -1,0 +1,34 @@
+{
+  "schema": "custodial.ci-fresh-only-exact-source-successor.v1",
+  "scope": "DISPOSABLE_CONSTRUCTION_ONLY_NOT_VENDOR_NORMAL_OR_PRODUCTION_ADMISSION",
+  "predecessor_manifest": {
+    "path": "release/fresh-only-replay/MANIFEST.json",
+    "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 297,
+    "overrides": 22
+  },
+  "source_migrations": 298,
+  "replay_manifest": {
+    "path": "supabase/canonical/migration-replay-order.json",
+    "sha256": "aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba",
+    "bytes": 56565
+  },
+  "append": {
+    "name": "20261028224728_full_scheduled_lunch_source_policy.sql",
+    "original": {
+      "path": "supabase/migrations/20261028224728_full_scheduled_lunch_source_policy.sql",
+      "sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514",
+      "bytes": 30019
+    },
+    "selected": {
+      "path": "supabase/migrations/20261028224728_full_scheduled_lunch_source_policy.sql",
+      "sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514",
+      "bytes": 30019
+    },
+    "atomic_mode": "exact-Source-BEGIN-COMMIT"
+  },
+  "observed_empty_source_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
+  "source_capture_scope": "Declared eleven-function-only successor measured through the maintained predecessor constructor; populated target capture and runtime qualification remain separate",
+  "full_vendor_NORMAL": false,
+  "expected_fingerprint_authority": null
+}

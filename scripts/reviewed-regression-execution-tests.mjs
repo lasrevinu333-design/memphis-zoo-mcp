@@ -1,3 +1,4 @@
+import {currentFoundationReviewedRegressionView} from './fixtures/current-foundation-source-successor.mjs';
 // Executes the actual direct-Node launcher/hash/shell against synthetic fixtures.
 // NOT HTTP, Docker, DB or hosted proof: those require separate actual-suite runs.
 import assert from 'node:assert/strict';
@@ -9,14 +10,15 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const owned=mkdtempSync(join(tmpdir(),'mz-reviewed-ci-boundary-'));
-const pinnedBin='/opt/hostedtoolcache/node/22.23.1/x64/bin';
+const pinnedBin='/opt/hostedtoolcache/node/22.23.4/x64/bin';
 const entries=['scripts/legacy-activation-http-tests.mjs','scripts/release-pair-consumer-regression-tests.mjs','scripts/run-isolated-release-recorder-tests.mjs'];
 const hash=b=>createHash('sha256').update(b).digest('hex');
 let checks=0;
 console.log(JSON.stringify({owned,cleanup:'remove exact temporary fixture in finally',production:false}));
 try {
  for(const name of ['foundation-security-gate.yml','custodial-production-repair.yml']){
-  const source=readFileSync(join(root,'.github/workflows',name),'utf8');
+  const actualSource=readFileSync(join(root,'.github/workflows',name),'utf8');
+  const source=name==='foundation-security-gate.yml'?currentFoundationReviewedRegressionView(actualSource):actualSource;
   const step=source.match(/^      - name: Reviewed phone, pair, and isolated recorder regressions\n([\s\S]*?)(?=^      - )/m)?.[1];assert.ok(step);
   const shell=step.match(/^        shell: (.+)$/m)[1];
   assert.ok(shell.startsWith('/usr/bin/env -i HOME=/home/runner PATH='+pinnedBin+':/usr/bin:/bin '));

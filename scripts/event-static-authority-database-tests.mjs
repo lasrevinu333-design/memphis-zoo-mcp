@@ -117,6 +117,36 @@ sql(`insert into public.device_auth_credentials(credential_id,device_id,token_ha
   insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash)
   select ${q(randomUUID())}::uuid,id,${q(credentialId)}::uuid,assigned_employee_id,assignment_epoch,'android',${q(`synthetic-event-token-${stamp}`)},repeat('f',64)
   from public.devices where id=${q(pushDeviceId)}::uuid;`);
+// The manager preview must use the same accepted static-weekly projection as
+// actual reminders, including phone registration, without creating a job or
+// revising the event/schedule merely by looking. Use the real compiled owner,
+// not an expected-recipient stub or an ungoverned legacy assignment.
+function impactState() {
+  return JSON.parse(sql(`select jsonb_build_object(
+    'event_revision',(select revision from public.events_app_events where id=${q(event)}::uuid),
+    'schedule_revision',(select current_revision from public.static_weekly_schedule_control where singleton),
+    'push_instances',(select count(*) from public.event_push_instances),
+    'jobs',(select count(*) from public.operational_notification_jobs))::text;`));
+}
+function impact() {
+  const before = impactState();
+  const result = JSON.parse(sql(`select public.mz_preview_event_impact(to_jsonb(e),
+    ${q(managerId)}::uuid,e.id,e.revision)::text from public.events_app_events e
+    where e.id=${q(event)}::uuid;`));
+  assert.deepEqual(impactState(), before, "impact preview cannot revise event/schedule or enqueue notifications");
+  assert.equal(result.schedule_mutation, false);
+  return result;
+}
+const beforeAbsenceImpact = impact();
+record("manager_impact_previews_nonzero_compiled_recipient", beforeAbsenceImpact.recipient_count, 1);
+const shiftPreview = beforeAbsenceImpact.recipients.find((row) => row.employee_id === owner.id
+  && row.notification_kind === "shift_plus_15");
+assert.ok(shiftPreview, "actual compiled working owner must appear in manager preview");
+record("manager_impact_shows_registered_phone", shiftPreview.registered_phone_count, 1);
+record("manager_impact_matches_actual_reminder_schedule", shiftPreview.scheduled_for,
+  sql(`select to_jsonb(s.scheduled_for)::text from public.events_app_events e
+    cross join lateral public.mz_event_reminder_schedule(e.id,e.revision,${q(owner.id)}::uuid,'shift_plus_15') s
+    where e.id=${q(event)}::uuid;`).replace(/^"|"$/g,""));
 const enqueue = () => JSON.parse(sql(`select public.mz_enqueue_employee_event_pushes((${q(serviceDate)}::date+time '00:00') at time zone 'America/Chicago')::text;`));
 assert.equal(enqueue().ok, true);
 record("enqueue_creates_current_canonical_candidate", sql(`select count(*) from public.event_push_instances
@@ -136,6 +166,7 @@ async function reverse(change) {
 }
 const pto = await accepted("pto", owner);
 record("accepted_full_pto_is_ineligible", schedule(event, owner.id), []);
+record("accepted_pto_removes_manager_preview_recipient", impact().recipient_count, 0);
 assert.equal(enqueue().ok, true);
 record("enqueue_cancels_prior_candidate_after_accepted_pto", sql(`select count(*) from public.event_push_instances i
   join public.operational_notification_jobs j on j.source_id=i.instance_id and j.job_type='employee_event_push'
@@ -143,6 +174,7 @@ record("enqueue_cancels_prior_candidate_after_accepted_pto", sql(`select count(*
     and i.notification_kind='shift_plus_15' and i.state='cancelled' and j.status='dead';`), "1");
 await reverse(pto);
 record("reversed_pto_restores_canonical_eligibility", schedule(event, owner.id), at("07:15:00"));
+record("reversed_pto_restores_manager_preview_recipient", impact().recipient_count, 1);
 assert.equal(enqueue().ok, true);
 record("enqueue_restores_unclaimed_candidate_only_after_canonical_reversal", sql(`select count(*) from public.event_push_instances i
   join public.operational_notification_jobs j on j.source_id=i.instance_id and j.job_type='employee_event_push'
@@ -223,6 +255,7 @@ record("old_incumbent_never_inherits_replacement_eligibility", schedule(event, o
 // transaction; no official receipt, projection, or trigger is changed.
 const currentProjection = fixture.projectionIds[weekStart];
 const currentEnvelope = JSON.parse(sql(`select projection_envelope::text from public.weekly_schedule_compiled_projections where projection_id=${q(currentProjection)}::uuid;`));
+console.log(JSON.stringify({ fixture_projection_envelope_utf8_bytes: Buffer.byteLength(JSON.stringify(currentEnvelope), "utf8") }));
 function challengeEnvelope(name, mutate) {
   const envelope = structuredClone(currentEnvelope);
   const entries = envelope.authority.projectionAvailability;
@@ -231,16 +264,26 @@ function challengeEnvelope(name, mutate) {
   mutate(entry, envelope);
   const projectionId = randomUUID(), commandId = randomUUID();
   const result = JSON.parse(sql(`begin;
-    insert into public.weekly_schedule_compiled_projections
-    select (jsonb_populate_record(null::public.weekly_schedule_compiled_projections,to_jsonb(p)||jsonb_build_object(
-      'projection_id',${q(projectionId)},'authority_digest',public.static_weekly_digest_jsonb(${q(JSON.stringify(envelope))}::jsonb),
-      'projection_envelope',${q(JSON.stringify(envelope))}::jsonb))).*
-    from public.weekly_schedule_compiled_projections p where projection_id=${q(currentProjection)}::uuid;
-    insert into public.weekly_schedule_command_receipts
-    select (jsonb_populate_record(null::public.weekly_schedule_command_receipts,to_jsonb(r)||jsonb_build_object(
-      'command_id',${q(commandId)},'idempotency_key',${q(`hostile-${name}-${stamp}`)},
-      'response_json',jsonb_build_object('revision',(select max((response_json->>'revision')::bigint)+1 from public.weekly_schedule_command_receipts),
-        'data',jsonb_build_object('projection_id',${q(projectionId)}))))).*
+    with hostile_envelope as materialized (select ${q(JSON.stringify(envelope))}::jsonb as value)
+    insert into public.weekly_schedule_compiled_projections (
+      projection_id, publication_id, version_id, week_start, week_end, exception_set_json,
+      exception_set_digest, compiler_version, objective_json, metrics_json, replay_digest,
+      authority_digest, receipt_json, projection_envelope, compiled_by_manager_id, compiled_at)
+    select ${q(projectionId)}::uuid, p.publication_id, p.version_id, p.week_start, p.week_end,
+      p.exception_set_json, p.exception_set_digest, p.compiler_version, p.objective_json,
+      p.metrics_json, p.replay_digest, public.static_weekly_digest_jsonb(h.value), p.receipt_json,
+      h.value, p.compiled_by_manager_id, p.compiled_at
+    from public.weekly_schedule_compiled_projections p cross join hostile_envelope h
+    where p.projection_id=${q(currentProjection)}::uuid;
+    insert into public.weekly_schedule_command_receipts (
+      command_id, actor_manager_id, actor_manager_name_snapshot, command_type, idempotency_key,
+      expected_revision, request_digest, request_canonical_json, response_json, response_digest,
+      content_digest, accepted_at)
+    select ${q(commandId)}::uuid, r.actor_manager_id, r.actor_manager_name_snapshot, r.command_type,
+      ${q(`hostile-${name}-${stamp}`)}, r.expected_revision, r.request_digest, r.request_canonical_json,
+      jsonb_build_object('revision',(select max((response_json->>'revision')::bigint)+1 from public.weekly_schedule_command_receipts),
+        'data',jsonb_build_object('projection_id',${q(projectionId)})),
+      r.response_digest, r.content_digest, r.accepted_at
     from public.weekly_schedule_command_receipts r where command_type='materialize_projection'
       and response_json#>>'{data,projection_id}'=${q(currentProjection)} limit 1;
     select jsonb_build_object('selected_current',exists(select 1 from public.static_weekly_v6_schedule_authority_state(${q(serviceDate)}::date)

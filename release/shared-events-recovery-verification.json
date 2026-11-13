@@ -1,0 +1,23 @@
+{
+  "recorded_at": "2026-10-06T16:25:11.464340+00:00",
+  "migration_version": "20261006162427",
+  "migration_name": "custodial_shared_events_recovery_binding",
+  "source_filename": "20261006162427_custodial_shared_events_recovery_binding.sql",
+  "sql_sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537",
+  "production_applied": true,
+  "production_readback_matching_objects": 8,
+  "inventory_immutability_guard": "enabled",
+  "writer_anonymous_and_authenticated_execute": false,
+  "source_schema_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
+  "schema_catalog_changed": false,
+  "application_rows_changed": false,
+  "unrelated_inventory_preserved": true,
+  "tests": {
+    "complete_133_migration_rebuild": true,
+    "original_canary_recovery": true,
+    "original_final_uncertainty_closure": true,
+    "new_events_recovery_cases": 10,
+    "complete_local_suite_exit": 0
+  },
+  "limitations": "Destructive Events recovery probes run in rollback-only transactions and verify logical definitions, not persistent physical column-ordinal preservation. No application deployment or live sign-in is claimed."
+}

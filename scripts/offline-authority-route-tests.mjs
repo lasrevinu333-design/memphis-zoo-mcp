@@ -56,4 +56,28 @@ assert.equal(malformedDevice.body.outcome, "quarantined");
 assert.equal(malformedManager.status, 422);
 assert.equal(malformedManager.body.ok, false);
 assert.equal(malformedManager.body.outcome, "rejected");
+for (const [data, expectedStatus, expectedOutcome] of [
+  [{ status: "quarantined", committable: true, terminal: true }, 422, "quarantined"],
+  [{ status: "quarantined", committable: true, terminal: true, replayed: true, reason: "payload_fingerprint_conflict" }, 409, "changed_content"],
+  [{ status: "active", committable: true, terminal: true }, 422, "quarantined"],
+  [{ status: "active", committable: true, automatic_replay_fenced: true }, 422, "fenced"],
+  [{ status: "cancelled", committable: true, terminal: true }, 422, "quarantined"],
+]) {
+  for (const fn of ["tool_start_offline_occurrence", "tool_complete_session", "tool_commit_cleaning_workflow"]) {
+    const failed = scanRpcHttpOutcome(fn, data);
+    assert.equal(failed.status, expectedStatus, `${fn} must not accept a contradictory committable result`);
+    assert.equal(failed.body.ok, false);
+    assert.equal(failed.body.outcome, expectedOutcome);
+    assert.deepEqual(failed.body.data, data, "retain the exact domain evidence for recovery");
+  }
+}
+const validActivation = scanRpcHttpOutcome("tool_start_offline_occurrence", { status: "active", committable: true });
+assert.equal(validActivation.status, 200);
+assert.equal(validActivation.body.ok, true);
+const canonicalActivation = scanRpcHttpOutcome("tool_start_offline_occurrence", { context_id: "synthetic-context", client_session_id: "synthetic-session", committable: true, replayed: false });
+assert.equal(canonicalActivation.status, 200, "the canonical committable activation shape does not require a new status field");
+assert.equal(canonicalActivation.body.ok, true);
+const retainedClosedReplay = scanRpcHttpOutcome("tool_commit_cleaning_workflow", { status: "closed", terminal: true, automatic_replay_fenced: true, replayed: true });
+assert.equal(retainedClosedReplay.status, 200, "an exact already-closed replay retains its existing classification");
+assert.equal(retainedClosedReplay.body.outcome, "replayed");
 console.log("OFFLINE_AUTHORITY_ROUTE_STATUS_PASS");

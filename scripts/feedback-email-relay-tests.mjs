@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {advertisedInputSchema} from '../src/mcp/advertised-schema.js';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
@@ -108,12 +109,12 @@ for(const tool of privateTools){
   assert.equal(tool.inputSchema.additionalProperties,false,'wire schemas reject unknown fields');
   assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['mcp:read','mcp:write']}]);
   // SDK emits draft-7; the reviewed digest/catalog uses Zod's default draft.
-  // Compare against the owning schema in the exact SDK dialect, not by dropping
-  // tuple or other validation fields from the comparison.
+  // Compare the exact descriptor projection; the original command schema and
+  // digest stay unchanged. Separate regressions reject extra recipients.
   const {$schema:wireDraft,...wireSchema}=tool.inputSchema;
   const {$schema:expectedDraft,...expectedSchema}=z.toJSONSchema(
     feedbackRelaySchemas[tool.name.slice('custodial_feedback_relay_'.length)],{target:'draft-7'});
-  assert.deepEqual(wireSchema,expectedSchema);
+  assert.deepEqual(wireSchema,advertisedInputSchema(expectedSchema));
 }
 const manifestHandler=live._registeredTools.server_tool_manifest.handler;
 assert.equal((await manifestHandler({include_planned:false},{})).isError,true);

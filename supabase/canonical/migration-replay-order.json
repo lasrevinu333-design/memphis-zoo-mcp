@@ -1192,9 +1192,117 @@
         {
           "name": "20261026065000_location_scan_state_qualified_lookup.sql",
           "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
+        },
+        {
+          "name": "20261027230000_accepted_actual_lunch_windows.sql",
+          "sha256": "55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b"
+        },
+        {
+          "name": "20261027231000_canonical_coverall_capacity_links.sql",
+          "sha256": "c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903"
+        },
+        {
+          "name": "20261027234814_mcp_oauth_durable_token_families.sql",
+          "sha256": "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
+        },
+        {
+          "name": "20261028224728_full_scheduled_lunch_source_policy.sql",
+          "sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514"
+        },
+        {
+          "name": "20261030031200_approved_manual_full_hour_coverers.sql",
+          "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+        },
+        {
+          "name": "20261030050235_compact_approved_initial_confirmation.sql",
+          "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
+        },
+        {
+          "name": "20261030155202_approved_manual_current_day_activation.sql",
+          "sha256": "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492"
+        },
+        {
+          "name": "20261031125902_approved_manual_native_operations.sql",
+          "sha256": "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d"
+        },
+        {
+          "name": "20261031180631_cohort_ticket_transaction_context.sql",
+          "sha256": "063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b"
+        },
+        {
+          "name": "20261031225210_custodial_sealed_repairs_current_eight.sql",
+          "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73"
+        },
+        {
+          "name": "20261101034931_custodial_completion_evidence_cohort_read.sql",
+          "sha256": "99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630"
+        },
+        {
+          "name": "20261101044239_custodial_cohort_places_feedback.sql",
+          "sha256": "d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78"
+        },
+        {
+          "name": "20261102000000_unfinished_work_owner_attention.sql",
+          "sha256": "e8fb1bb569b653a53b05f52944a14ab232e5e0542eaeec30173a9194fd6ca835"
+        },
+        {
+          "name": "20261102010000_local_retained_enrollment_partition.sql",
+          "sha256": "83f817a25ffe468c715323cf71f62a0c65cbe5a2fe68fde9d75903b55678a4d1"
+        },
+        {
+          "name": "20261102151842_current_source_recovery_binding.sql",
+          "sha256": "999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a"
+        },
+        {
+          "name": "20261102161602_current_recovery_column_order.sql",
+          "sha256": "067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665"
+        },
+        {
+          "name": "20261103004520_authoritative_events_cancellation.sql",
+          "sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b"
         }
       ]
     }
   ],
-  "integration_base_source_commit": "6b6caecff2f8a6b182f570e84d96e6876c6fdbc9"
+  "integration_base_source_commit": "6b6caecff2f8a6b182f570e84d96e6876c6fdbc9",
+  "solo_audit_repair_append": {
+    "previous_migration_count": 304,
+    "previous_replay_manifest_sha256": "abba683ec10c75fb3ab585e8a12351a410438bd24822569d3f3671c9ae6fa751",
+    "previous_rows_unchanged": true,
+    "appended": [
+      {
+        "name": "20261101034931_custodial_completion_evidence_cohort_read.sql",
+        "sha256": "99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630"
+      },
+      {
+        "name": "20261101044239_custodial_cohort_places_feedback.sql",
+        "sha256": "d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78"
+      }
+    ],
+    "scope": "Source reconstruction order only; no applied, canonical fingerprint, release or production admission claim"
+  },
+  "current_qualification_append": {
+    "previous_migration_count": 308,
+    "previous_replay_manifest_sha256": "6037f9ef923c4173e0f5287ff4036d248c4afc18e5a130f380a413139e7a456b",
+    "previous_rows_unchanged": true,
+    "appended": [
+      {
+        "name": "20261102151842_current_source_recovery_binding.sql",
+        "sha256": "999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a"
+      }
+    ],
+    "scope": "Additive current local recovery binding; production execution remains unauthorized"
+  },
+  "current_column_order_qualification_append": {
+    "previous_migration_count": 309,
+    "previous_replay_manifest_sha256": "2e1c3938fa129063dc836839449e1d9769fa4a1fcf8078c867296e00bf9ebd0f",
+    "previous_rows_unchanged": true,
+    "appended": [
+      {
+        "name": "20261102161602_current_recovery_column_order.sql",
+        "sha256": "067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665"
+      }
+    ],
+    "scope": "Additive R008 exact column order recovery repair; local qualification only; no production admission"
+  }
 }

@@ -1,0 +1,18 @@
+{
+  "schema": "custodial.pending-diagnostic-sql-repair.v1",
+  "status": "SOURCE_PARITY_QUALIFIED_PENDING_EXACT_RUNTIME_AND_OWNER_APPLY",
+  "sql_sha256": "391cfe0020981837a3cb06d3374179f3cc7b7f6b2b10430343d00a102cfe2c60",
+  "function_count": 3,
+  "global_digest_helpers_changed": false,
+  "lunch_validator_closure_changed": false,
+  "runtime_transaction_deadline_changed": false,
+  "historical_migration_replay_changed": false,
+  "applied": false,
+  "scope": "discard unused context result; trim unused duplicate local fields after validation; all actual context/native/lunch calls preserved",
+  "restore_inventory": "Existing absence preserved; no row or grant created",
+  "validation": "actual captured three-owner joined PG17fixture with synthetic dependencyports; same calls,receipts,replay,writes,9refusals and lower retainedmemory",
+  "generated_with": "Supabase CLI2.109.1 migration new; moved from active migrations into pending repairs before use",
+  "validation_command": "npm run test:activation-context-retention",
+  "precedent": "docs/EXPIRED_ACTIVATION_REPAIR_20261104.json",
+  "requires": "exact unchanged60-second real activation forced-ROLLBACK and originalPID/lease quiescence before apply"
+}

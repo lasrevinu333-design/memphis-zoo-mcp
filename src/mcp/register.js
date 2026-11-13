@@ -1,9 +1,22 @@
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { MCP_TOOL_MANIFEST, TOOL_SAFETY } from "./tool-manifest.js";
+import { advertisedInputSchema } from "./advertised-schema.js";
 
 const serverToolAuth = new WeakMap();
 const toolSafety = new Map(MCP_TOOL_MANIFEST.map((tool) => [tool.name, tool.safety]));
 const anonymousTools = new Set(["ping", "server_connection_diagnostic"]);
+
+function toolAnnotations(name) {
+  const known = toolSafety.has(name);
+  const readOnly = toolSafety.get(name) === TOOL_SAFETY.READ || name === "custodial_feedback_relay_status";
+  // Descriptor hints communicate existing behavior only. OAuth checks below
+  // remain authoritative, including write scopes for privileged status tools.
+  return {
+    readOnlyHint: readOnly,
+    destructiveHint: !readOnly && name !== "custodial_outlook_operations_import",
+    openWorldHint: !known,
+  };
+}
 
 function cloneSecuritySchemes(schemes) {
   return Array.isArray(schemes)
@@ -53,8 +66,16 @@ function authErrorResult(challenge, scopes) {
     }],
     isError: true,
   };
-  const scoped = scopedChallenge(challenge, scopes);
-  if (scoped) result._meta = { "mcp/www_authenticate": [scoped] };
+  let scoped = scopedChallenge(challenge, scopes);
+  if (scoped) {
+    // OpenAI's tool-level linking UI requires both error parameters in the
+    // challenge. Keep an existing reason and preserve the exact resource/scope.
+    if (!/\berror="/.test(scoped)) scoped += ', error="insufficient_scope"';
+    if (!/\berror_description="/.test(scoped)) {
+      scoped += ', error_description="Authorize the required Memphis Zoo MCP permissions to use this tool."';
+    }
+    result._meta = { "mcp/www_authenticate": [scoped] };
+  }
   return result;
 }
 
@@ -88,7 +109,8 @@ export function finalizeMcpToolAuth(server) {
       ...result,
       tools: (result?.tools || []).map((tool) => {
         const securitySchemes = cloneSecuritySchemes(tool?._meta?.securitySchemes);
-        return securitySchemes.length ? { ...tool, securitySchemes } : tool;
+        return { ...tool, inputSchema: advertisedInputSchema(tool.inputSchema),
+          ...(securitySchemes.length ? { securitySchemes } : {}) };
       }),
     };
   });
@@ -122,6 +144,7 @@ export function registerMcpTool(server, name, definition, handler) {
         title,
         description,
         inputSchema,
+        annotations: toolAnnotations(name),
         ...(securitySchemes.length ? { securitySchemes } : {}),
         ...(Object.keys(meta).length ? { _meta: meta } : {}),
       },

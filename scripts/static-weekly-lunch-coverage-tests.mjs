@@ -157,9 +157,25 @@ if(result?.status==='FEASIBLE'){
       for(const intent of loan.notificationIntents)assert.equal(intent.deliveryState,'NOT_ENQUEUED');
     }
   });
-  await check('sub-hour lunch is explicitly unresolved rather than changed to one hour',()=>{
-    const p=clone(problem);p.states.get(1).availability.get('a').lunch={start:'12:00',end:'12:30'};
-    assert.equal(deriveLunchCoverageFromPreparedProblem(p,result.weeklyAssignments).lunches[0].reason,'scheduled_lunch_must_be_one_hour_within_shift');
+  await check('accepted actual lunch duration/end is preserved without a fixed one-hour rule',()=>{
+    for(const end of ['12:30','13:00','13:30']){
+      const p=clone(problem);p.states.get(1).availability.get('a').lunch={start:'12:00',end};
+      const loan=deriveLunchCoverageFromPreparedProblem(p,result.weeklyAssignments).lunches[0];
+      assert.deepEqual(loan.window,{start:'12:00',end});
+      assert.notEqual(loan.status,'REVIEW_REQUIRED');
+      for(const intent of loan.notificationIntents) assert.equal(intent.endTime,end);
+    }
+  });
+  await check('helper actual non-hour break remains a real overlapping exclusion',()=>{
+    const p=clone(problem);p.availabilityByDaySlot.get('1\0b').availability.lunch={start:'10:00',end:'10:30'};
+    assert.ok(deriveLunchCoverageFromPreparedProblem(p,result.weeklyAssignments).lunches[0].helperSlotIds.includes('b'));
+    p.availabilityByDaySlot.get('1\0b').availability.lunch={start:'12:00',end:'12:30'};
+    assert.ok(!deriveLunchCoverageFromPreparedProblem(p,result.weeklyAssignments).lunches[0].helperSlotIds.includes('b'));
+  });
+  await check('actual lunch outside shift remains unresolved and never truncated',()=>{
+    const p=clone(problem);p.states.get(1).availability.get('a').lunch={start:'12:00',end:'23:30'};
+    const loan=deriveLunchCoverageFromPreparedProblem(p,result.weeklyAssignments).lunches[0];
+    assert.equal(loan.reason,'scheduled_lunch_outside_shift');assert.equal(loan.window.end,'23:30');
   });
   await check('tampered baseline and candidate cannot pass consistency verification',()=>{
     const candidate=createStaticWeeklyLunchCoverageCandidate(input,result);

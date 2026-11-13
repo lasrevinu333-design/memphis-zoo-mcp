@@ -25,6 +25,14 @@ execFileSync(process.execPath, ["scripts/build52-release-recovery-binding-databa
   stdio: "inherit",
 });
 
+// Recheck the GPS/recurring correction through the same disposable recovery
+// controller, including permission and trigger-state fault sensitivity.
+execFileSync(process.execPath, ["scripts/recovery-inventory-closure-database-tests.mjs"], {
+  env: { ...process.env, BUILD52_RECOVERY_TEST_DOCKER_CONTAINER: container,
+    BUILD52_RECOVERY_TEST_DATABASE: database },
+  stdio: "inherit",
+});
+
 function sql(statement, { role = "supabase_admin", expectFailure = false } = {}) {
   try {
     const output = execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", role, "-d", database, "-c", statement], {

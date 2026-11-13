@@ -1,3 +1,6 @@
+import {assertManualScheduleDeliveryOrigin} from './approved-manual-device-delivery.js';
+import {readZooWideCoverage} from './employee-zoo-wide-coverage.js';
+import {readRecurringNotificationPlan,exactPlanReceiptInstant} from './recurring-notification-plan.js';
 import {readHomeTimeFacts} from './employee-home-time-facts.js';
 import {normalizeCoverAllLanguage,coverAllLabels} from './coverall-language.js';
 import express from "express";
@@ -1237,7 +1240,15 @@ export function createScheduleRouter({
     return rows[0];
   }
 
+  async function assertLegacyCoverAllDate(serviceDate){
+    const state=await loadScheduleAuthorityState(serviceDate);
+    if(state.governed!==false&&state.governed!=='false'){
+      throw Object.assign(new Error('Use the accepted canonical CoverAll handout and explicit capacity selector for this date.'),
+        {status:409,code:'coverall_canonical_capacity_link_required'});
+    }
+  }
   async function issueCoverAllAssignmentLink({ serviceDate, slotCode, lang, ttlHours, actor }) {
+    await assertLegacyCoverAllDate(serviceDate);
     const slot = await getCoverAllSlotByCode(slotCode);
     const token = randomBytes(32).toString("base64url");
     const tokenHash = coverAllAccessTokenHash(token);
@@ -1250,6 +1261,7 @@ export function createScheduleRouter({
     });
     const row = Array.isArray(result) ? result[0] : result;
     if (!row?.id) throw new Error("The secure CoverAll assignment link could not be created.");
+    await assertLegacyCoverAllDate(serviceDate);
     const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
     const normalizedLang = normalizeCoverAllLanguage(lang);
     return {
@@ -2030,10 +2042,12 @@ export function createScheduleRouter({
     let match;
     while ((match = rowPattern.exec(text)) !== null) {
       const [, month, day, year, dayOfWeek, employeeName, status] = match;
-      const date = new Date(`${month} ${day}, ${year} 12:00:00`);
-      if (Number.isNaN(date.getTime())) continue;
+      // Reports name civil service dates, not instants in the server's timezone.
+      // Reject rollover dates instead of quietly approving a different day.
+      const serviceDate = buildDate(Number(year), MONTH_LOOKUP[month.toLowerCase()], Number(day));
+      if (!serviceDate) throw new Error("PTO report contains an invalid calendar date.");
       rows.push({
-        service_date: date.toISOString().slice(0, 10),
+        service_date: serviceDate,
         day_of_week: dayOfWeek,
         employee_name: String(employeeName || "").trim(),
         status: String(status || "").trim(),
@@ -2046,16 +2060,19 @@ export function createScheduleRouter({
     if (!rows.length) throw new Error("No PTO rows were detected in the report text.");
 
     const bestByKey = new Map();
-    const rank = { approved: 3, submitted: 2, cancelled: 1, refused: 0 };
+    // No timestamps establish which conflicting report entry is current.
+    // Accept only unambiguous Approved rows; Submitted is never approval.
+    const conflictingKeys = new Set();
     for (const row of rows) {
       const key = `${row.service_date}__${row.employee_name.toLowerCase()}`;
       const prior = bestByKey.get(key);
-      const currentRank = rank[row.status.toLowerCase()] ?? -1;
-      const priorRank = prior ? (rank[String(prior.status || "").toLowerCase()] ?? -1) : -1;
-      if (!prior || currentRank > priorRank) bestByKey.set(key, row);
+      if (prior && prior.status.toLowerCase() !== row.status.toLowerCase()) conflictingKeys.add(key);
+      if (!prior) bestByKey.set(key, row);
     }
 
-    const kept = Array.from(bestByKey.values()).filter((row) => /^(approved|submitted)$/i.test(row.status));
+    const kept = Array.from(bestByKey.entries())
+      .filter(([key,row]) => !conflictingKeys.has(key) && /^approved$/i.test(row.status))
+      .map(([,row]) => row);
     const grouped = new Map();
     for (const row of kept) {
       const key = row.employee_name.toLowerCase();
@@ -2069,10 +2086,10 @@ export function createScheduleRouter({
       const dates = Array.from(new Set(group.dates)).sort();
       let start = dates[0];
       let end = dates[0];
-      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report", source: "report", provider: "local-parser", provider_used: "local-parser", provider_fallback: false, warnings: [] });
+      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report", source: "report", approval_status: "APPROVED", provider: "local-parser", provider_used: "local-parser", provider_fallback: false, warnings: [] });
       for (let i = 1; i < dates.length; i += 1) {
-        const prev = new Date(`${end}T12:00:00`);
-        prev.setDate(prev.getDate() + 1);
+        const prev = new Date(`${end}T12:00:00Z`);
+        prev.setUTCDate(prev.getUTCDate() + 1);
         const expected = prev.toISOString().slice(0, 10);
         if (dates[i] === expected) end = dates[i];
         else { pushRange(); start = dates[i]; end = dates[i]; }
@@ -2119,7 +2136,7 @@ export function createScheduleRouter({
       "- employee_name should be the employee's display name in normal order when known, like 'Jane Smith'.",
       "- start_date and end_date must be YYYY-MM-DD.",
       "- collapse consecutive PTO dates for the same employee into one range row.",
-      "- include only approved or submitted PTO rows. Ignore cancelled and refused rows.",
+      "- include only explicitly approved PTO rows. Ignore submitted, cancelled, refused or missing status.",
       "- pto_type should usually be PTO unless the report clearly says otherwise.",
       "- notes should be short plain text or null.",
       "- confidence must be one of high, medium, low.",
@@ -2199,23 +2216,11 @@ export function createScheduleRouter({
       };
     }
 
-    const localRows = Array.isArray(localResult?.import_rows) ? localResult.import_rows : [];
-    const localWarnings = localRows.reduce((sum, row) => sum + (Array.isArray(row?.warnings) ? row.warnings.length : 0), 0);
-    const geminiWarnings = normalizedGeminiRows.reduce((sum, row) => sum + (Array.isArray(row?.warnings) ? row.warnings.length : 0), 0);
-
-    if (!localRows.length || geminiWarnings <= localWarnings) {
-      return {
-        detected_rows: Array.isArray(localResult?.detected_rows) ? localResult.detected_rows : [],
-        kept_rows: normalizedGeminiRows,
-        import_rows: normalizedGeminiRows,
-        provider: "gemini",
-        providers_used: ["local-parser", "gemini"],
-        fallback_count: localRows.length,
-      };
-    }
-
+    // AI output assists manager review; it cannot establish PTO approval or
+    // replace the deterministically approved report dates used by import.
     return {
       ...localResult,
+      review_rows: normalizedGeminiRows.map(row => ({...row, approval_verified: false, requires_manager_confirmation: true})),
       providers_used: ["local-parser", "gemini"],
       fallback_count: normalizedGeminiRows.length,
     };
@@ -2950,20 +2955,23 @@ export function createScheduleRouter({
     return resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: deviceId });
   }
 
-  async function readScheduleApplication({ serviceDate, assignment, credentialId }) {
+  async function readScheduleDelivery({ serviceDate, assignment, credentialId }) {
     const devicePk = String(assignment?.canonical_device_pk || "").trim().toLowerCase();
     const employeeId = String(assignment?.assigned_employee_id || "").trim().toLowerCase();
     const credential = String(credentialId || "").trim().toLowerCase();
     const epoch = Number(assignment?.assignment_epoch);
     if (!CANONICAL_UUID.test(devicePk) || !CANONICAL_UUID.test(employeeId)
-      || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) return null;
-    return runRpc("static_weekly_v10_read_device_schedule_application", {
-      p_service_date: serviceDate,
-      p_device_id: devicePk,
-      p_credential_id: credential,
-      p_employee_id: employeeId,
-      p_assignment_epoch: epoch,
+      || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) {
+      const error = new Error("The authenticated schedule delivery principal is unavailable."); error.status = 401; throw error;
+    }
+    const result = await runRpc("static_weekly_v24_read_device_schedule_delivery", {
+      p_date: serviceDate, p_device: devicePk, p_credential: credential, p_employee: employeeId, p_epoch: epoch,
     });
+    if (result?.schema !== "static-weekly.device-schedule-delivery.v1"
+      || !["RECURRING_TERMINAL", "RECURRING_SCHEDULE", "LEGACY_REGISTERED", "UNAVAILABLE"].includes(result.mode)) {
+      const error = new Error("The exact schedule delivery state is unavailable."); error.status = 503; throw error;
+    }
+    return assertManualScheduleDeliveryOrigin(result);
   }
 
   function toCsvValue(value) {
@@ -3118,7 +3126,7 @@ export function createScheduleRouter({
       if (purposes.some((purpose) => purpose === "late_coverage")) return "Afternoon Call Coverage";
       if (purposes.some((purpose) => purpose === "restroom_upkeep")) return "Restroom Rebalance";
       if (sortedItems.some((item) => toMinutes(item?.coverage_start) >= 585)) return "Restroom Rebalance";
-      if (data?.phase === "morning" || purposes.some((purpose) => purpose === "deep_clean")) return "Morning Full Clean Schedule";
+      if (data?.phase === "morning" || purposes.some((purpose) => purpose === "deep_clean")) return "Morning Assigned Areas";
       return "Restroom Rebalance";
     })();
     const formatDate = (value) => {
@@ -3361,7 +3369,35 @@ export function createScheduleRouter({
         resolvedEmployeeId = employeeRows[0].employee_id;
       }
 
-      let data = await loadStaticWeeklyEmployeeDay(serviceDate, resolvedEmployeeId, atSql);
+      if (req.memphisDevice && (req.memphisDevice.assigned_employee_id !== resolvedEmployeeId
+          || Number(req.memphisDevice.assignment_epoch) !== Number(assignment?.assignment_epoch))) {
+        res.status(403).json({ ok: false, error: "Device assignment changed. Refresh the current identity." });
+        return;
+      }
+      // A terminal recurring winner must arrive before the legacy employee-day
+      // reader can turn it into a 503 and leave an old usable phone cache.
+      const delivery = assignment ? await readScheduleDelivery({ serviceDate, assignment,
+        credentialId: req.memphisDeviceCredential?.credential_id }) : null;
+      let data;
+      if (delivery?.mode === "RECURRING_TERMINAL") {
+        data = { governed: true, source: "static_weekly_projection", service_date: serviceDate,
+          employee_id: resolvedEmployeeId, employee_name: assignment.assigned_employee_name,
+          projection_status: "blocked_recurring_authority", full_day: true, raw_items: [], shift: null,
+          notice: "Your schedule needs a manager's updated plan. Your saved cleaning work is preserved." };
+      } else if (delivery?.mode === "RECURRING_SCHEDULE") {
+        const target = delivery.delivery?.target, view = delivery.delivery?.view;
+        if (!target || target.targetType !== "SCHEDULE" || !view || view.service_date !== serviceDate
+          || view.employee_id !== resolvedEmployeeId || view.publication_id !== target.publicationId
+          || view.projection_id !== target.projectionId || view.projection_status !== "current"
+          || view.full_day !== true || !Array.isArray(view.raw_items)) {
+          const error = new Error("The exact recurring schedule target is still pending reconciliation."); error.status = 503; throw error;
+        }
+        data = { ...view, governed: true, source: "static_weekly_projection",
+          projection_authority_revision: target.authorityRevision,
+          home_facts: await readHomeTimeFacts({ day: view, employeeId: resolvedEmployeeId, runReadOnlySql }) };
+      } else if (delivery?.mode === "UNAVAILABLE") {
+        const error = new Error("The current recurring schedule is not ready for this phone."); error.status = 503; throw error;
+      } else data = await loadStaticWeeklyEmployeeDay(serviceDate, resolvedEmployeeId, atSql);
       if (!data) {
         await assertScheduleReadyForRead(serviceDate);
         const [pageRows, fullDayItems] = await Promise.all([
@@ -3377,30 +3413,136 @@ export function createScheduleRouter({
         const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
         data = combineFullDaySchedule(pageData, fullDayItems);
       }
-      const application = assignment ? await readScheduleApplication({
-        serviceDate,
-        assignment,
-        credentialId: req.memphisDeviceCredential?.credential_id,
-      }) : null;
+      const zooWideCoverage=await readZooWideCoverage({day:data,runReadOnlySql});
+      const ordinaryNotificationPlan=await readRecurringNotificationPlan({runRpc,delivery,serviceDate,assignment,
+        credentialId:req.memphisDeviceCredential?.credential_id});
       res.status(200).json({
         ok: true,
         data: {
           ...data,
+          ordinary_notification_plan:ordinaryNotificationPlan,
+          zoo_wide_coverage:zooWideCoverage,
           requested_device_id: assignment?.requested_device_id || deviceId || null,
           device_id: assignment?.canonical_device_id || assignment?.device_id || deviceId || null,
           canonical_device_id: assignment?.canonical_device_id || assignment?.device_id || null,
+          canonical_device_pk: assignment?.canonical_device_pk || null,
           matched_by: assignment?.matched_by || null,
           device_name: assignment?.device_name || null,
           employee_id: resolvedEmployeeId,
           credential_id: req.memphisDeviceCredential?.credential_id || null,
           assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
             && Number(assignment?.assignment_epoch)>0 ? Number(assignment.assignment_epoch) : null,
-          schedule_application: application,
+          schedule_application: delivery?.mode === "LEGACY_REGISTERED" ? delivery.datedApplication : null,
+          recurring_delivery: delivery?.mode?.startsWith("RECURRING_") ? delivery.delivery : null,
+          schedule_delivery_mode: delivery?.mode || null,
+          schedule_authority_origin: delivery?.authorityOrigin || null,
         },
-        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+        meta: {
+          version: appVersion, release_id: releaseId, contract_version: contractVersion,
+          generated_at: new Date().toISOString(),
+          canonical_device_id: assignment?.canonical_device_id || deviceId || null,
+          employee_id: resolvedEmployeeId,
+          assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
+            ? Number(assignment.assignment_epoch) : null,
+          credential_id: req.memphisDeviceCredential?.credential_id || null,
+        },
       });
     } catch (error) {
       fail(res, error, "Personal schedule summary failed");
+    }
+  });
+
+  router.get("/my-day-summary/delivery-receipt", requireEmployeeDevice, async (req, res) => {
+    try {
+      const query = req.query;
+      if (!query || JSON.stringify(Object.keys(query).sort()) !== JSON.stringify(["intent_id", "target_type"])
+        || typeof query.intent_id !== "string" || !CANONICAL_UUID.test(query.intent_id)
+        || typeof query.target_type !== "string"
+        || !["SCHEDULE", "BLOCKED_RECURRING_AUTHORITY"].includes(query.target_type)) {
+        const error = new Error("The exact original delivery identity is required."); error.status = 422; throw error;
+      }
+      const deviceIdentifier = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim();
+      const assignment = await getAssignedEmployeeForDevice(deviceIdentifier);
+      const credential = String(req.memphisDeviceCredential?.credential_id || "").trim().toLowerCase();
+      const epoch = Number(assignment?.assignment_epoch);
+      if (!assignment?.device_active || !assignment?.employee_active
+        || !CANONICAL_UUID.test(String(assignment.canonical_device_pk || ""))
+        || !CANONICAL_UUID.test(String(assignment.assigned_employee_id || ""))
+        || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) {
+        const error = new Error("The current authenticated delivery principal is unavailable."); error.status = 401; throw error;
+      }
+      const data = await runRpc("static_weekly_v26_read_original_delivery_outcome", {
+        p_intent: query.intent_id, p_target_type: query.target_type,
+        p_device: assignment.canonical_device_pk, p_credential: credential,
+        p_employee: assignment.assigned_employee_id, p_epoch: epoch,
+      });
+      if (data?.schema !== "static-weekly.original-device-delivery-outcome.v1"
+        || data.intentId !== query.intent_id || data.targetType !== query.target_type
+        || !["NO_RECORDED_RECEIPT", "RECEIPT_RECORDED"].includes(data.status)
+        || data.retryAuthorized !== false || data.currentAuthorityNotInferred !== true) {
+        const error = new Error("The exact original delivery outcome is unavailable."); error.status = 503; throw error;
+      }
+      res.set("Cache-Control", "no-store");
+      res.status(200).json({ ok: true, data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      if (Number.isInteger(error?.status)) fail(res, error, "Original schedule delivery outcome failed");
+      else fail(res, {
+        status: error?.code === "42501" ? 403 : 503,
+        code: "original_delivery_outcome_unavailable",
+        message: "The exact original delivery outcome is unavailable.",
+      });
+    }
+  });
+
+  router.post("/my-day-summary/delivery-receipt", requireEmployeeDevice, async (req, res) => {
+    try {
+      const body = req.body;
+      // The unchanged six-field body cannot supply this acquisition identity.
+      // Reject duplicate raw headers even when Node combines their values.
+      const rawHeaders=Array.isArray(req.rawHeaders)?req.rawHeaders:[];
+      const tokenHeaders=[];
+      for(let index=0;index<rawHeaders.length;index+=2){
+        if(typeof rawHeaders[index]==="string"&&rawHeaders[index].toLowerCase()==="x-custodial-plan-read-id") tokenHeaders.push(rawHeaders[index+1]);
+      }
+      const planReadId=req.headers?.["x-custodial-plan-read-id"];
+      if(tokenHeaders.length!==1||typeof planReadId!=="string"||tokenHeaders[0]!==planReadId||!CANONICAL_UUID.test(planReadId)){
+        const error=new Error("The exact original issued notification plan read is required.");error.status=422;throw error;
+      }
+      const keys = ["applied_at", "authority_revision", "intent_id", "rendered_digest", "target_digest", "target_type"];
+      if (!body || typeof body !== "object" || Array.isArray(body)
+        || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(keys)
+        || typeof body.intent_id !== "string" || !CANONICAL_UUID.test(body.intent_id)
+        || !["SCHEDULE", "BLOCKED_RECURRING_AUTHORITY"].includes(body.target_type)
+        || !Number.isSafeInteger(body.authority_revision) || body.authority_revision < 1
+        || typeof body.target_digest !== "string" || !SHA256_HEX.test(body.target_digest)
+        || typeof body.rendered_digest !== "string" || !SHA256_HEX.test(body.rendered_digest)
+        || !exactPlanReceiptInstant(body.applied_at)) {
+        const error = new Error("The exact typed schedule delivery receipt is required."); error.status = 422; throw error;
+      }
+      const deviceIdentifier = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim();
+      const assignment = await getAssignedEmployeeForDevice(deviceIdentifier);
+      const credential = String(req.memphisDeviceCredential?.credential_id || "").trim().toLowerCase();
+      const epoch = Number(assignment?.assignment_epoch);
+      if (!assignment?.device_active || !assignment?.employee_active
+        || !CANONICAL_UUID.test(String(assignment.canonical_device_pk || ""))
+        || !CANONICAL_UUID.test(String(assignment.assigned_employee_id || ""))
+        || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) {
+        const error = new Error("The current authenticated delivery principal is unavailable."); error.status = 401; throw error;
+      }
+      const data = await runRpc("static_weekly_v27_ack_device_schedule_delivery", {
+        p_plan_read: planReadId,
+        p_intent: body.intent_id, p_device: assignment.canonical_device_pk, p_credential: credential,
+        p_employee: assignment.assigned_employee_id, p_epoch: epoch, p_target_type: body.target_type,
+        p_revision: body.authority_revision, p_target_digest: body.target_digest,
+        p_rendered_digest: body.rendered_digest, p_applied_at: body.applied_at,
+      });
+      res.status(200).json({ ok: true, data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      if(Number.isInteger(error?.status)) fail(res,error,"Schedule delivery receipt failed");
+      else fail(res,{status:error?.code==="42501"?403:503,code:"original_delivery_receipt_unavailable",
+        message:"The exact original delivery receipt is unavailable. Query its original outcome; another send is not authorized."});
     }
   });
 
@@ -3811,6 +3953,7 @@ export function createScheduleRouter({
       const lang = normalizeCoverAllLanguage(req.query.lang);
       const accessToken = normalizeCoverAllAccessToken(req.query.access_token || req.query.token);
       await authorizeCoverAllAssignmentLink({ serviceDate, slotCode, accessToken });
+      await assertLegacyCoverAllDate(serviceDate);
       const slot = await getCoverAllSlotByCode(slotCode);
       const shiftRows = await runReadOnlySql(`
         select to_char(shift_start, 'HH24:MI') as shift_start, to_char(shift_end, 'HH24:MI') as shift_end
@@ -3884,6 +4027,7 @@ export function createScheduleRouter({
   <main class="wrap"><div class="notice">${htmlEscape(t.notice)}</div><section class="card"><h2>${htmlEscape(t.restrooms)}</h2><ul>${renderItems(restroomItems)}</ul></section><section class="card"><h2>${htmlEscape(t.other)}</h2><ul>${renderItems(otherItems)}</ul></section><div class="meta">${htmlEscape(slot.employee_code)} • ${htmlEscape(serviceDate)}</div></main>
 </body>
 </html>`;
+      await assertLegacyCoverAllDate(serviceDate);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.status(200).send(html);
     } catch (error) {

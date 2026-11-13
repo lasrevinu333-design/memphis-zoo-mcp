@@ -1,0 +1,47 @@
+{
+  "schema": "custodial.private-custody-named-acl-comparison-c.v1",
+  "scope": "COMPARISON_ORDER_ONLY_NO_CATALOG_PROFILE_CHANGE",
+  "actual_before": "ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable",
+  "actual_after": "ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)::text COLLATE pg_catalog.\"C\",pg_get_userbyid(a.grantor)::text COLLATE pg_catalog.\"C\",a.privilege_type COLLATE pg_catalog.\"C\",a.is_grantable",
+  "expected_before": "ORDER BY x->>'grantee',x->>'grantor',x->>'privilege',(x->>'grantable')::boolean",
+  "expected_after": "ORDER BY (x->>'grantee') COLLATE pg_catalog.\"C\",(x->>'grantor') COLLATE pg_catalog.\"C\",(x->>'privilege') COLLATE pg_catalog.\"C\",(x->>'grantable')::boolean",
+  "migrations": [
+    {
+      "file": "20261010193211_native_private_custody_chunk_retention.sql",
+      "before_sha256": "ce160e5c55373e75580c287d62484d925e02348844d4aac2fef9bc4cb94be798",
+      "after_sha256": "4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a",
+      "actual_aggregate_count": 2,
+      "expected_aggregate_count": 1
+    },
+    {
+      "file": "20261011000206_native_private_custody_complete_frame_readback.sql",
+      "before_sha256": "7955900bf9d2b02d076c9ab8ad52fc1b4d0dea10de60ddd89c4ebd9bfd3888e0",
+      "after_sha256": "ac22e6cce896c87cf754022ee565815811fbb04e58b00fde278efc835a665889",
+      "actual_aggregate_count": 3,
+      "expected_aggregate_count": 2
+    }
+  ],
+  "historical_source253_required_executed119_sha256": "ce160e5c55373e75580c287d62484d925e02348844d4aac2fef9bc4cb94be798",
+  "active_executed119_sha256": "4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a",
+  "historical_profile_scalar_is_derivation_provenance": true,
+  "reverse_byte_exact": true,
+  "runtime_profiles_aggregates_definitions_ACLs_owners_mutations_changed": false,
+  "pure_pg_proof": "Root root-pure119-acl-order-pg-q45jlj4h same pinned image/template0 en_US.UTF-8:784profiles,12defaultdifferences,0explicittextC; fixture only not live query",
+  "production_authorized": false,
+  "unchanged_profile_sha256": {
+    "private-custody-existing-postgres-profile.json": "a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f",
+    "private-custody-source253-existing-profile.json": "92658305ec278150cb2711ce1a7f0f83cb7d1e92488ca87d187f076c9078afdd"
+  },
+  "root_actual_pure_pg_diagnosis_receipts": [
+    {
+      "path": "/home/eric/Documents/Codex/2026-10-19/custodial-replacement-plan-20261020/work/ROOT_PURE119_ACL_ORDER_PG_RESULT.json",
+      "sha256": "6811ef6769cfd1151888b72f201f8aaf6dfc6757b40a10f6ca2983a95ada26d9"
+    },
+    {
+      "path": "/home/eric/Documents/Codex/2026-10-19/custodial-replacement-plan-20261020/work/ROOT_PURE119_120_ACL_NEGATIVES_PG_RESULT.json",
+      "sha256": "1cc844b59d908905adbf90984a796cc93e266833009e74d923d17b5313bb3e8a"
+    }
+  ],
+  "negative_predicate_fixture_source_sha256": "8079cb751cc9ec8b1a9046a5f70e7fd3c97a0d5b9fa518d003e0154a2da5256e",
+  "helper_sql_executed": false
+}

@@ -32,6 +32,9 @@ function pendingWorkerExact(value,keys){
  if(!value||Array.isArray(value)||typeof value!=='object'||Object.keys(value).length!==keys.length
   ||keys.some(k=>!Object.hasOwn(value,k)))throw failure('staffing_approved_pending_protocol_invalid');
 }
+// Shared bounded DATA capture only. The operation-specific callers below (and
+// the manual-period owner) retain their own closed request/result contracts.
+export {pendingWorkerData as captureStaticWeeklyPreparationData};
 export function captureApprovedPendingStaffingWorkerInput(input){
  const v=pendingWorkerData(input),bad=()=>{throw failure('staffing_approved_pending_protocol_invalid');},
   uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(x);

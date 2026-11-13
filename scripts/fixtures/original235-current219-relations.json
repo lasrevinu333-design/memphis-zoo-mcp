@@ -1,0 +1,1973 @@
+[
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "audit_log_entries"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "custom_oauth_providers"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "flow_state"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "identities"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "instances"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "mfa_amr_claims"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "mfa_challenges"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "mfa_factors"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "mfa_recovery_code_sets"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "mfa_recovery_codes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "oauth_authorizations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "oauth_client_states"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "oauth_clients"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "oauth_consents"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "one_time_tokens"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "refresh_tokens"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "saml_providers"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "saml_relay_states"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "schema_migrations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "scim_tokens"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "scim_users"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "sessions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "sso_domains"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "sso_providers"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "auth",
+    "table_name": "users"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "webauthn_challenges"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_auth_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "auth",
+    "table_name": "webauthn_credentials"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ai_provider_access_audit"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_chat_state"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_contacts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_deliverables"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_log_notes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_log_reminders"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_log_suggested_reminders"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "annie_suggested_contacts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "cleaning_inspections"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "completion_responses"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "coverage_templates"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "coverall_assignment_links"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "current_attendance_state"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_backend_execution_config"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_device_credential_replacements"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_employee_device_assignment_history"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_employee_status_history"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_actor_contexts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_authority_activation_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_reconciliation_audits"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_reconciliation_delivery_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_reconciliation_delivery_recipients"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_reconciliation_dispositions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_reconciliation_outbox"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_reconciliation_records"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_scan_authority_snapshots"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_scan_event_evidence"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_submission_proofs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_offline_time_reservations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_release_authority_bootstrap_definitions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_release_authority_restore_definitions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "custodial_release_authority_restore_inventory"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_release_canary_controls"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_release_canary_recovery_probes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_release_canary_rollback_audits"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_release_canary_transport_probes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "custodial_session_corrections"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "daily_absence_overrides"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "daily_group_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "daily_schedule_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "daily_work_roster"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "demo_scan_mock_runs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_aliases"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_auth_credentials"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_auth_enrollment_codes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_auth_enrollment_operations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_auth_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_auth_policy"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_auth_removal_operations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_location_proximity_status"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_notification_acknowledgements"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "device_sync_status"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "devices"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_aliases"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_area_familiarity"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_area_preferences"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_backup_group_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_group_proximity"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_location_group_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_native_push_delivery_receipts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_planned_time_off"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_primary_group_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_pto"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_push_registrations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_shift_overrides"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_shift_templates"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employee_zone_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "employees"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "event_area_aliases"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "event_default_rules"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "event_push_instances"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "event_venues"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "events_app_event_history"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "events_app_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "events_app_notification_log"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "events_app_outlook_sync"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "foundation_removal_archive"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_attachments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_conversations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_messages"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_repair_job_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_repair_jobs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_repair_proposals"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "gemini_console_worker_heartbeats"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "guest_cleanliness_reports"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "internal_ops_contacts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "legacy_application_write_rollups"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_coverage_templates"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_adjacency"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_aliases"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_memberships"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_proximity_settings"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_scoring"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_workload_settings"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_group_zone_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_groups"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_proximity_settings"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "location_zone_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "locations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "maintenance_tickets"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "migration_log"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "migration_log_summary"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "moxie_access_audit"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "moxie_auth_credentials"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_broadcast_recipients"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_broadcasts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "msg_canonical_thread_pairs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_device_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_hidden_threads_by_device"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_memphis_thread_context"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_message_audit"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_message_deletions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_messages"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_ops_manager_legacy_identity_links"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_receipts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_thread_deletion_operations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_thread_participants"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_thread_visibility"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_threads"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "msg_users"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "operating_hours"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "operational_notification_jobs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_auth_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_device_security_config"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_device_security_rate_limits"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_device_security_sessions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_enrollment_code_rate_limits"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_enrollment_codes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_managers"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_notification_preferences"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_notification_queue"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_notification_state"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_pairing_tokens"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_push_devices"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_security_code_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_shared_enrollment_rate_limits"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_shared_enrollment_windows"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_trusted_devices"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "ops_manager_weekly_schedules"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "public_submission_rate_limits"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "release_deployment_manifest"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "release_validation_runs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "scan_alert_notification_log"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "scan_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_assignment_archive"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_automation_runs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_candidate_scores"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_generation_runs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_manual_locks"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_operational_notes"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_publish_audit"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_solution_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "schedule_work_items"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "scheduler_scoring_settings"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "session_events"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "sessions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "static_weekly_authority_attestation_config"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "static_weekly_authority_attestation_keys"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": false,
+    "schema_name": "public",
+    "table_name": "static_weekly_authority_source_documents"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "static_weekly_schedule_control"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "system_feedback_items"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "system_feedback_legacy_image_backups"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "system_logs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "system_settings"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_roster_slot_incumbencies"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_roster_slot_incumbency_closures"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_roster_slot_staffing_states"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_roster_slots"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_authority_revisions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_command_receipts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_compiled_projections"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_effective_range_closures"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_exception_commands"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_objective_inputs"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_occurrences"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_projection_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_publications"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_slot_assignments"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_slot_availability"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "weekly_schedule_versions"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "working_cluster_adjacency"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "postgres",
+    "relation_kind": "r",
+    "relforcerowsecurity": true,
+    "relrowsecurity": true,
+    "schema_name": "public",
+    "table_name": "zones"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "bucket_lifecycle_states"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "buckets"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "buckets_analytics"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "buckets_vectors"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "lifecycle_abandoned_artifacts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "migrations"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "objects"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "s3_multipart_uploads"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "s3_multipart_uploads_parts"
+  },
+  {
+    "is_partition": false,
+    "owner_name": "supabase_storage_admin",
+    "relation_kind": "r",
+    "relforcerowsecurity": false,
+    "relrowsecurity": true,
+    "schema_name": "storage",
+    "table_name": "vector_indexes"
+  }
+]

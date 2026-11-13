@@ -1,0 +1,399 @@
+{
+  "schema": "custodial.activated-employee-roster-binding-candidate.v1",
+  "ownerAuthorizationDate": "2026-10-28",
+  "databaseProject": "rqquvtjdmugpigbndmne",
+  "status": "EMPLOYEE_PROFILES_ACTIVE_SCHEDULE_BINDINGS_UNPUBLISHED",
+  "applicationMode": "EXPLICIT_SOURCE_BOUND_ROSTER_PUBLICATION_ONLY",
+  "newEmployees": [
+    {
+      "key": "JADA",
+      "sourceSlotKey": "OPTION2",
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "name": "Jada Rawlings",
+      "shift": [
+        "06:00",
+        "15:00"
+      ],
+      "lunch": [
+        "10:00",
+        "11:00"
+      ],
+      "lunchByDay": {},
+      "workDays": [
+        0,
+        1,
+        2,
+        5,
+        6
+      ],
+      "personId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+      "state": "ACTIVE_EMPLOYEE_SCHEDULE_UNPUBLISHED",
+      "effectiveStart": null,
+      "employeeCode": "EMP014",
+      "employeeActivatedAt": "2026-10-28 20:46:13.414619+00",
+      "schedulePublicationState": "PENDING"
+    },
+    {
+      "key": "KILTRA",
+      "sourceSlotKey": "OPTION1",
+      "slotId": "7044faec-4bbd-57ca-a898-ddd719503113",
+      "name": "Kiltra Horton",
+      "shift": [
+        "07:00",
+        "16:00"
+      ],
+      "lunch": [
+        "12:00",
+        "13:00"
+      ],
+      "lunchByDay": {},
+      "workDays": [
+        0,
+        1,
+        4,
+        5,
+        6
+      ],
+      "personId": "06228c5d-5123-4b8b-b730-e01114bdc971",
+      "state": "ACTIVE_EMPLOYEE_SCHEDULE_UNPUBLISHED",
+      "effectiveStart": null,
+      "employeeCode": "EMP015",
+      "employeeActivatedAt": "2026-10-28 20:46:13.414619+00",
+      "schedulePublicationState": "PENDING"
+    },
+    {
+      "key": "DERRICK",
+      "sourceSlotKey": "KAILI",
+      "slotId": "e91b7a47-f20f-5777-a5d3-9c0ce8778df5",
+      "name": "Derrick Henderson",
+      "shift": [
+        "07:00",
+        "16:00"
+      ],
+      "lunch": [
+        "10:30",
+        "11:30"
+      ],
+      "lunchByDay": {
+        "0": [
+          "10:30",
+          "11:30"
+        ],
+        "1": [
+          "10:30",
+          "11:30"
+        ],
+        "2": [
+          "10:30",
+          "11:30"
+        ],
+        "3": [
+          "10:30",
+          "11:30"
+        ],
+        "4": [
+          "11:00",
+          "12:00"
+        ]
+      },
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "personId": "8067cca2-7487-4589-ba7c-aa442e135045",
+      "state": "ACTIVE_EMPLOYEE_SCHEDULE_UNPUBLISHED",
+      "effectiveStart": null,
+      "employeeCode": "EMP016",
+      "employeeActivatedAt": "2026-10-28 20:46:13.414619+00",
+      "schedulePublicationState": "PENDING"
+    },
+    {
+      "key": "XAVIER",
+      "sourceSlotKey": "GREGORY",
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "name": "Xavier Green",
+      "shift": [
+        "08:00",
+        "17:00"
+      ],
+      "lunch": [
+        "12:30",
+        "13:30"
+      ],
+      "lunchByDay": {
+        "0": [
+          "12:30",
+          "13:30"
+        ],
+        "1": [
+          "12:30",
+          "13:30"
+        ],
+        "2": [
+          "12:30",
+          "13:30"
+        ],
+        "3": [
+          "12:30",
+          "13:30"
+        ],
+        "6": [
+          "12:30",
+          "13:30"
+        ]
+      },
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        6
+      ],
+      "personId": "1318b295-fd70-4e78-8828-62c29302f96f",
+      "state": "ACTIVE_EMPLOYEE_SCHEDULE_UNPUBLISHED",
+      "effectiveStart": null,
+      "employeeCode": "EMP017",
+      "employeeActivatedAt": "2026-10-28 20:46:13.414619+00",
+      "schedulePublicationState": "PENDING"
+    }
+  ],
+  "unchangedEmployees": [
+    {
+      "key": "TAMMY",
+      "sourceSlotKey": "TAMMY",
+      "slotId": "4a5a83ca-d297-5a30-8344-db08d05b978c",
+      "name": "Tammy Miller",
+      "shift": [
+        "05:00",
+        "14:00"
+      ],
+      "lunch": [
+        "08:30",
+        "09:30"
+      ],
+      "lunchByDay": {
+        "0": [
+          "08:30",
+          "09:30"
+        ],
+        "1": [
+          "08:30",
+          "09:30"
+        ],
+        "2": [
+          "08:30",
+          "09:30"
+        ],
+        "3": [
+          "08:30",
+          "09:30"
+        ],
+        "4": [
+          "08:30",
+          "09:30"
+        ],
+        "5": [
+          "08:30",
+          "09:30"
+        ]
+      },
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "personId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+      "state": "CURRENT_BOUND",
+      "effectiveStart": null
+    },
+    {
+      "key": "KAREN",
+      "sourceSlotKey": "KAREN",
+      "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+      "name": "Karen Robinson",
+      "shift": [
+        "05:00",
+        "14:00"
+      ],
+      "lunch": [
+        "09:30",
+        "10:30"
+      ],
+      "lunchByDay": {
+        "1": [
+          "09:30",
+          "10:30"
+        ],
+        "2": [
+          "09:30",
+          "10:30"
+        ],
+        "3": [
+          "09:30",
+          "10:30"
+        ],
+        "5": [
+          "09:30",
+          "10:30"
+        ],
+        "6": [
+          "09:30",
+          "10:30"
+        ]
+      },
+      "workDays": [
+        1,
+        2,
+        3,
+        5,
+        6
+      ],
+      "personId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+      "state": "CURRENT_BOUND",
+      "effectiveStart": null
+    },
+    {
+      "key": "KATHY",
+      "sourceSlotKey": "KATHY",
+      "slotId": "55e5939c-175c-5026-94fd-c4350d538922",
+      "name": "Kathy Phelps",
+      "shift": [
+        "06:00",
+        "15:00"
+      ],
+      "lunch": [
+        "10:30",
+        "11:30"
+      ],
+      "lunchByDay": {
+        "2": [
+          "10:30",
+          "11:30"
+        ],
+        "3": [
+          "10:30",
+          "11:30"
+        ],
+        "4": [
+          "10:00",
+          "11:00"
+        ],
+        "5": [
+          "10:30",
+          "11:30"
+        ],
+        "6": [
+          "10:30",
+          "11:30"
+        ]
+      },
+      "workDays": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "personId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+      "state": "CURRENT_BOUND",
+      "effectiveStart": null
+    },
+    {
+      "key": "ALIJAH",
+      "sourceSlotKey": "ALIJAH",
+      "slotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+      "name": "Alijah Collins",
+      "shift": [
+        "07:00",
+        "16:00"
+      ],
+      "lunch": [
+        "11:30",
+        "12:30"
+      ],
+      "lunchByDay": {
+        "0": [
+          "11:30",
+          "12:30"
+        ],
+        "1": [
+          "11:30",
+          "12:30"
+        ],
+        "4": [
+          "12:00",
+          "13:00"
+        ],
+        "5": [
+          "11:30",
+          "12:30"
+        ],
+        "6": [
+          "11:30",
+          "12:30"
+        ]
+      },
+      "workDays": [
+        0,
+        1,
+        4,
+        5,
+        6
+      ],
+      "personId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+      "state": "CURRENT_BOUND",
+      "effectiveStart": null
+    }
+  ],
+  "ninthPosition": {
+    "key": "OPEN",
+    "sourceSlotKey": "OPTION4",
+    "slotId": "40aaa043-6ff3-52c6-9c88-79da314f8b49",
+    "name": "Open position",
+    "shift": [
+      "06:00",
+      "15:00"
+    ],
+    "lunch": [
+      "10:00",
+      "11:00"
+    ],
+    "lunchByDay": {},
+    "workDays": [
+      0,
+      1,
+      2,
+      5,
+      6
+    ],
+    "personId": null,
+    "state": "VACANT_NO_COVERAGE",
+    "effectiveStart": null,
+    "scenario": "ASSUME_FILLED_FOR_NINE_POSITION_PLAN_ONLY",
+    "realEmployeeCreated": false
+  },
+  "eightEmployeeCandidate": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/employee-activation-20261028/eight-employees/repaired-review-week.json",
+    "sha256": "30b73cc7d0ffb67c124cc47c0b78eb74c7042820c4078d94b7d212b86a25c08b"
+  },
+  "ninePositionAssumedFilledCandidate": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/employee-activation-20261028/nine-positions/repaired-review-week.json",
+    "sha256": "92ecefd6f22fb77d08c0fc3dc9d4d0abf2f0c34a4a592d0608daa4d21b2184de"
+  },
+  "liveReadback": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/employee-activation-20261028/live-readback.json",
+    "sha256": "b62fa76b9fb731311353baf725c9c4b8f26eff40d22552bc1eeb61b3883dcaf8"
+  },
+  "constraints": {
+    "createDuplicateEmployees": false,
+    "inventNinthIdentity": false,
+    "rewritePriorIncumbencies": false,
+    "automaticallyAssignPhones": false,
+    "claimSchedulePublication": false
+  }
+}

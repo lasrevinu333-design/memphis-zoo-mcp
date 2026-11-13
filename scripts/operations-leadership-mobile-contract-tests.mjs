@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import express from "express";
-import { installLeadershipHttpRoutes } from "../src/leadership-bootstrap.js";
+// Importing leadership must preserve the shared JSON parser identity.
+const originalExpressJson = express.json;
+const { installLeadershipHttpRoutes } = await import("../src/leadership-bootstrap.js");
+assert.equal(express.json, originalExpressJson, "leadership import must not monkeypatch express.json");
 import { assertExactFrontendPair } from './fixtures/exact-frontend-pair.mjs';
 
 const root = new URL("../", import.meta.url);
-const [bootstrap, annieMoxie, indexSource, migration, authSource, releaseManifestSource] = await Promise.all([
+const [bootstrap, indexSource, migration, authSource, releaseManifestSource] = await Promise.all([
   readFile(new URL("src/leadership-bootstrap.js", root), "utf8"),
-  readFile(new URL("src/annie-moxie-bootstrap.js", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql", root), "utf8"),
   readFile(new URL("src/auth/shared-access-auth.js", root), "utf8"),
@@ -37,11 +39,10 @@ assert.doesNotMatch(bootstrap, /device_credential|X-Memphis-Device-Credential/);
 assert.match(bootstrap, /\/leadership-api\/managers\/:managerId\/enrollment-code/);
 assert.match(bootstrap, /\/viewer-api\/dashboard/);
 assert.match(bootstrap, /capacitor:\/\/localhost/);
-assert.match(bootstrap, /replace\(\/\[’‘\]\/g, "'"\)/);
+assert.doesNotMatch(bootstrap, /express\.json\s*=/, "leadership must not globally rewrite request JSON");
 assert.doesNotMatch(bootstrap, /express\.application\.use\s*=/, "leadership routes must not revive retired browser routes through a global Express hook");
-assert.match(annieMoxie, /Moxie access is limited to Annie Feist and Eric Operle/);
-assert.match(annieMoxie, /annie_feist_operations_admin/);
-assert.match(indexSource, /installAnnieMoxieRoutes\(app/);
+assert.doesNotMatch(bootstrap, /moxie-mobile-api|requireMoxie/);
+assert.doesNotMatch(indexSource, /installAnnieMoxieRoutes|createMoxieRouter/);
 assert.match(indexSource, /installLeadershipHttpRoutes\(app/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
 assert.match(authSource, /app\.use\("\/auth-api\/ops\/shared-enrollment", retireSharedManagerEnrollment\)/);
@@ -51,7 +52,7 @@ assert.match(authSource, /shared_48_hour_enrollment:\s*false/);
 assert.match(indexSource, /ops-manager-auth\.v6\.http-only-boundary/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
 assertExactFrontendPair(releaseManifest, releasePairInput);
-assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
+assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v6.http-only-boundary");
 assert.equal(releaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 
 const echo = express();
@@ -60,13 +61,23 @@ echo.post("/echo", (req, res) => res.json(req.body));
 const echoServer = echo.listen(0, "127.0.0.1");
 await new Promise((resolve) => echoServer.once("listening", resolve));
 try {
-  const response = await fetch(`http://127.0.0.1:${echoServer.address().port}/echo`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ body: "Who’s working tomorrow — and who’s off?" }),
-  });
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).body, "Who's working tomorrow - and who's off?");
+  const submitted = {
+    body: "Who’s working tomorrow — and who’s off?",
+    message: 'It’s “closed”—please check – and preserve  internal whitespace.',
+    nested: { body: 'Don’t rewrite “original” text — at any depth.' },
+    items: [{ message: 'It’s unchanged.' }],
+  };
+  const literalWire = JSON.stringify(submitted);
+  const escapedWire = literalWire.replace(/[’‘“”–—]/g, character => "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0"));
+  for (const wire of [literalWire, escapedWire]) {
+    const response = await fetch(`http://127.0.0.1:${echoServer.address().port}/echo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: wire,
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), submitted, "normal JSON parsing preserves original punctuation and nested data verbatim");
+  }
 } finally {
   await new Promise((resolve, reject) => echoServer.close((error) => error ? reject(error) : resolve()));
 }

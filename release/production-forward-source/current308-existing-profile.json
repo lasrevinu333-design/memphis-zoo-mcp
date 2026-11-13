@@ -1,0 +1,1119 @@
+{
+  "schema": "custodial.current308-existing-postgres-metadata.v1",
+  "evidence_run": 41746616388,
+  "archive_digest": "f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3",
+  "source_catalog_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
+  "rollback_verified": true,
+  "inventory": {
+    "count": "7571",
+    "sha256": "caed39969afbbe1b35fc72059ebf87b0fdccde85bac4751e3c0ac66a85b7512a"
+  },
+  "canary": {
+    "function_sha256": "d82be622b733c30b046268449e7dc75a799bce55deac4aa7956b9786930a383e",
+    "surface_count": "1603",
+    "surface_sha256": "9e90c09d2ac3f694a845b31b60fd9540a4bc26c2653ca22abd4a3af0bc0c36f1"
+  },
+  "api_defaults": [
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "USAGE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "DELETE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "INSERT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "MAINTAIN",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "REFERENCES",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "TRIGGER",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "postgres",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "USAGE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "USAGE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "S",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "USAGE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "DELETE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "INSERT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "MAINTAIN",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "REFERENCES",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "TRIGGER",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "anon",
+      "grantor": "supabase_admin",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "DELETE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "INSERT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "MAINTAIN",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "REFERENCES",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "TRIGGER",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "authenticated",
+      "grantor": "supabase_admin",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "DELETE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "INSERT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "MAINTAIN",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "REFERENCES",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "SELECT",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "TRIGGER",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": false
+    },
+    {
+      "owner_name": "supabase_admin",
+      "schema_name": "public",
+      "object_type": "r",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "privilege_type": "UPDATE",
+      "is_grantable": false
+    }
+  ],
+  "predecessors": [
+    {
+      "expected": {
+        "kind": "column",
+        "identity": "public.custodial_offline_reconciliation_outbox:reconciliation_id",
+        "stored_sha256": "6acb15657cceb3b32478659010548a26f63b8973d9c5c7c44b10b75b31c3d8c1",
+        "live_sha256": "2b99eaa22fee39a7aeb683cd268eb8b0959d443044bc17834b3c204b885a466c"
+      },
+      "actual": [
+        {
+          "restore_order": 200177,
+          "object_kind": "column",
+          "object_identity": "public.custodial_offline_reconciliation_outbox:reconciliation_id",
+          "stored_sha256": "6acb15657cceb3b32478659010548a26f63b8973d9c5c7c44b10b75b31c3d8c1",
+          "stored_definition_sha256": "6acb15657cceb3b32478659010548a26f63b8973d9c5c7c44b10b75b31c3d8c1",
+          "live_sha256": "2b99eaa22fee39a7aeb683cd268eb8b0959d443044bc17834b3c204b885a466c"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "column_set",
+        "identity": "public.custodial_offline_reconciliation_outbox",
+        "stored_sha256": "f585d877d1b4f82f89c708eaefe8a6d5f78758f88fe494aad9bfdb0e2a98530c",
+        "live_sha256": "f53e62237e377924766eca80db8abcfd4726c17f77c87f37aae25fba1cb7df80"
+      },
+      "actual": [
+        {
+          "restore_order": 300013,
+          "object_kind": "column_set",
+          "object_identity": "public.custodial_offline_reconciliation_outbox",
+          "stored_sha256": "f585d877d1b4f82f89c708eaefe8a6d5f78758f88fe494aad9bfdb0e2a98530c",
+          "stored_definition_sha256": "f585d877d1b4f82f89c708eaefe8a6d5f78758f88fe494aad9bfdb0e2a98530c",
+          "live_sha256": "f53e62237e377924766eca80db8abcfd4726c17f77c87f37aae25fba1cb7df80"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "constraint",
+        "identity": "public.custodial_offline_reconciliation_outbox:custodial_offline_reconciliation_outbox_notification_kind_check",
+        "stored_sha256": "4221cfc1c8ba4c839b9700a34bcaf7920f8bc2a8e0acabfcf2ed91a75c6da626",
+        "live_sha256": "63714ffee189080db10c45347492673db4d9d91a74714669ca202ea28145ccfe"
+      },
+      "actual": [
+        {
+          "restore_order": 500588,
+          "object_kind": "constraint",
+          "object_identity": "public.custodial_offline_reconciliation_outbox:custodial_offline_reconciliation_outbox_notification_kind_check",
+          "stored_sha256": "4221cfc1c8ba4c839b9700a34bcaf7920f8bc2a8e0acabfcf2ed91a75c6da626",
+          "stored_definition_sha256": "4221cfc1c8ba4c839b9700a34bcaf7920f8bc2a8e0acabfcf2ed91a75c6da626",
+          "live_sha256": "63714ffee189080db10c45347492673db4d9d91a74714669ca202ea28145ccfe"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "capture_system_feedback_email_intent()",
+        "stored_sha256": "88cd48d0f88921c54db35fb1aab538563055c688603262af21dd3507cb5f9c35",
+        "live_sha256": "ff5e533b61ec6bae4a6b8ba418cffb1a528d1fc56a0838400a60289c1b50fc77"
+      },
+      "actual": [
+        {
+          "restore_order": 100333,
+          "object_kind": "function",
+          "object_identity": "capture_system_feedback_email_intent()",
+          "stored_sha256": "88cd48d0f88921c54db35fb1aab538563055c688603262af21dd3507cb5f9c35",
+          "stored_definition_sha256": "88cd48d0f88921c54db35fb1aab538563055c688603262af21dd3507cb5f9c35",
+          "live_sha256": "ff5e533b61ec6bae4a6b8ba418cffb1a528d1fc56a0838400a60289c1b50fc77"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_action_actor_v1(uuid,uuid,text,text,text)",
+        "stored_sha256": "c3953e8993ef86cba598973e36bc0dc34bd393dda0bca2dfc398bf97b5fd412a",
+        "live_sha256": "95ae99a83afdd36703f4bbe439856cd43c774f0662751d1ef8ab38728dc6c872"
+      },
+      "actual": [
+        {
+          "restore_order": 800039,
+          "object_kind": "function",
+          "object_identity": "custodial_action_actor_v1(uuid,uuid,text,text,text)",
+          "stored_sha256": "c3953e8993ef86cba598973e36bc0dc34bd393dda0bca2dfc398bf97b5fd412a",
+          "stored_definition_sha256": "c3953e8993ef86cba598973e36bc0dc34bd393dda0bca2dfc398bf97b5fd412a",
+          "live_sha256": "95ae99a83afdd36703f4bbe439856cd43c774f0662751d1ef8ab38728dc6c872"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_claim_offline_reconciliation_notification_recipients(uuid,text,uuid,jsonb,text)",
+        "stored_sha256": "b375f7889c415e8176229dacb631eac26ecda812cc29c38e99b68c908e631549",
+        "live_sha256": "6a090ab7e1cee957e38456208f34c61526ac7ba399444a8280d64163da97a4c4"
+      },
+      "actual": [
+        {
+          "restore_order": 100016,
+          "object_kind": "function",
+          "object_identity": "custodial_claim_offline_reconciliation_notification_recipients(uuid,text,uuid,jsonb,text)",
+          "stored_sha256": "b375f7889c415e8176229dacb631eac26ecda812cc29c38e99b68c908e631549",
+          "stored_definition_sha256": "b375f7889c415e8176229dacb631eac26ecda812cc29c38e99b68c908e631549",
+          "live_sha256": "6a090ab7e1cee957e38456208f34c61526ac7ba399444a8280d64163da97a4c4"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_leadership_private.record_operation_v1(jsonb,text,jsonb)",
+        "stored_sha256": "1483b360a49c661c97e53d27756f62e3dc45a4c435e101605185f718e2e83c88",
+        "live_sha256": "e82c5955d2483cd8896f9248c3c189178d2b7fde76d3b927e4af7a2d12516854"
+      },
+      "actual": [
+        {
+          "restore_order": 100629,
+          "object_kind": "function",
+          "object_identity": "custodial_leadership_private.record_operation_v1(jsonb,text,jsonb)",
+          "stored_sha256": "1483b360a49c661c97e53d27756f62e3dc45a4c435e101605185f718e2e83c88",
+          "stored_definition_sha256": "1483b360a49c661c97e53d27756f62e3dc45a4c435e101605185f718e2e83c88",
+          "live_sha256": "e82c5955d2483cd8896f9248c3c189178d2b7fde76d3b927e4af7a2d12516854"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_leadership_record_operation_v1(uuid,uuid,text,text,jsonb)",
+        "stored_sha256": "57f33a5fca39a6ad35ce827615c8c9d799c1cda7067325dc1f73d203b0dffcaf",
+        "live_sha256": "d66e87a35b3ed757c413a26228283689e077d80cd8f8da049a4f0ca2bb514377"
+      },
+      "actual": [
+        {
+          "restore_order": 100631,
+          "object_kind": "function",
+          "object_identity": "custodial_leadership_record_operation_v1(uuid,uuid,text,text,jsonb)",
+          "stored_sha256": "57f33a5fca39a6ad35ce827615c8c9d799c1cda7067325dc1f73d203b0dffcaf",
+          "stored_definition_sha256": "57f33a5fca39a6ad35ce827615c8c9d799c1cda7067325dc1f73d203b0dffcaf",
+          "live_sha256": "d66e87a35b3ed757c413a26228283689e077d80cd8f8da049a4f0ca2bb514377"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_manager_completion_evidence(uuid,text,text)",
+        "stored_sha256": "fa84ea9975f52cb156dd5383b20548c78dfdfc497ec553f27a4a0efed3812ac1",
+        "live_sha256": "ef4af3f85d530b0a05680ad786a7519dc4ac6d8bb49b6a5c533d1cec1424d390"
+      },
+      "actual": [
+        {
+          "restore_order": 100425,
+          "object_kind": "function",
+          "object_identity": "custodial_manager_completion_evidence(uuid,text,text)",
+          "stored_sha256": "fa84ea9975f52cb156dd5383b20548c78dfdfc497ec553f27a4a0efed3812ac1",
+          "stored_definition_sha256": "fa84ea9975f52cb156dd5383b20548c78dfdfc497ec553f27a4a0efed3812ac1",
+          "live_sha256": "ef4af3f85d530b0a05680ad786a7519dc4ac6d8bb49b6a5c533d1cec1424d390"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_native_lunch_live(uuid,jsonb,timestamp with time zone)",
+        "stored_sha256": "accd2ed108271bb48dd0f2ddeac0d7fa6943d73fbb53d5358f331bce342418b0",
+        "live_sha256": "da3acd9c5f3d16be6f1d91879718554a8dd81d534aeecf0813d2f83a1ab0535e"
+      },
+      "actual": [
+        {
+          "restore_order": 100456,
+          "object_kind": "function",
+          "object_identity": "custodial_native_lunch_live(uuid,jsonb,timestamp with time zone)",
+          "stored_sha256": "accd2ed108271bb48dd0f2ddeac0d7fa6943d73fbb53d5358f331bce342418b0",
+          "stored_definition_sha256": "accd2ed108271bb48dd0f2ddeac0d7fa6943d73fbb53d5358f331bce342418b0",
+          "live_sha256": "da3acd9c5f3d16be6f1d91879718554a8dd81d534aeecf0813d2f83a1ab0535e"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "custodial_native_target_source_at(text,uuid,uuid,uuid,timestamp with time zone)",
+        "stored_sha256": "120ab6c2021600529e79265da97aeefdf28d3265df032ff1c4edd63c2cee9d9e",
+        "live_sha256": "7a2821e947ccec13cc97e3bf78437cc5d7676d5cd1212df604282e30e4394d77"
+      },
+      "actual": [
+        {
+          "restore_order": 100436,
+          "object_kind": "function",
+          "object_identity": "custodial_native_target_source_at(text,uuid,uuid,uuid,timestamp with time zone)",
+          "stored_sha256": "120ab6c2021600529e79265da97aeefdf28d3265df032ff1c4edd63c2cee9d9e",
+          "stored_definition_sha256": "120ab6c2021600529e79265da97aeefdf28d3265df032ff1c4edd63c2cee9d9e",
+          "live_sha256": "7a2821e947ccec13cc97e3bf78437cc5d7676d5cd1212df604282e30e4394d77"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "device_auth_consume_enrollment_operation(uuid,text,uuid,text,text,uuid,text,text,timestamp with time zone,text,text,text,timestamp with time zone,text,text,text,jsonb)",
+        "stored_sha256": "895521d65cd3b6e025c0cef0b33cb1b8cc3bd71e103cb2f8ed5ab4db0f3f6094",
+        "live_sha256": "799de0abf1bc517010ad866e4c883e90469bf039c7b0c92128f6585e520c542e"
+      },
+      "actual": [
+        {
+          "restore_order": 100157,
+          "object_kind": "function",
+          "object_identity": "device_auth_consume_enrollment_operation(uuid,text,uuid,text,text,uuid,text,text,timestamp with time zone,text,text,text,timestamp with time zone,text,text,text,jsonb)",
+          "stored_sha256": "895521d65cd3b6e025c0cef0b33cb1b8cc3bd71e103cb2f8ed5ab4db0f3f6094",
+          "stored_definition_sha256": "895521d65cd3b6e025c0cef0b33cb1b8cc3bd71e103cb2f8ed5ab4db0f3f6094",
+          "live_sha256": "799de0abf1bc517010ad866e4c883e90469bf039c7b0c92128f6585e520c542e"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "expire_stale_open_sessions(timestamp with time zone)",
+        "stored_sha256": "97070694ca30316cf8bea79af865a45a5296846e4f4b0c4f4e8b74ff08c7534c",
+        "live_sha256": "771a186cde92b9a0cd364202b4c5669f0819100252563624a885732c74f8eb2a"
+      },
+      "actual": [
+        {
+          "restore_order": 100171,
+          "object_kind": "function",
+          "object_identity": "expire_stale_open_sessions(timestamp with time zone)",
+          "stored_sha256": "97070694ca30316cf8bea79af865a45a5296846e4f4b0c4f4e8b74ff08c7534c",
+          "stored_definition_sha256": "97070694ca30316cf8bea79af865a45a5296846e4f4b0c4f4e8b74ff08c7534c",
+          "live_sha256": "771a186cde92b9a0cd364202b4c5669f0819100252563624a885732c74f8eb2a"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "mz_enqueue_employee_lunch_coverage_pushes(timestamp with time zone)",
+        "stored_sha256": "50347b4c4db3433b2febbc2876b1585b8cacddfdcd1d5beac066ee309d8d7467",
+        "live_sha256": "7050c232edad3a8444a6cfa797b143e7b9f56aa81ee76d8ed3700421a36a274b"
+      },
+      "actual": [
+        {
+          "restore_order": 100192,
+          "object_kind": "function",
+          "object_identity": "mz_enqueue_employee_lunch_coverage_pushes(timestamp with time zone)",
+          "stored_sha256": "50347b4c4db3433b2febbc2876b1585b8cacddfdcd1d5beac066ee309d8d7467",
+          "stored_definition_sha256": "50347b4c4db3433b2febbc2876b1585b8cacddfdcd1d5beac066ee309d8d7467",
+          "live_sha256": "7050c232edad3a8444a6cfa797b143e7b9f56aa81ee76d8ed3700421a36a274b"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.custodial_v12_guard_protected_device()",
+        "stored_sha256": "ff340a30703f1fe222b8813ea045a8ab14ffbff7632f5cc143599071d4a2cf5f",
+        "live_sha256": "6d57a44bc68cf3f92f25d5700fe961efce339f882599afc2024d73dfcf1bea6b"
+      },
+      "actual": [
+        {
+          "restore_order": 100260,
+          "object_kind": "function",
+          "object_identity": "public.custodial_v12_guard_protected_device()",
+          "stored_sha256": "ff340a30703f1fe222b8813ea045a8ab14ffbff7632f5cc143599071d4a2cf5f",
+          "stored_definition_sha256": "ff340a30703f1fe222b8813ea045a8ab14ffbff7632f5cc143599071d4a2cf5f",
+          "live_sha256": "6d57a44bc68cf3f92f25d5700fe961efce339f882599afc2024d73dfcf1bea6b"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v22_ack_recurring_application_target(uuid,uuid,uuid,uuid,bigint,bigint,text,text,timestamp with time zone)",
+        "stored_sha256": "12b247915de07ae32eee0209b82ce2c30d7470dbc16184f4cc7f3b5e30b3d6d9",
+        "live_sha256": "7e0ac56b4236d135d290e3853b4e784ab530e0bc3a4e0f146ff8727773a02175"
+      },
+      "actual": [
+        {
+          "restore_order": 100297,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v22_ack_recurring_application_target(uuid,uuid,uuid,uuid,bigint,bigint,text,text,timestamp with time zone)",
+          "stored_sha256": "12b247915de07ae32eee0209b82ce2c30d7470dbc16184f4cc7f3b5e30b3d6d9",
+          "stored_definition_sha256": "12b247915de07ae32eee0209b82ce2c30d7470dbc16184f4cc7f3b5e30b3d6d9",
+          "live_sha256": "7e0ac56b4236d135d290e3853b4e784ab530e0bc3a4e0f146ff8727773a02175"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v22_read_recurring_application_target(date,uuid,uuid,uuid,bigint)",
+        "stored_sha256": "a2d04f831cce37de5bd503adea6e648f8b99545e24c111a74c9b0764807990da",
+        "live_sha256": "0cc16424dd3b111469d18808e33a9fc05a2c39e2d87ebef5c40e1e3283cfe0a7"
+      },
+      "actual": [
+        {
+          "restore_order": 100298,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v22_read_recurring_application_target(date,uuid,uuid,uuid,bigint)",
+          "stored_sha256": "a2d04f831cce37de5bd503adea6e648f8b99545e24c111a74c9b0764807990da",
+          "stored_definition_sha256": "a2d04f831cce37de5bd503adea6e648f8b99545e24c111a74c9b0764807990da",
+          "live_sha256": "0cc16424dd3b111469d18808e33a9fc05a2c39e2d87ebef5c40e1e3283cfe0a7"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v22_reconcile_recurring_application_date(date)",
+        "stored_sha256": "fbe23313ab9e85fea04e6901f8367f0051ba9ba550840e4e31c203aaae2ff4d2",
+        "live_sha256": "54a0778d62ccea3ec42ea8a1770ec42c1488420b93adcee51b85f056c0cac790"
+      },
+      "actual": [
+        {
+          "restore_order": 100299,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v22_reconcile_recurring_application_date(date)",
+          "stored_sha256": "fbe23313ab9e85fea04e6901f8367f0051ba9ba550840e4e31c203aaae2ff4d2",
+          "stored_definition_sha256": "fbe23313ab9e85fea04e6901f8367f0051ba9ba550840e4e31c203aaae2ff4d2",
+          "live_sha256": "54a0778d62ccea3ec42ea8a1770ec42c1488420b93adcee51b85f056c0cac790"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v24_ack_device_schedule_delivery(uuid,uuid,uuid,uuid,bigint,text,bigint,text,text,timestamp with time zone)",
+        "stored_sha256": "6a07f3cbb6d04adf6f93045a90ef1917a057b4dbcf52530db311e459dbecc89b",
+        "live_sha256": "bf00c7c7952193dfdbe03472f3ddff733c5cbc77f1777fae8184ef44a4664bf8"
+      },
+      "actual": [
+        {
+          "restore_order": 100302,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v24_ack_device_schedule_delivery(uuid,uuid,uuid,uuid,bigint,text,bigint,text,text,timestamp with time zone)",
+          "stored_sha256": "6a07f3cbb6d04adf6f93045a90ef1917a057b4dbcf52530db311e459dbecc89b",
+          "stored_definition_sha256": "6a07f3cbb6d04adf6f93045a90ef1917a057b4dbcf52530db311e459dbecc89b",
+          "live_sha256": "bf00c7c7952193dfdbe03472f3ddff733c5cbc77f1777fae8184ef44a4664bf8"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v24_read_device_schedule_delivery(date,uuid,uuid,uuid,bigint)",
+        "stored_sha256": "063b3b106479fc656269ad0729e119d480e65dcac72c6c311dbbfdd65cfe7a38",
+        "live_sha256": "836a8ae3fa6922373d66ba91cc675a0cd0886c8828690ce4415e343336c69007"
+      },
+      "actual": [
+        {
+          "restore_order": 100303,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v24_read_device_schedule_delivery(date,uuid,uuid,uuid,bigint)",
+          "stored_sha256": "063b3b106479fc656269ad0729e119d480e65dcac72c6c311dbbfdd65cfe7a38",
+          "stored_definition_sha256": "063b3b106479fc656269ad0729e119d480e65dcac72c6c311dbbfdd65cfe7a38",
+          "live_sha256": "836a8ae3fa6922373d66ba91cc675a0cd0886c8828690ce4415e343336c69007"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v25_read_current_recurring_delivery(date,uuid)",
+        "stored_sha256": "3bf65a972869ff81372ad3f3952daace5739a139985f685a5b368bbdaaa602d7",
+        "live_sha256": "c2cf0da085cff2ac50fdc31df3bb5cb928252b68ae14f7bcda5ba5188f8af631"
+      },
+      "actual": [
+        {
+          "restore_order": 100304,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v25_read_current_recurring_delivery(date,uuid)",
+          "stored_sha256": "3bf65a972869ff81372ad3f3952daace5739a139985f685a5b368bbdaaa602d7",
+          "stored_definition_sha256": "3bf65a972869ff81372ad3f3952daace5739a139985f685a5b368bbdaaa602d7",
+          "live_sha256": "c2cf0da085cff2ac50fdc31df3bb5cb928252b68ae14f7bcda5ba5188f8af631"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v27_ack_device_schedule_delivery(uuid,uuid,uuid,uuid,uuid,bigint,text,bigint,text,text,timestamp with time zone)",
+        "stored_sha256": "faa0f55d4896f4363000c5953a2fef8caa864d5db77902a9bf047071d55f3ff2",
+        "live_sha256": "b0727c271838961e2bc2e9c0a3d7c711c5a9d892f8c7e4dbd71626259d443dc8"
+      },
+      "actual": [
+        {
+          "restore_order": 100597,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v27_ack_device_schedule_delivery(uuid,uuid,uuid,uuid,uuid,bigint,text,bigint,text,text,timestamp with time zone)",
+          "stored_sha256": "faa0f55d4896f4363000c5953a2fef8caa864d5db77902a9bf047071d55f3ff2",
+          "stored_definition_sha256": "faa0f55d4896f4363000c5953a2fef8caa864d5db77902a9bf047071d55f3ff2",
+          "live_sha256": "b0727c271838961e2bc2e9c0a3d7c711c5a9d892f8c7e4dbd71626259d443dc8"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v27_notification_plan_at(date,uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)",
+        "stored_sha256": "59ae64a1a55284bd5348e2ec7fb6cb607f39123d30cba7969ef9f75d17b2fcf1",
+        "live_sha256": "6cb15415e12b312bdf20276fc74dd26751d660e0691b0d8015f1457440f53e98"
+      },
+      "actual": [
+        {
+          "restore_order": 100600,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v27_notification_plan_at(date,uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)",
+          "stored_sha256": "59ae64a1a55284bd5348e2ec7fb6cb607f39123d30cba7969ef9f75d17b2fcf1",
+          "stored_definition_sha256": "59ae64a1a55284bd5348e2ec7fb6cb607f39123d30cba7969ef9f75d17b2fcf1",
+          "live_sha256": "6cb15415e12b312bdf20276fc74dd26751d660e0691b0d8015f1457440f53e98"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "public.static_weekly_v27_original_native_bindings(jsonb,timestamp with time zone)",
+        "stored_sha256": "2489f1e64dce5c28470d053425b34d5fa5bbd4ef630f827f2ec1e0e557bfc6e4",
+        "live_sha256": "87c33fbb9cb51f6fe7da034adebea239fa99242e8cb0d5a69ca3ea92fc3ba4ee"
+      },
+      "actual": [
+        {
+          "restore_order": 100603,
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v27_original_native_bindings(jsonb,timestamp with time zone)",
+          "stored_sha256": "2489f1e64dce5c28470d053425b34d5fa5bbd4ef630f827f2ec1e0e557bfc6e4",
+          "stored_definition_sha256": "2489f1e64dce5c28470d053425b34d5fa5bbd4ef630f827f2ec1e0e557bfc6e4",
+          "live_sha256": "87c33fbb9cb51f6fe7da034adebea239fa99242e8cb0d5a69ca3ea92fc3ba4ee"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_accepted_exception_set(uuid,date)",
+        "stored_sha256": "8ce1e49beaf770567bd3468be0b28aea370e5930ce2138e1597eb90668e348d7",
+        "live_sha256": "773163ee06fbccba59596d5a0eb5b40ecb25495b197872de3fae0c5ff02264d9"
+      },
+      "actual": [
+        {
+          "restore_order": 100253,
+          "object_kind": "function",
+          "object_identity": "static_weekly_accepted_exception_set(uuid,date)",
+          "stored_sha256": "8ce1e49beaf770567bd3468be0b28aea370e5930ce2138e1597eb90668e348d7",
+          "stored_definition_sha256": "8ce1e49beaf770567bd3468be0b28aea370e5930ce2138e1597eb90668e348d7",
+          "live_sha256": "773163ee06fbccba59596d5a0eb5b40ecb25495b197872de3fae0c5ff02264d9"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_capacity_assert_projection_owner(jsonb,uuid,jsonb)",
+        "stored_sha256": "a7af1913ce3b2301d75fa0559db96e820484bcf0da9867ce0e4acfb586450d0e",
+        "live_sha256": "c4fb8a3810ab9a779d79d011ce2ad486a8ccc4031c3d019dfd277f2583225932"
+      },
+      "actual": [
+        {
+          "restore_order": 100428,
+          "object_kind": "function",
+          "object_identity": "static_weekly_capacity_assert_projection_owner(jsonb,uuid,jsonb)",
+          "stored_sha256": "a7af1913ce3b2301d75fa0559db96e820484bcf0da9867ce0e4acfb586450d0e",
+          "stored_definition_sha256": "a7af1913ce3b2301d75fa0559db96e820484bcf0da9867ce0e4acfb586450d0e",
+          "live_sha256": "c4fb8a3810ab9a779d79d011ce2ad486a8ccc4031c3d019dfd277f2583225932"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_compiler_exception_set(uuid,date)",
+        "stored_sha256": "85db993fb76b2bd098a0581c44f474c6990576252d1e2f5928555899b8cab212",
+        "live_sha256": "2286a3d9ddc5107a5699875cc3a27a02fd6de3901fdc0479880cab73baeca494"
+      },
+      "actual": [
+        {
+          "restore_order": 100255,
+          "object_kind": "function",
+          "object_identity": "static_weekly_compiler_exception_set(uuid,date)",
+          "stored_sha256": "85db993fb76b2bd098a0581c44f474c6990576252d1e2f5928555899b8cab212",
+          "stored_definition_sha256": "85db993fb76b2bd098a0581c44f474c6990576252d1e2f5928555899b8cab212",
+          "live_sha256": "2286a3d9ddc5107a5699875cc3a27a02fd6de3901fdc0479880cab73baeca494"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_pending_assert_lunch(uuid,uuid,uuid,date,jsonb,jsonb)",
+        "stored_sha256": "a34dd5e4b7bc163b48d57d8f791b03a09e1238e15f911d3770b10cdcde7429a8",
+        "live_sha256": "f369414eb5a37e371e3064058394a7c7734932196c5e512739646a6197c85b58"
+      },
+      "actual": [
+        {
+          "restore_order": 850021,
+          "object_kind": "function",
+          "object_identity": "static_weekly_pending_assert_lunch(uuid,uuid,uuid,date,jsonb,jsonb)",
+          "stored_sha256": "a34dd5e4b7bc163b48d57d8f791b03a09e1238e15f911d3770b10cdcde7429a8",
+          "stored_definition_sha256": "a34dd5e4b7bc163b48d57d8f791b03a09e1238e15f911d3770b10cdcde7429a8",
+          "live_sha256": "f369414eb5a37e371e3064058394a7c7734932196c5e512739646a6197c85b58"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_pending_assert_projection(uuid,uuid,jsonb)",
+        "stored_sha256": "357ac0648dd992ebdb09d923fdb7265fdc6513e422288ef6347d3e1214a77c7c",
+        "live_sha256": "601588840d94bc7d36601887b1980481090f16c2c27aace5b0905337ee55f987"
+      },
+      "actual": [
+        {
+          "restore_order": 850018,
+          "object_kind": "function",
+          "object_identity": "static_weekly_pending_assert_projection(uuid,uuid,jsonb)",
+          "stored_sha256": "357ac0648dd992ebdb09d923fdb7265fdc6513e422288ef6347d3e1214a77c7c",
+          "stored_definition_sha256": "357ac0648dd992ebdb09d923fdb7265fdc6513e422288ef6347d3e1214a77c7c",
+          "live_sha256": "601588840d94bc7d36601887b1980481090f16c2c27aace5b0905337ee55f987"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_pending_exception_set(uuid,uuid,date,date)",
+        "stored_sha256": "0c65eae618a04b336ffc447acb953344505b38625c007244898adc75e078f51b",
+        "live_sha256": "76c8124adb07062ecd7cf95592215383ea837048733055d9496a0e3fe9b05bc2"
+      },
+      "actual": [
+        {
+          "restore_order": 850012,
+          "object_kind": "function",
+          "object_identity": "static_weekly_pending_exception_set(uuid,uuid,date,date)",
+          "stored_sha256": "0c65eae618a04b336ffc447acb953344505b38625c007244898adc75e078f51b",
+          "stored_definition_sha256": "0c65eae618a04b336ffc447acb953344505b38625c007244898adc75e078f51b",
+          "live_sha256": "76c8124adb07062ecd7cf95592215383ea837048733055d9496a0e3fe9b05bc2"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_pending_original_exception_set(uuid,date,uuid)",
+        "stored_sha256": "568183788a0f7e52be9f3d8232445b6d42549b93254e311dcd906642a191f01e",
+        "live_sha256": "dd03577075d47b8e7d751ed2b6b8e577abe809675f655f59e30db44cd4cc455c"
+      },
+      "actual": [
+        {
+          "restore_order": 850011,
+          "object_kind": "function",
+          "object_identity": "static_weekly_pending_original_exception_set(uuid,date,uuid)",
+          "stored_sha256": "568183788a0f7e52be9f3d8232445b6d42549b93254e311dcd906642a191f01e",
+          "stored_definition_sha256": "568183788a0f7e52be9f3d8232445b6d42549b93254e311dcd906642a191f01e",
+          "live_sha256": "dd03577075d47b8e7d751ed2b6b8e577abe809675f655f59e30db44cd4cc455c"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v10_read_staffing_command(uuid,uuid)",
+        "stored_sha256": "63b11b296de897e97990f404dc7800c90bc0c269978606cc764a7d51c53a11fc",
+        "live_sha256": "a42058840724610b796b63ae7eeb3a27e1f3248298068cc3cc2f7570ed993f95"
+      },
+      "actual": [
+        {
+          "restore_order": 100249,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v10_read_staffing_command(uuid,uuid)",
+          "stored_sha256": "63b11b296de897e97990f404dc7800c90bc0c269978606cc764a7d51c53a11fc",
+          "stored_definition_sha256": "63b11b296de897e97990f404dc7800c90bc0c269978606cc764a7d51c53a11fc",
+          "live_sha256": "a42058840724610b796b63ae7eeb3a27e1f3248298068cc3cc2f7570ed993f95"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v11_accept_staffing_command(uuid,text,uuid,uuid)",
+        "stored_sha256": "7e7512b39c2dad6f6f5306b2c98b273a035e4d1b84f3f67b2972a6944bca7b3b",
+        "live_sha256": "dfb1b6c77fac33a98989903476169fdf5ec425677a836e8f1d83d5fba2e1e496"
+      },
+      "actual": [
+        {
+          "restore_order": 100256,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v11_accept_staffing_command(uuid,text,uuid,uuid)",
+          "stored_sha256": "7e7512b39c2dad6f6f5306b2c98b273a035e4d1b84f3f67b2972a6944bca7b3b",
+          "stored_definition_sha256": "7e7512b39c2dad6f6f5306b2c98b273a035e4d1b84f3f67b2972a6944bca7b3b",
+          "live_sha256": "dfb1b6c77fac33a98989903476169fdf5ec425677a836e8f1d83d5fba2e1e496"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v11_staged_projection_digest_matches(uuid,text,uuid)",
+        "stored_sha256": "65428e05a6e6da354e5d73b45a09ecf47ba07ab37a2eac6d42627f776c305daa",
+        "live_sha256": "3453d848ffccd041d10d140b81c3f5fac04d25941f003875c13d5d27a82c697e"
+      },
+      "actual": [
+        {
+          "restore_order": 100258,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v11_staged_projection_digest_matches(uuid,text,uuid)",
+          "stored_sha256": "65428e05a6e6da354e5d73b45a09ecf47ba07ab37a2eac6d42627f776c305daa",
+          "stored_definition_sha256": "65428e05a6e6da354e5d73b45a09ecf47ba07ab37a2eac6d42627f776c305daa",
+          "live_sha256": "3453d848ffccd041d10d140b81c3f5fac04d25941f003875c13d5d27a82c697e"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v5_read_employee_day_single_location_base(date,uuid,timestamp with time zone)",
+        "stored_sha256": "25faf446ca1ec9ee0f295f0114617eafc565cfd9f19ff41a3a8bde845fa6da38",
+        "live_sha256": "242caba9fbe188e9bdc635a4b27475e81efa25d0fc523fa33457c701b694cb87"
+      },
+      "actual": [
+        {
+          "restore_order": 100621,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v5_read_employee_day_single_location_base(date,uuid,timestamp with time zone)",
+          "stored_sha256": "25faf446ca1ec9ee0f295f0114617eafc565cfd9f19ff41a3a8bde845fa6da38",
+          "stored_definition_sha256": "25faf446ca1ec9ee0f295f0114617eafc565cfd9f19ff41a3a8bde845fa6da38",
+          "live_sha256": "242caba9fbe188e9bdc635a4b27475e81efa25d0fc523fa33457c701b694cb87"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v8_assert_lunch_document(uuid,jsonb)",
+        "stored_sha256": "632692af300fbb6610b2f56077535568859cf47f7829ef5d20901a37466d25c7",
+        "live_sha256": "f6aef114ba8759123d9907a24088da7500dfb5ffc7c5384cef720375838a1b4a"
+      },
+      "actual": [
+        {
+          "restore_order": 100188,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v8_assert_lunch_document(uuid,jsonb)",
+          "stored_sha256": "632692af300fbb6610b2f56077535568859cf47f7829ef5d20901a37466d25c7",
+          "stored_definition_sha256": "632692af300fbb6610b2f56077535568859cf47f7829ef5d20901a37466d25c7",
+          "live_sha256": "f6aef114ba8759123d9907a24088da7500dfb5ffc7c5384cef720375838a1b4a"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v8_materialize_lunch_document(uuid,jsonb,uuid)",
+        "stored_sha256": "b37945e14e5f804f4bbde542115bd017f8c7e64b909933658d8a23ec6979a9e9",
+        "live_sha256": "7a95af194dc0bf9a69ed26e737d748ee4144960f0d23dcea93ac11624aafb95a"
+      },
+      "actual": [
+        {
+          "restore_order": 100189,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v8_materialize_lunch_document(uuid,jsonb,uuid)",
+          "stored_sha256": "b37945e14e5f804f4bbde542115bd017f8c7e64b909933658d8a23ec6979a9e9",
+          "stored_definition_sha256": "b37945e14e5f804f4bbde542115bd017f8c7e64b909933658d8a23ec6979a9e9",
+          "live_sha256": "7a95af194dc0bf9a69ed26e737d748ee4144960f0d23dcea93ac11624aafb95a"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "function",
+        "identity": "static_weekly_v8_read_lunch_document(date)",
+        "stored_sha256": "8e19ebff428a4883e35acd09d50986228f6efea9b12ade4450da0c53aeb327d0",
+        "live_sha256": "b15fe4047739f187438c3081128ff49f8c81e3a63c6e0c12c9a0efdb9685ce15"
+      },
+      "actual": [
+        {
+          "restore_order": 100190,
+          "object_kind": "function",
+          "object_identity": "static_weekly_v8_read_lunch_document(date)",
+          "stored_sha256": "8e19ebff428a4883e35acd09d50986228f6efea9b12ade4450da0c53aeb327d0",
+          "stored_definition_sha256": "8e19ebff428a4883e35acd09d50986228f6efea9b12ade4450da0c53aeb327d0",
+          "live_sha256": "b15fe4047739f187438c3081128ff49f8c81e3a63c6e0c12c9a0efdb9685ce15"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "relation",
+        "identity": "public.custodial_offline_reconciliation_outbox",
+        "stored_sha256": "f0df2989becf9a4221ab98097165290cdeccc1e7f8a4a9e054830a82bd6079c9",
+        "live_sha256": "44003c86ddc601a5860e8142d6d5772b26b267134c52fa408e82e4f5453d9bc8"
+      },
+      "actual": [
+        {
+          "restore_order": 1013,
+          "object_kind": "relation",
+          "object_identity": "public.custodial_offline_reconciliation_outbox",
+          "stored_sha256": "f0df2989becf9a4221ab98097165290cdeccc1e7f8a4a9e054830a82bd6079c9",
+          "stored_definition_sha256": "f0df2989becf9a4221ab98097165290cdeccc1e7f8a4a9e054830a82bd6079c9",
+          "live_sha256": "44003c86ddc601a5860e8142d6d5772b26b267134c52fa408e82e4f5453d9bc8"
+        }
+      ]
+    }
+  ],
+  "production_authorized": false
+}

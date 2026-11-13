@@ -5,9 +5,20 @@ import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
+import { createOriginalMessageActions } from "./messaging-original-outcome.js";
+import { recipientDirectory } from "./messenger-recipient-directory.js";
 
-export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
+export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, leadershipMessagingBridge, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
+  const cohortRequestContexts = new WeakMap();
+  const isCohortSession = session => session?.auth_mode === 'custodial_leadership_pin' || session?.actor_kind === 'CUSTODIAL_LEADERSHIP_COHORT';
+  async function cohortOperation(session, action, input) {
+    const context = cohortRequestContexts.get(session);
+    if (!context || typeof leadershipMessagingBridge !== 'function') throw Object.assign(new Error('Current cohort Messenger context is unavailable.'), {status:403});
+    return leadershipMessagingBridge({session,action,input,origin:context.origin,csrfToken:context.csrfToken});
+  }
+  const originalMessageActions = typeof requireDeviceAccess === "function"
+    ? createOriginalMessageActions({ runReadOnlySql, runRpc, requireDeviceAccess }) : null;
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
   const requireOpsManagerAuth = suppliedOpsManagerAuth || makeOpsAccessMiddleware();
   const retiredGeminiAdminRoute = (_req, res) => res.status(410).json({ ok: false, error: "This diagnostic route is retired. Use /gemini-api." });
@@ -22,6 +33,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   async function finishMessagingIdentity(req, res, next) {
     if (req.memphisAuth) {
       try {
+        if (isCohortSession(req.memphisAuth)) cohortRequestContexts.set(req.memphisAuth, {
+          origin: String(req.get?.('Origin') || req.headers?.origin || ''),
+          csrfToken: String(req.get?.('X-CSRF-Token') || req.headers?.['x-csrf-token'] || ''),
+        });
         const identity = await getManagerMessagingIdentity(req.memphisAuth);
         req.memphisMessagingManager = { identity };
         next();
@@ -73,6 +88,45 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       .catch((error) => res.status(401).json({ ok: false, error: error?.message || "Device authentication failed." }));
   }
 
+  function longPollOwner(req, viewer) {
+    const session = req.memphisAuth || {}, credential = req.memphisDeviceCredential || {};
+    return JSON.stringify([
+      viewer.effectiveUserId, Boolean(viewer.isManagerOverview), Boolean(viewer.authenticatedManager),
+      viewer.identity?.role || '', viewer.identity?.canonical_device_id || viewer.deviceId || '',
+      session.auth_mode || '', session.actor_kind || '', session.manager_id || '',
+      session.claimed_manager_id || '', session.credential_id || '', session.device_id || '',
+      session.session_id || '', Boolean(session.read_only), session.permissions?.policyVersion || '',
+      Array.isArray(session.roles) ? [...session.roles].sort() : [],
+      credential.credential_id || '', credential.employee_id || '', credential.assignment_epoch ?? null,
+      req.memphisDevice?.assigned_employee_id || '', req.memphisDevice?.assignment_epoch ?? null,
+    ]);
+  }
+
+  async function confirmLongPollOwner(req, res, owner, deviceId) {
+    // A held read must validate the original presented credential again. Never
+    // carry a previously resolved principal into the new authentication pass.
+    for (const key of ['memphisAuth', 'memphisDevice', 'memphisDeviceCredential', 'memphisDeviceAuth',
+      'memphisMessagingManager', 'memphisMessagingDevice']) delete req[key];
+    const allowed = await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (value, error) => {
+        if (settled) return;
+        settled = true; res.off('finish', denied); res.off('close', denied);
+        if (error) reject(error); else resolve(value);
+      };
+      const denied = () => finish(false);
+      res.once('finish', denied); res.once('close', denied);
+      try { requireDeviceOrOpsAuth(req, res, () => finish(true)); }
+      catch (error) { finish(false, error); }
+    });
+    if (!allowed || res.headersSent || res.writableEnded || res.destroyed) return false;
+    const current = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+    if (longPollOwner(req, current) !== owner) {
+      throw Object.assign(new Error('Messenger access changed while waiting for updates.'), { status: 403 });
+    }
+    return true;
+  }
+
   function requireWritableDeviceOrOpsAuth(req, res, next) {
     requireDeviceOrOpsAuth(req, res, () => {
       if (req.memphisAuth?.read_only) {
@@ -89,6 +143,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   const OFF_SHIFT_NOTIFICATION_OVERRIDE_SETTING_KEY = "off_shift_employee_notifications_override_enabled";
 
   function fail(res, error, fallback = "Messaging request failed") {
+    if (res.headersSent || res.writableEnded) return;
     const requested = Number(error?.status || error?.statusCode || 400);
     const status = requested >= 400 && requested <= 599 ? requested : 400;
     res.status(status).json({ ok: false, error: error?.message || fallback });
@@ -102,6 +157,22 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   function isUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim())
       || /^00000000-0000-0000-0000-000000000000$/i.test(String(value || "").trim());
+  }
+
+  function deletionReceiptInstant(value) {
+    if (typeof value !== "string") return null;
+    const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2}):(\d{2}))$/);
+    if (!parts) return null;
+    const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = "", , , offsetHourText, offsetMinuteText] = parts;
+    const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]
+        || Number(hourText) > 23 || Number(minuteText) > 59 || Number(secondText) > 59
+        || (offsetHourText && (Number(offsetHourText) > 23 || Number(offsetMinuteText) > 59))) return null;
+    const milliseconds = Date.parse(fraction ? value.replace(`.${fraction}`, "") : value);
+    if (!Number.isFinite(milliseconds)) return null;
+    return BigInt(milliseconds) * 1000n + BigInt(fraction.padEnd(6, "0") || "0");
   }
 
   function assertMessageBodyWithinLimit(body) {
@@ -188,10 +259,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return (await getLeadershipProfilesForMessagingUsers([userId])).get(String(userId || "").trim()) || null;
   }
 
-  async function enrichMessagingUsers(rows = []) {
+  async function enrichMessagingUsers(rows = [], currentUserId = '') {
     const users = Array.isArray(rows) ? rows : [];
     const profiles = await getLeadershipProfilesForMessagingUsers(users.map((row) => row?.id));
-    return users.map((row) => {
+    const ids=[...new Set([...users.map(row=>String(row?.id||'')),currentUserId].filter(isUuid))];
+    const links=ids.length?await runReadOnlySql(`select id,ops_manager_id,custodial_cohort_manager_id,custodial_claimed_account_id
+      from public.msg_users where is_active=true and id in (${ids.map(id=>`'${esc(id)}'::uuid`).join(',')})`):[];
+    return recipientDirectory(users.map((row) => {
       const profile = profiles.get(String(row?.id || "").trim()) || null;
       return {
         ...row,
@@ -200,12 +274,28 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         department_key: String(profile?.department_key || "").trim() || null,
         manager_roles: Array.isArray(profile?.manager_roles) ? profile.manager_roles : null,
       };
-    });
+    }),Array.isArray(links)?links:[],currentUserId);
   }
 
   async function getManagerMessagingIdentity(managerSession = {}) {
     const managerId = String(managerSession?.manager_id || "").trim();
     if (!isUuid(managerId)) throw Object.assign(new Error("Authenticated manager identity is required for Messenger."), { status: 401 });
+    if (isCohortSession(managerSession)) {
+      const context = cohortRequestContexts.get(managerSession);
+      if (context?.identity) return context.identity;
+      const row = await cohortOperation(managerSession, 'identity', {});
+      if (row?.schema !== 'custodial.cohort-messenger-identity.v1' || !isUuid(row.msg_user_id)
+          || row.custodial_cohort_manager_id !== managerId || row.custodial_claimed_account_id !== managerSession.claimed_manager_id
+          || row.identity_assurance !== 'SELF_ASSERTED_NAME' || row.individual_identity_verified !== false
+          || row.ops_manager_id != null || row.role !== 'manager') {
+        throw Object.assign(new Error('Cohort Messenger identity was not confirmed.'), {status:403});
+      }
+      const identity = {...row,user_id:row.msg_user_id,manager_id:managerId,
+        canonical_device_id:managerSession.device_id,identity_source:'current_self_asserted_cohort_account',
+        role_title:'Custodial leadership (shared PIN)',read_only:false};
+      context.identity = identity;
+      return identity;
+    }
     const data = await runRpc("msg_ensure_ops_manager_user", { p_manager_id: managerId });
     const row = Array.isArray(data) ? data[0] : data;
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
@@ -232,6 +322,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
       canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
       identity_source: "trusted_manager_session",
+      read_only: managerSession.read_only === true,
     };
   }
 
@@ -248,7 +339,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         identity,
         effectiveUserId,
         deviceId: String(managerSession.device_id || managerSession.credential_id || "manager-session"),
-        isManagerOverview: true,
+        isManagerOverview: !isCohortSession(managerSession),
         authenticatedManager: true,
       };
     }
@@ -978,6 +1069,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         m.thread_id,
         m.sender_user_id,
         sender.display_name as sender_display_name,
+        sender.role as sender_role,
         m.message_type,
         m.body,
         m.metadata_json,
@@ -1023,6 +1115,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         m.thread_id,
         m.sender_user_id,
         sender.display_name as sender_display_name,
+        sender.role as sender_role,
         m.message_type,
         m.body,
         m.metadata_json,
@@ -1079,22 +1172,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return parts.join(". " ) + ".";
   }
 
-  async function directContactReply(body = "") {
-    if (!isDirectContactPrompt(body)) return null;
-    const contacts = await runReadOnlySql(`
-      select display_name, role_title, department, phone, active, sort_order
-      from public.internal_ops_contacts
-      where active = true
-      order by sort_order asc, display_name asc
-    `);
-    const ranked = (Array.isArray(contacts) ? contacts : [])
-      .map((contact) => ({ contact, score: scoreContactPrompt(body, contact) }))
-      .sort((a, b) => b.score - a.score || Number(a.contact.sort_order || 999) - Number(b.contact.sort_order || 999));
-    const best = ranked[0];
-    if (best && best.score >= 70) return summarizeDirectContact(best.contact, true);
-    if (/\b(manager|managers|director|contact|phone|number)\b/i.test(String(body || ""))) {
-      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, true)).join(" " );
-    }
+  async function directContactReply() {
+    // Work-directory access now belongs to the shared responder. It resolves
+    // the original sender's current employee/named/cohort identity and applies
+    // the owner-approved internal work-contact policy before any directory read.
+    // Falling through also preserves the original sourceMessageId for cohort
+    // authority instead of granting access from a device label or role hint.
     return null;
   }
 
@@ -1140,9 +1223,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return raw;
   }
 
-  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
+  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "", sourceMessageId = "" } = {}) {
     try {
-      const directContact = await directContactReply(body);
+      const directContact = await directContactReply(body, userId);
       if (directContact) {
         return {
           reply: { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } },
@@ -1156,7 +1239,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         };
       }
       const routedBody = normalizeMemphisPromptForLocalRouting(body);
-      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody });
+      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody, sourceMessageId });
       if (routedBody !== body) {
         reply = {
           ...reply,
@@ -1172,8 +1255,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       console.error("memphis ai reply failed:", error);
       return {
         reply: {
-          text: `Memphis hit an internal error while answering that. ${error?.message || "Unknown error."}`,
-          meta: { fallback: true, error: error?.message || "unknown_error", diagnostics: getGeminiDiagnosticsForMessaging() },
+          text: "I couldn't verify that answer right now. Please try again or check with a manager.",
+          meta: { fallback: true, mode: "answer_unavailable" },
         },
         routedBody: body,
       };
@@ -1187,6 +1270,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     clientMessageId = "",
     threadId = "",
     managerId = "",
+    managerSession = null,
   } = {}) {
     const normalizedUserId = String(userId || "").trim();
     const normalizedDeviceId = String(deviceId || "").trim();
@@ -1222,7 +1306,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       },
       p_client_message_id: normalizedClientMessageId || null,
     };
-    const userMessage = normalizedManagerId
+    const userMessage = isCohortSession(managerSession)
+      ? await cohortOperation(managerSession, 'send', {
+        thread_id:thread.id,body:normalizedBody,message_type:'text',metadata_json:messageArgs.p_metadata_json,
+        client_message_id:normalizedClientMessageId,
+      })
+      : normalizedManagerId
       ? await runRpc("msg_send_message_as_ops_manager", {
         ...messageArgs,
         p_manager_id: normalizedManagerId,
@@ -1282,14 +1371,29 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
+  async function requireCurrentCohortMessageActor(source) {
+    if (source.custodial_cohort_manager_id) {
+      const checked = await runReadOnlySql(`select public.msg_custodial_cohort_message_actor_v1('${esc(source.id)}'::uuid,'${esc(source.sender_user_id)}'::uuid,'${esc(source.device_id)}') as actor`);
+      const actor = Array.isArray(checked) && checked.length === 1 ? checked[0]?.actor : null;
+      if (actor?.schema !== 'custodial.cohort-messenger-actor.v1' || actor.msg_user_id !== source.sender_user_id
+          || actor.source_message_id !== source.id || actor.custodial_cohort_manager_id !== source.custodial_cohort_manager_id
+          || actor.custodial_claimed_account_id !== source.custodial_claimed_account_id
+          || actor.identity_assurance !== 'SELF_ASSERTED_NAME' || actor.individual_identity_verified !== false || actor.owner !== false) {
+        throw new Error('Original cohort Messenger authority is no longer current.');
+      }
+    }
+  }
+
   async function processMemphisBotReplyJob(job = {}) {
     const sourceMessageId = String(job.source_id || job.payload_json?.message_id || "").trim();
     if (!isUuid(sourceMessageId)) throw new Error("Memphis background job is missing its source message.");
     const sourceRows = await runReadOnlySql(`
       select m.id, m.thread_id, m.sender_user_id, m.body, m.metadata_json,
-             coalesce(m.metadata_json->>'device_id','') as device_id
+             coalesce(m.metadata_json->>'device_id','') as device_id,
+             sender.custodial_cohort_manager_id,sender.custodial_claimed_account_id
       from public.msg_messages m
       join public.msg_threads t on t.id = m.thread_id
+      join public.msg_users sender on sender.id=m.sender_user_id
       where m.id = '${esc(sourceMessageId)}'::uuid
         and m.is_deleted is false
         and t.is_active is true
@@ -1298,6 +1402,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     `);
     const source = Array.isArray(sourceRows) && sourceRows.length ? sourceRows[0] : null;
     if (!source) throw new Error("Memphis source message no longer exists.");
+    await requireCurrentCohortMessageActor(source);
     const replyKey = `memphis-reply:${source.id}`;
     const existing = await findMemphisBotMessage(replyKey);
     if (existing) return { bot_message: existing, replayed: true };
@@ -1310,7 +1415,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       deviceId: source.device_id,
       threadId: source.thread_id,
       body: source.body,
+      sourceMessageId: source.id,
     });
+    await requireCurrentCohortMessageActor(source);
     const botMessage = await runRpc("msg_send_message", {
       p_thread_id: source.thread_id,
       p_sender_user_id: memphisUserId,
@@ -1366,9 +1473,18 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.get("/me/by-device", requireDeviceOrOpsAuth, async (req, res) => {
     try {
+      const original = originalMessageActions?.prepare(req, res);
       const deviceId = String(req.query.device_id || req.memphisMessagingDevice?.deviceId || req.header("x-device-id") || "").trim();
       if (!deviceId && !req.memphisAuth && !req.memphisMessagingDevice?.identity) throw new Error("device_id is required.");
-      const data = req.memphisMessagingManager?.identity || req.memphisMessagingDevice?.identity || await getViewerIdentity(deviceId);
+      let data = req.memphisMessagingManager?.identity || req.memphisMessagingDevice?.identity || await getViewerIdentity(deviceId);
+      if (original?.applicable) {
+        const { relationship } = await original.currentRelationship();
+        if (String(data?.msg_user_id || "") !== relationship.user_id) {
+          throw Object.assign(new Error("Current device and Messenger employee no longer match."), { status: 409 });
+        }
+        data = { ...data, employee_id: relationship.employee_id, credential_id: relationship.credential_id,
+          assignment_epoch: Number(relationship.assignment_epoch), canonical_device_id: relationship.device_id };
+      }
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
       fail(res, error, "Device identity lookup failed");
@@ -1381,7 +1497,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const deviceId = String(req.query.device_id || req.header("x-device-id") || "").trim();
       const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
       const baseRows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
-      const rows = await enrichMessagingUsers(baseRows);
+      const rows = await enrichMessagingUsers(baseRows,viewer.effectiveUserId);
       res.status(200).json({ ok: true, data: rows, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
@@ -1430,6 +1546,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor thread id is required."), { status: 422 });
       const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
       const canonicalViewerDevice = String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim();
+      const owner = longPollOwner(req, viewer);
       let rows = [];
       do {
         rows = await runReadOnlySql(buildThreadChangesSql({
@@ -1444,6 +1561,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         await waitFor(Math.min(1000, Math.max(100, waitMs - (Date.now() - startedAt))));
       } while (!clientGone);
       if (clientGone || res.headersSent) return;
+      if (!await confirmLongPollOwner(req, res, owner, deviceId) || clientGone) return;
       const data = Array.isArray(rows) ? rows : [];
       const last = data[data.length - 1] || null;
       res.status(200).json({
@@ -1482,11 +1600,56 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.get("/device-location-status-reminders", requireDeviceOrOpsAuth, async (req, res) => {
     try {
+      res.setHeader('Cache-Control', 'private, no-store');
       const deviceId = String(req.query.device_id || "").trim();
+      const includeAcceptedSessions = req.query.accepted_sessions === '1';
+      const requestedServiceDate = String(req.query.service_date || req.query.date || '').trim();
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
+      // This pins permission to READ the response. It is never represented as
+      // the credential that originally created a session/START occurrence.
+      const principal = () => {
+        const auth=req.memphisDeviceAuth,d=req.memphisDevice,c=req.memphisDeviceCredential;
+        const epoch=String(d?.assignment_epoch ?? '');
+        if(req.memphisAuth || auth?.ok!==true || auth.credentialed!==true || auth.offline_recovery_only===true
+          || auth.device!==d || auth.credential!==c || d?.device_active!==true || d.employee_active!==true
+          || !isUuid(d.canonical_device_pk) || !isUuid(d.assigned_employee_id)
+          || typeof d.canonical_device_id!=='string' || !d.canonical_device_id
+          || !/^[1-9][0-9]*$/.test(epoch) || (typeof d.assignment_epoch==='number'&&!Number.isSafeInteger(d.assignment_epoch))
+          || !isUuid(c?.credential_id) || c.device_id!==d.canonical_device_pk
+          || !c.confirmed_at || c.revoked_at!==null || !Number.isFinite(Date.parse(c.expires_at))
+          || Date.parse(c.expires_at)<=Date.now())return null;
+        return {credential_id:c.credential_id,device_pk:d.canonical_device_pk,device_id:d.canonical_device_id,
+          employee_id:d.assigned_employee_id,assignment_epoch:epoch};
+      };
+      const originalPrincipal=includeAcceptedSessions?principal():null;
+      if(includeAcceptedSessions&&(!originalPrincipal||typeof requireDeviceAccess!=='function')){
+        res.status(401).json({ok:false,error:'Current enrolled employee device authority is required.'});return;
+      }
+      const reminderCredentialId = isUuid(req.memphisDeviceCredential?.credential_id)
+        ? req.memphisDeviceCredential.credential_id : null;
+      const refreshPrincipal = async () => {
+        if(!includeAcceptedSessions)return true;
+        const admitted=await new Promise((resolve,reject)=>{
+          let settled=false;
+          const finish=value=>{if(settled)return;settled=true;res.removeListener('finish',closed);res.removeListener('close',closed);resolve(value);};
+          const closed=()=>finish(false);
+          res.once('finish',closed);res.once('close',closed);
+          try{Promise.resolve(requireDeviceAccess(req,res,()=>finish(true))).catch(error=>{
+            if(settled)return;settled=true;res.removeListener('finish',closed);res.removeListener('close',closed);reject(error);
+          });}catch(error){settled=true;res.removeListener('finish',closed);res.removeListener('close',closed);reject(error);}
+          if(res.headersSent||res.writableEnded||res.destroyed)finish(false);
+        });
+        if(!admitted)return false;
+        const current=principal();
+        if(!current||Object.keys(originalPrincipal).some(key=>current[key]!==originalPrincipal[key])){
+          res.status(409).json({ok:false,error:'Original device authority changed during reminder readback.'});return false;
+        }
+        return true;
+      };
 
       const assignment = await getAssignedEmployeeForDevice(deviceId);
+      if(!await refreshPrincipal())return;
       const canonicalDeviceId = String(assignment?.canonical_device_id || assignment?.device_id || deviceId).trim();
       if (!assignment || !assignment.device_active) {
         res.status(404).json({ ok: false, error: "Active device assignment not found." });
@@ -1497,9 +1660,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
 
-      const serviceDate = String(req.query.service_date || req.query.date || "").trim() || await getServiceDate();
+      if(includeAcceptedSessions&&(assignment.canonical_device_pk!==originalPrincipal.device_pk
+        || canonicalDeviceId!==originalPrincipal.device_id || assignment.assigned_employee_id!==originalPrincipal.employee_id
+        || String(assignment.assignment_epoch)!==originalPrincipal.assignment_epoch)){
+        res.status(409).json({ok:false,error:'Original device assignment changed during reminder readback.'});return;
+      }
+      const serviceDate = requestedServiceDate || await getServiceDate();
+      if(!await refreshPrincipal())return;
       if (!serviceDate) throw new Error("service_date could not be resolved.");
       const notificationState = await getDeviceNotificationState(canonicalDeviceId, { serviceDate, employeeId: assignment.assigned_employee_id });
+      if(!await refreshPrincipal())return;
       if (idsDiffer(notificationState?.employee_id, assignment.assigned_employee_id)) {
         const mismatchState = forceSilentNotificationState(notificationState, "device_assignment_mismatch");
         res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(mismatchState)) });
@@ -1510,10 +1680,30 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
 
+      // Only the authenticated current principal may consume its bound ACK.
+      // Manager/legacy unbound readers never borrow another principal's ACK.
+      const readAuthority = async () => {
+        const authorityRows=await runReadOnlySql(`select service_date,governed,projection_status,version_id,publication_id,projection_id,
+          projection_authority_revision::text as schedule_authority_revision
+          from public.static_weekly_v6_schedule_authority_state('${esc(serviceDate)}'::date) limit 2`);
+        if(!await refreshPrincipal())return null;
+        const a=Array.isArray(authorityRows)&&authorityRows.length===1?authorityRows[0]:null;
+        if(!a||a.service_date!==serviceDate||a.governed!==true||a.projection_status!=='current'
+          || !isUuid(a.version_id)||!isUuid(a.publication_id)||!isUuid(a.projection_id)
+          || typeof a.schedule_authority_revision!=='string'||!/^[1-9][0-9]*$/.test(a.schedule_authority_revision)){
+          res.status(409).json({ok:false,error:'Current projection authority is unavailable for reminder readback.'});return null;
+        }
+        return {service_date:a.service_date,version_id:a.version_id,publication_id:a.publication_id,
+          projection_id:a.projection_id,schedule_authority_revision:a.schedule_authority_revision};
+      };
+      const originalAuthority=includeAcceptedSessions?await readAuthority():null;
+      if(includeAcceptedSessions&&!originalAuthority)return;
       const rows = await runReadOnlySql(`
         select * from (
           with assigned_locations as (
             select distinct on (assignment.location_id)
+              assignment.projection_id,
+              assignment.publication_id,
               assignment.location_group_id,
               assignment.group_code,
               assignment.group_name,
@@ -1525,6 +1715,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             from public.custodial_operational_location_assignments('${esc(serviceDate)}'::date) assignment
             where assignment.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
               and assignment.assignment_status = 'ASSIGNED'
+              and assignment.projection_status = 'current'
+              and assignment.projection_id is not null
               and assignment.coverage_start <= (now() at time zone 'America/Chicago')::time
               and (now() at time zone 'America/Chicago')::time < assignment.coverage_end
             order by assignment.location_id, assignment.coverage_start,
@@ -1537,6 +1729,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             '${esc(assignment.assigned_employee_id)}'::uuid as employee_id,
             ${assignment.assigned_employee_name ? `'${esc(assignment.assigned_employee_name)}'::text` : 'null::text'} as employee_name,
             ${assignment.employee_code ? `'${esc(assignment.employee_code)}'::text` : 'null::text'} as employee_code,
+            al.projection_id,
+            al.publication_id,
             al.location_group_id,
             al.group_code,
             al.group_name,
@@ -1558,7 +1752,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             v.open_ticket_count,
             v.last_scan_at,
             v.last_scan_at_display,
-            cycle.notification_key as notification_key
+            cycle.notification_key||':projection:'||al.projection_id::text as notification_key
           from assigned_locations al
           join public.v_location_dashboard_status v on v.location_id = al.location_id
           join public.mz_location_reminder_candidates('${esc(serviceDate)}'::date,now()) cycle
@@ -1568,7 +1762,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
               select 1
               from public.device_notification_acknowledgements a
               where upper(btrim(a.device_identifier)) = upper(btrim('${esc(canonicalDeviceId)}'))
-                and a.notification_key = cycle.notification_key
+                and a.notification_key = cycle.notification_key||':projection:'||al.projection_id::text
+                and a.credential_id = ${reminderCredentialId ? `'${esc(reminderCredentialId)}'::uuid` : 'null::uuid'}
+                and a.assignment_epoch = '${esc(assignment.assignment_epoch)}'::bigint
+                and a.employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
                 and a.acknowledged_at is not null
             )
           order by
@@ -1578,7 +1775,122 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           limit ${limit}
         ) reminder_rows
       `);
-      res.status(200).json({ ok: true, data: rows || [], meta: messagingMeta(notificationStateMeta(notificationState)) });
+      if(!await refreshPrincipal())return;
+      let acceptedLocationSessions = [];
+      if (includeAcceptedSessions) {
+        // Existing open-work authority includes canonical sessions and only
+        // activated, attested native contexts with an issued server proof.
+        // Local/unsubmitted IDs and absence from this list are not acceptance.
+        acceptedLocationSessions = await runReadOnlySql(`
+          select distinct on (a.location_id,a.projection_id)
+            '${esc(serviceDate)}'::date service_date,
+            '${esc(canonicalDeviceId)}'::text device_id,
+            '${esc(assignment.assigned_employee_id)}'::uuid employee_id,
+            '${esc(assignment.assignment_epoch)}'::bigint assignment_epoch,
+            '${esc(originalPrincipal.credential_id)}'::uuid credential_id,
+            authority.projection_authority_revision::text schedule_authority_revision,
+            a.location_id,a.projection_id,w.session_uuid open_session_uuid,
+            w.status open_session_status,
+            to_char(w.started_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') open_session_started_at,
+            w.device_identifier open_session_device_identifier,
+            case when original_context.context_id is not null and original_proof.submission_id is not null then
+              jsonb_build_object(
+                'schema','custodial.accepted-start-origin.v1',
+                'source_kind',w.source_kind,
+                'context_id',original_context.context_id,
+                'occurrence_id',original_context.occurrence_id,
+                'client_session_id',original_context.client_session_id,
+                'employee_id',original_context.employee_id,
+                'device_id',original_context.device_id,
+                'credential_id',original_context.credential_id,
+                'assignment_epoch',original_context.assignment_epoch::text,
+                'location_id',original_context.location_id,
+                'native_scan_entry_id',original_context.native_scan_entry_id,
+                'occurrence_fingerprint',original_context.occurrence_fingerprint,
+                'started_at',to_char(original_context.started_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+                'context_status',original_context.status,
+                'proof_state',original_proof.state)
+              else null::jsonb end original_start
+          from public.custodial_operational_location_assignments('${esc(serviceDate)}'::date) a
+          join public.static_weekly_v6_schedule_authority_state('${esc(serviceDate)}'::date) authority
+            on authority.service_date=a.service_date and authority.governed=true and authority.projection_status='current'
+            and authority.version_id=a.version_id and authority.publication_id=a.publication_id and authority.projection_id=a.projection_id
+            and authority.projection_authority_revision::text='${esc(originalAuthority.schedule_authority_revision)}'
+            and authority.version_id='${esc(originalAuthority.version_id)}'::uuid
+            and authority.publication_id='${esc(originalAuthority.publication_id)}'::uuid
+            and authority.projection_id='${esc(originalAuthority.projection_id)}'::uuid
+          join public.custodial_open_work() w on w.location_id=a.location_id
+            and w.employee_id='${esc(assignment.assigned_employee_id)}'::uuid
+            and w.status in ('active','pending_submit') and w.started_at<=now()
+            and w.source_kind in ('session','native_offline_context')
+            and isfinite(w.started_at) and w.session_uuid is not null and length(btrim(w.session_uuid))>0
+            and upper(btrim(w.device_identifier))=upper(btrim('${esc(canonicalDeviceId)}'))
+          left join public.sessions original_session
+            on w.source_kind='session' and original_session.id=w.session_id
+            and original_session.session_uuid=w.session_uuid
+            and original_session.client_session_id=w.client_session_id
+            and original_session.employee_id=w.employee_id and original_session.device_id=w.device_id
+            and original_session.location_id=w.location_id and original_session.started_at=w.started_at
+            and original_session.status=w.status
+          left join public.custodial_offline_actor_contexts original_context
+            on ((w.source_kind='native_offline_context' and original_context.context_id=w.context_id
+                and original_context.client_session_id=w.client_session_id)
+              or (w.source_kind='session' and original_session.id is not null
+                and original_context.client_session_id=original_session.client_session_id))
+            and original_context.employee_id=w.employee_id and original_context.device_id=w.device_id
+            and original_context.location_id=w.location_id and original_context.started_at=w.started_at
+            and original_context.status in ('activated','committed')
+            and original_context.native_start_attestation_version='custodial-native-start.v1'
+            and original_context.native_start_attestation_sha256 ~ '^[0-9a-f]{64}$'
+            and original_context.native_scan_entry_id is not null
+            and original_context.occurrence_fingerprint ~ '^[0-9a-f]{64}$'
+          left join public.custodial_offline_submission_proofs original_proof
+            on original_proof.context_id=original_context.context_id
+            and ((original_context.status='activated' and original_proof.state='issued')
+              or (original_context.status='committed' and original_proof.state='consumed'))
+          where a.assigned_employee_id='${esc(assignment.assigned_employee_id)}'::uuid
+            and a.assignment_status='ASSIGNED' and a.projection_status='current'
+            and a.projection_id is not null
+            and a.coverage_start<=(now() at time zone 'America/Chicago')::time
+            and (now() at time zone 'America/Chicago')::time<a.coverage_end
+          order by a.location_id,a.projection_id,w.started_at desc,w.open_work_id desc
+          limit 128
+        `);
+        if(!await refreshPrincipal())return;
+        const after = await getAssignedEmployeeForDevice(deviceId);
+        if(!await refreshPrincipal())return;
+        if (!after || after.device_active !== true || after.employee_active !== true
+          || after.canonical_device_pk!==originalPrincipal.device_pk
+          || after.assigned_employee_id !== assignment.assigned_employee_id
+          || String(after.assignment_epoch) !== String(assignment.assignment_epoch)
+          || String(after.canonical_device_id || after.device_id).trim() !== canonicalDeviceId) {
+          res.status(409).json({ ok:false,error:'Device assignment changed during reminder readback.' });return;
+        }
+        const afterAuthority=await readAuthority();
+        if(!afterAuthority)return;
+        if(Object.keys(originalAuthority).some(key=>afterAuthority[key]!==originalAuthority[key])){
+          res.status(409).json({ok:false,error:'Projection authority changed during reminder readback.'});return;
+        }
+        if(!Array.isArray(acceptedLocationSessions)||acceptedLocationSessions.length>128
+          || acceptedLocationSessions.some(row=>!row||row.service_date!==serviceDate
+            || row.device_id!==originalPrincipal.device_id || row.employee_id!==originalPrincipal.employee_id
+            || String(row.assignment_epoch)!==originalPrincipal.assignment_epoch
+            || row.credential_id!==originalPrincipal.credential_id || row.projection_id!==originalAuthority.projection_id
+            || row.schedule_authority_revision!==originalAuthority.schedule_authority_revision
+            || !isUuid(row.location_id)||typeof row.open_session_uuid!=='string'||!row.open_session_uuid.trim()
+            || !['active','pending_submit'].includes(row.open_session_status)
+            || row.open_session_device_identifier!==originalPrincipal.device_id
+            || typeof row.open_session_started_at!=='string'
+            || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{6}Z$/.test(row.open_session_started_at)
+            || row.open_session_started_at.startsWith('0000-')||!Number.isFinite(Date.parse(row.open_session_started_at))
+            || new Date(row.open_session_started_at.slice(0,10)+'T00:00:00Z').toISOString().slice(0,10)!==row.open_session_started_at.slice(0,10))){
+          res.status(409).json({ok:false,error:'Original accepted session readback is unavailable.'});return;
+        }
+      }
+      res.status(200).json({ ok: true, data: rows || [], meta: messagingMeta({
+        ...notificationStateMeta(notificationState),
+        ...(includeAcceptedSessions ? {accepted_location_sessions:acceptedLocationSessions} : {}),
+      }) });
     } catch (error) {
       fail(res, error, "Device location status reminders failed");
     }
@@ -1658,6 +1970,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!after || Number.isNaN(Date.parse(after))) throw Object.assign(new Error("A valid server message cursor is required."), { status: 422 });
       if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor message id is required."), { status: 422 });
       const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const owner = longPollOwner(req, viewer);
       let rows = [];
       do {
         rows = await runReadOnlySql(buildThreadUpdatesSql({
@@ -1672,6 +1985,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         await waitFor(Math.min(1000, Math.max(100, waitMs - (Date.now() - startedAt))));
       } while (!clientGone);
       if (clientGone || res.headersSent) return;
+      if (!await confirmLongPollOwner(req, res, owner, deviceId) || clientGone) return;
       const data = Array.isArray(rows) ? rows : [];
       const last = data[data.length - 1] || null;
       res.status(200).json({
@@ -1767,6 +2081,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.post("/thread/:threadId/message", rejectOversizeMessageBodyBeforeAuth, requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
+      const original = originalMessageActions?.prepare(req, res);
       const threadId = String(req.params.threadId || "").trim();
       const senderUserId = String(req.body?.sender_user_id || "").trim();
       const body = String(req.body?.body || "");
@@ -1796,6 +2111,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           clientMessageId,
           threadId,
           managerId: String(req.memphisAuth?.manager_id || "").trim(),
+          managerSession: req.memphisAuth || null,
         });
         res.status(200).json({ ok: true, data, meta: messagingMeta({ responder: "memphis" }) });
         return;
@@ -1805,7 +2121,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
       };
       delete authoritativeMetadata.authenticated_ops_manager_id;
-      const data = req.memphisAuth
+      if (original?.applicable) {
+        const { outcome, result } = await original.send();
+        res.status(200).json({ ok: true, data: result, meta: messagingMeta({ original_outcome: outcome }) });
+        return;
+      }
+      const data = isCohortSession(req.memphisAuth)
+        ? await cohortOperation(req.memphisAuth, 'send', {
+          thread_id:threadId,body,message_type:messageType,metadata_json:authoritativeMetadata,client_message_id:clientMessageId,
+        })
+        : req.memphisAuth
         ? await runRpc("msg_send_message_as_ops_manager", {
           p_manager_id: String(req.memphisAuth.manager_id || "").trim(),
           p_thread_id: threadId,
@@ -1837,6 +2162,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.post("/thread/:threadId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
+      const original = originalMessageActions?.prepare(req, res);
       const threadId = String(req.params.threadId || "").trim();
       const operationId = String(req.body?.operation_id || req.body?.operationId || "").trim();
       if (!isUuid(threadId) || !isUuid(operationId)) {
@@ -1846,6 +2172,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const claimedUserId = String(req.body?.user_id || req.body?.userId || "").trim();
       const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+      const authenticatedUserId = String(viewer.identity?.msg_user_id || "").trim();
+      if (!authenticatedUserId
+          || authenticatedUserId.toLowerCase() !== String(viewer.effectiveUserId || "").toLowerCase()) {
+        res.status(403).json({ ok: false, error: "An authenticated Messenger user is required for conversation removal." });
+        return;
+      }
       if (claimedUserId && claimedUserId !== viewer.effectiveUserId) {
         res.status(403).json({ ok: false, error: "Deletion user ID must match the authenticated viewer." });
         return;
@@ -1867,24 +2199,36 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           return;
         }
       }
+      if (original?.applicable) {
+        const { outcome, result } = await original.delete();
+        res.status(200).json({ ok: true, data: result,
+          meta: messagingMeta({ deletion: "current_user_only", authoritative: true, old_history_restores: false,
+            memphis_starts_clean: result.memphis_generation_ended === true, original_outcome: outcome }) });
+        return;
+      }
       const data = await runRpc("msg_delete_thread", {
         p_thread_id: threadId,
-        p_request_user_id: viewer.effectiveUserId,
+        p_request_user_id: authenticatedUserId,
         p_operation_id: operationId,
       });
-      const deleted = Array.isArray(data) ? data[0] : data;
-      if (!deleted
+      const deleted = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data;
+      const deletedAt = deletionReceiptInstant(deleted?.deleted_at);
+      const deletedThrough = deletionReceiptInstant(deleted?.deleted_through);
+      if (!deleted || typeof deleted !== "object"
+          || deleted.ok !== true
           || deleted.deleted !== true
-          || String(deleted.thread_id || "") !== threadId
+          || String(deleted.thread_id || "").toLowerCase() !== threadId.toLowerCase()
+          || String(deleted.operation_id || "").toLowerCase() !== operationId.toLowerCase()
+          || (Object.hasOwn(deleted, "user_id")
+            && String(deleted.user_id || "").toLowerCase() !== authenticatedUserId.toLowerCase())
           || deleted.deletion_scope !== "user"
-          || !deleted.deleted_at
-          || !deleted.deleted_through) {
-        res.status(502).json({ ok: false, error: "The database did not confirm user-scoped conversation removal." });
+          || deletedAt === null || deletedThrough === null || deletedThrough < deletedAt) {
+        res.status(502).json({ ok: false, error: "The database did not confirm this exact user-scoped conversation removal." });
         return;
       }
       res.status(200).json({
         ok: true,
-        data: deleted,
+        data: { ...deleted, user_id: authenticatedUserId },
         meta: messagingMeta({
           deletion: "current_user_only",
           authoritative: true,
@@ -1903,7 +2247,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.post("/thread/:threadId/admin-tombstone", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
-      if (!req.memphisAuth) {
+      if (!req.memphisAuth || isCohortSession(req.memphisAuth)) {
         res.status(403).json({ ok: false, error: "A named admin session is required." });
         return;
       }
@@ -1950,6 +2294,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.post("/thread/:threadId/read", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
+      const original = originalMessageActions?.prepare(req, res);
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
@@ -1982,6 +2327,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         });
         return;
       }
+      if (original?.applicable) {
+        const { outcome, result } = await original.read();
+        res.status(200).json({ ok: true, data: result, meta: messagingMeta({ original_outcome: outcome }) });
+        return;
+      }
       const data = throughMessageId
         ? await runRpc("msg_mark_thread_read_through", {
           p_thread_id: threadId,
@@ -1994,6 +2344,28 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       fail(res, error, "Mark thread read failed");
     }
   });
+
+  // Fixed original-request lookups never accept a caller-selected command and
+  // never resend an effect. Current employee credential middleware is retained.
+  for (const [path, method] of [
+    ["/thread/:threadId/message/original-outcome", "sendOutcome"],
+    ["/thread/:threadId/read/original-outcome", "readOutcome"],
+    ["/thread/:threadId/delete/original-outcome", "deleteOutcome"],
+  ]) {
+    router.post(path, requireWritableDeviceOrOpsAuth, async (req, res) => {
+      try {
+        const original = originalMessageActions?.prepare(req, res);
+        if (!original?.applicable) {
+          res.status(403).json({ ok: false, error: "Original employee transaction lookup requires its current enrolled actor." });
+          return;
+        }
+        const { outcome, result } = await original[method]();
+        res.status(200).json({ ok: true, data: result, meta: messagingMeta({ original_outcome: outcome }) });
+      } catch (error) {
+        fail(res, error, "Original Messenger outcome lookup failed");
+      }
+    });
+  }
 
   router.post("/memphis/thread", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
@@ -2098,6 +2470,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         clientMessageId,
         threadId,
         managerId: String(req.memphisAuth?.manager_id || "").trim(),
+        managerSession: req.memphisAuth || null,
       });
 
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
@@ -2106,23 +2479,36 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/broadcast", requireWritableDeviceOrOpsAuth, async (req, res) => {
+  async function broadcastOperation(req, res, readOnly = false) {
     try {
       const senderUserId = String(req.body?.sender_user_id || "").trim();
       const title = req.body?.title == null ? null : String(req.body.title);
       const body = String(req.body?.body || "");
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
-      if (!viewer.isManagerOverview) {
+      if (!viewer.isManagerOverview && !viewer.authenticatedManager) {
         res.status(403).json({ ok: false, error: "Broadcast requires a manager device." });
         return;
       }
-      const data = await runRpc("msg_send_broadcast", { p_sender_user_id: viewer.effectiveUserId, p_title: title, p_body: body });
+      const clientBroadcastId = req.body?.client_broadcast_id ?? req.body?.clientBroadcastId;
+      if (typeof clientBroadcastId !== "string" || !clientBroadcastId.trim()
+          || clientBroadcastId !== clientBroadcastId.trim() || clientBroadcastId.length > 200) {
+        throw Object.assign(new Error("A stable client_broadcast_id of 1–200 characters is required."), { status: 422 });
+      }
+      assertMessageBodyWithinLimit(body);
+      const data = await runRpc("msg_broadcast_operation_v1", {
+        p_sender_user_id: viewer.effectiveUserId, p_client_broadcast_id: clientBroadcastId,
+        p_title: title, p_body: body, p_read_only: readOnly,
+      });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
-      fail(res, error, "Send broadcast failed");
+      const sqlStatus = { "23505": 409, "42501": 403, "22023": 422 }[error?.code];
+      if (sqlStatus) error.status = sqlStatus;
+      fail(res, error, readOnly ? "Read original broadcast outcome failed" : "Send broadcast failed");
     }
-  });
+  }
+  router.post("/broadcast", requireWritableDeviceOrOpsAuth, (req, res) => broadcastOperation(req, res));
+  router.post("/broadcast/original-outcome", requireWritableDeviceOrOpsAuth, (req, res) => broadcastOperation(req, res, true));
 
   return router;
 }

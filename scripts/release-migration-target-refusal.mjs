@@ -1,4 +1,5 @@
 import {REGISTERED_VACANCY_SOURCE_FILE,REGISTERED_VACANCY_SOURCE_SHA256,REGISTERED_VACANCY_FORWARD_SHA256,readRegisteredVacancyRefusal} from './release-migration-registered-vacancy-refusal.mjs';
+import {CURRENT308_FILE,CURRENT308_SHA256,CURRENT308_FORWARD_SHA256,CURRENT_TAIL_STAGES,readCurrent308Refusal} from './release-migration-current308-refusal.mjs';
 import {APPROVED_DATED_SOURCE_FILE,APPROVED_DATED_SOURCE_SHA256,APPROVED_DATED_FORWARD_SHA256,readApprovedDatedRefusal} from './release-migration-approved-dated-refusal.mjs';
 import assert from 'node:assert/strict';
 import {writeFileSync,readFileSync} from 'node:fs';
@@ -203,7 +204,7 @@ export async function readCurrentGrantRefusalPredecessors(db) {
 }
 export const PRIVATE_CUSTODY_SOURCE252_FILE='20261010193211_native_private_custody_chunk_retention.sql';
 export const PRIVATE_CUSTODY_SOURCE252_SHA256='28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b';
-export const PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256='4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a';
+export const PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256='fffd25207dc1f7c1953bafe2dc23d4867c79724c4ed4f19995e36d3a71c95653';
 export const PRIVATE_CUSTODY_SOURCE252_RUNTIME_PROFILE_SHA256='a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f';
 export const PRIVATE_CUSTODY_SOURCE252_REFERENCE_SHA256='2f0b2b84762a4786560c59880a076b1e869575af5b1f221830b7b4f0ca67c5b3';
 const private252Key=row=>JSON.stringify([row.object_kind,row.object_identity]);
@@ -520,6 +521,23 @@ async function readAuthorityIdentity158Refusal(db){
 }
 
 async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file===CURRENT308_FILE){
+  assert.equal(migration.order,175);assert.ok([CURRENT308_SHA256,CURRENT308_FORWARD_SHA256].includes(migration.sha256));
+  if(migration.sha256===CURRENT308_FORWARD_SHA256){
+   assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',canonical_sha256:CURRENT308_SHA256,file:'release/production-forward-source/'+CURRENT308_FILE,sha256:CURRENT308_FORWARD_SHA256});
+   assert.equal(createHash('sha256').update(readFileSync(new URL('../'+migration.forward_source.file,import.meta.url))).digest('hex'),CURRENT308_FORWARD_SHA256);
+  }
+  return {metadata_source_file:CURRENT308_FILE,metadata_source_sha256:CURRENT308_SHA256,metadata_executed_sha256:migration.sha256,current308:await readCurrent308Refusal(db)};
+ }
+ const tailStage=CURRENT_TAIL_STAGES.find(stage=>stage.file===migration.file);
+ if(tailStage){
+  assert.equal(migration.order,tailStage.order);assert.ok([tailStage.sha256,tailStage.forward_sha256].includes(migration.sha256));
+  if(migration.sha256===tailStage.forward_sha256){
+   assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',canonical_sha256:tailStage.sha256,file:'release/production-forward-source/'+tailStage.file,sha256:tailStage.forward_sha256});
+   assert.equal(createHash('sha256').update(readFileSync(new URL('../'+migration.forward_source.file,import.meta.url))).digest('hex'),tailStage.forward_sha256);
+  }else assert.ok(!migration.forward_source);
+  return {metadata_source_file:tailStage.file,metadata_source_sha256:tailStage.sha256,metadata_executed_sha256:migration.sha256,[tailStage.stage]:await readCurrent308Refusal(db,{predecessors:false,relations:true})};
+ }
  if(migration.file===AUTHORITY_IDENTITY158_SOURCE_FILE){
   assert.equal(migration.order,158);assert.equal(migration.sha256,AUTHORITY_IDENTITY158_FORWARD_SHA256);
   assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',
@@ -559,8 +577,15 @@ async function readSelectedTargetRefusal(db,migration) {
     md5(p.prosrc) body_md5,md5(pg_get_functiondef(p.oid)) definition_md5,p.prosecdef,p.provolatile,p.proconfig
     from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')`)).rows};
 }
-export async function runTargetCaptureStep({db,migration,run,targetCapture,onRefusal}) {
- if(!targetCapture)return run();
+export function isProductionSource252Diagnostic(migration) {
+ return migration?.order===119 && migration.file===PRIVATE_CUSTODY_SOURCE252_FILE
+  && migration.sha256===PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256;
+}
+export async function runTargetCaptureStep({db,migration,run,targetCapture,productionRefusal=false,onRefusal}) {
+ // Normal production keeps all existing authorization/admission in its owner.
+ // Only this already-pinned failed step gains a metadata-only failure read.
+ // A refusal ALWAYS propagates to the owner's whole-transaction rollback.
+ if(!targetCapture && !(productionRefusal && isProductionSource252Diagnostic(migration)))return run();
  await db.query('savepoint custodial_target_migration_step');
  try {const value=await run();await db.query('release savepoint custodial_target_migration_step');return value;}
  catch(error){

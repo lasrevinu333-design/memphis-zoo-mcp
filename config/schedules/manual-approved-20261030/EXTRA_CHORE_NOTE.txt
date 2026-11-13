@@ -1,0 +1,5 @@
+Kathy: Elephant Trunk employee men's and women's restrooms once weekly on Tuesday, after opening.
+
+Tuesday is the coordinating chat's implementation choice, consistent with the retained Tuesday note and Kathy's lighter base load. Eric assigned the chore to Kathy on a lighter day; he did not explicitly select Tuesday.
+
+This is a plain extra chore note. It is outside the program's daily groups, scores, ownership, absence calculation, lunch relief and departure handoffs. No scheduler mechanism, location reactivation or score is needed.

@@ -21,6 +21,7 @@ DO $existing_profile$
 DECLARE spec jsonb; item jsonb; repair jsonb; pass integer; obj oid; namespace text;
  actual jsonb; expected jsonb; named_acl jsonb; effective jsonb; column_acl jsonb;
  definition text; digest text; changed integer; expected_digest text;
+ role_order_profile jsonb; role_order_item jsonb; exception_index integer; repair_index integer;
 BEGIN
  SELECT data INTO STRICT spec FROM private_custody_existing_profile;
  IF current_user<>'postgres' OR session_user<>current_user
@@ -50,9 +51,55 @@ BEGIN
   OR (SELECT count(DISTINCT (x->>0,x->>1)) FROM jsonb_array_elements(spec->'original_rows') x)<>6884
   OR (SELECT count(DISTINCT (x->>'object_kind',x->>'object_identity')) FROM jsonb_array_elements(spec->'exceptions') x)<>793
  THEN RAISE EXCEPTION 'Distinct existing Source252 complete original reference changed';END IF;
+  -- BEGIN FINITE PRODUCTION SOURCE252 ROLE ORDER
+  -- Exactly the production refusal41761975715, not an arbitrary ACL normalizer.
+  -- This changes only the in-memory expected profile; all existing full-census,
+  -- body/owner/ACL checks run before the original metadata UPDATE boundary.
+  SELECT public.static_weekly_digest_text(string_agg(restore_order::text||E'\n'||object_kind||E'\n'||object_identity||E'\n'||definition_sha256,E'\n---\n'
+   ORDER BY object_kind COLLATE "C",object_identity COLLATE "C")) INTO digest FROM public.custodial_release_authority_restore_inventory;
+  IF digest='63b9a4e815d453adb8d7349eae2190e13874095fe407c5633e54866263d722c8' THEN
+   role_order_profile:=$production_role_order${"schema":"custodial.source252-production-role-order.v1","source_production_run":41761975715,"source_capture_state":"AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK","source_rollback_verified":true,"prior_forward_sha256":"4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a","historical_profile_sha256":"a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f","preimage_aggregate_sha256":"63b9a4e815d453adb8d7349eae2190e13874095fe407c5633e54866263d722c8","post_repair_aggregate_sha256":"36c298d2d3152ae660bb7b6b3fee01c92f7e770f1b0e6f8aa025d12b666f6d33","row_count":6884,"role_order":["service_role","static_weekly_control_plane","custodial_application_reader"],"differences":[{"object_kind":"grant","object_identity":"static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)","restore_order":950009,"prior_saved_sha256":"048274d946755c1ae04a485257f8b16653e515d9a14aa46dffeaf482f2a6c8ce","saved_sha256":"5269ca4aea78073c99970e6cc899620de94e6aaa78251158d93022040200255b","saved_definition_sql":"select public.custodial_release_authority_reset_grants('public.static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)'); grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to service_role; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to static_weekly_control_plane; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to custodial_application_reader;","current_definition_sql":"select public.custodial_release_authority_reset_grants('static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)'); grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to service_role; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to custodial_application_reader;","current_sha256":"15c9a6a60b821065f4e36a1da987057991f428b3224a3f11d61c19e9f831c5db","replacement_sql":"select public.custodial_release_authority_reset_grants('static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)'); grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to service_role; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to custodial_application_reader;","replacement_sha256":"15c9a6a60b821065f4e36a1da987057991f428b3224a3f11d61c19e9f831c5db"},{"object_kind":"grant","object_identity":"static_weekly_v8_read_lunch_document(date)","restore_order":950012,"prior_saved_sha256":"d8e6d38d5d06db6e2b0f45209c3c3e282df12e345d29cb962ae8505ca7e8efd1","saved_sha256":"67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791","saved_definition_sql":"select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;","current_definition_sql":"select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;","current_sha256":"67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791","replacement_sql":"select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane;","replacement_sha256":"d8e6d38d5d06db6e2b0f45209c3c3e282df12e345d29cb962ae8505ca7e8efd1"}],"new_grants":false,"revocations":false,"owner_swaps":false,"business_row_writes":false,"production_authorized":false}$production_role_order$::jsonb;
+   IF NOT ('service_role'::regrole::oid < 'static_weekly_control_plane'::regrole::oid
+     AND 'static_weekly_control_plane'::regrole::oid < 'custodial_application_reader'::regrole::oid)
+    OR spec->>'preimage_aggregate_sha256'<>'6a6e7fcd3a9f430be8fa22df9fdcfa66d67e8f82f12e1775805bdb234f5531a2'
+    OR spec->>'post_repair_aggregate_sha256'<>role_order_profile->>'post_repair_aggregate_sha256'
+    OR jsonb_array_length(role_order_profile->'differences')<>2
+   THEN RAISE EXCEPTION 'Distinct Source252 captured production role order/profile changed';END IF;
+   FOR role_order_item IN SELECT x FROM jsonb_array_elements(role_order_profile->'differences') x LOOP
+    IF NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i
+     WHERE i.object_kind='grant' AND i.object_identity=role_order_item->>'object_identity'
+      AND i.restore_order=(role_order_item->>'restore_order')::integer
+      AND i.definition_sql=role_order_item->>'saved_definition_sql'
+      AND i.definition_sha256=role_order_item->>'saved_sha256'
+      AND public.static_weekly_digest_text(i.definition_sql)=role_order_item->>'saved_sha256')
+     OR public.custodial_release_authority_current_grant_definition(role_order_item->>'object_identity')
+       IS DISTINCT FROM role_order_item->>'current_definition_sql'
+    THEN RAISE EXCEPTION 'Distinct Source252 exact production grant literal changed';END IF;
+    SELECT (n-1)::integer INTO STRICT exception_index FROM jsonb_array_elements(spec->'exceptions') WITH ORDINALITY e(x,n)
+     WHERE x->>'object_kind'='grant' AND x->>'object_identity'=role_order_item->>'object_identity'
+      AND x->>'saved_sha256'=role_order_item->>'prior_saved_sha256';
+    spec:=jsonb_set(spec,ARRAY['exceptions',exception_index::text,'saved_sha256'],role_order_item->'saved_sha256');
+    spec:=jsonb_set(spec,ARRAY['exceptions',exception_index::text,'current_definition_sql'],role_order_item->'current_definition_sql');
+    spec:=jsonb_set(spec,ARRAY['exceptions',exception_index::text,'current_sha256'],role_order_item->'current_sha256');
+    IF role_order_item->>'object_identity'='static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)' THEN
+     SELECT (n-1)::integer INTO STRICT repair_index FROM jsonb_array_elements(spec->'repairs') WITH ORDINALITY e(x,n)
+      WHERE x->>'object_kind'='grant' AND x->>'object_identity'=role_order_item->>'object_identity'
+       AND x->>'preimage_sha256'=role_order_item->>'prior_saved_sha256';
+     spec:=jsonb_set(spec,ARRAY['repairs',repair_index::text,'preimage_sha256'],role_order_item->'saved_sha256');
+    ELSIF role_order_item->>'object_identity'='static_weekly_v8_read_lunch_document(date)' THEN
+     spec:=jsonb_set(spec,'{repairs}',(spec->'repairs')||jsonb_build_array(jsonb_build_object(
+      'object_kind','grant','object_identity',role_order_item->>'object_identity','restore_order',role_order_item->>'restore_order',
+      'preimage_sha256',role_order_item->>'saved_sha256','replacement_sql',role_order_item->>'replacement_sql',
+      'replacement_sha256',role_order_item->>'replacement_sha256')));
+    ELSE RAISE EXCEPTION 'Distinct Source252 unknown production role-order identity';END IF;
+   END LOOP;
+   spec:=jsonb_set(spec,'{preimage_aggregate_sha256}',role_order_profile->'preimage_aggregate_sha256');
+   IF jsonb_array_length(spec->'repairs')<>3 THEN RAISE EXCEPTION 'Distinct Source252 finite production repair count changed';END IF;
+  END IF;
+  -- END FINITE PRODUCTION SOURCE252 ROLE ORDER
  FOR pass IN 0..1 LOOP
   -- Complete original identity/order census, with only the finite independently
-  -- reconstructed 793 preimages and the two declared metadata replacements.
+  -- reconstructed 793 preimages and the declared finite metadata replacements.
   IF (SELECT count(*) FROM public.custodial_release_authority_restore_inventory)<>6884
    OR EXISTS(
     WITH original AS(SELECT x->>0 kind,x->>1 identity,(x->>2)::integer restore_order,x->>3 digest FROM jsonb_array_elements(spec->'original_rows') x),
@@ -122,7 +169,7 @@ BEGIN
    END IF;
   END LOOP;
   IF pass=0 THEN
-   -- Only these two obsolete recovery records change. Current routine bodies,
+   -- Only the declared finite recovery records change. Current routine bodies,
    -- named direct/column/effective ACLs, owners and all business rows stay put.
    ALTER TABLE public.custodial_release_authority_restore_inventory DISABLE TRIGGER trg_custodial_release_authority_restore_inventory_immutable;
    FOR repair IN SELECT x FROM jsonb_array_elements(spec->'repairs') x LOOP
@@ -133,7 +180,7 @@ BEGIN
       AND public.static_weekly_digest_text(definition_sql)=repair->>'preimage_sha256';
     GET DIAGNOSTICS changed=ROW_COUNT;
     IF changed<>1 OR public.static_weekly_digest_text(repair->>'replacement_sql') IS DISTINCT FROM repair->>'replacement_sha256' THEN
-     RAISE EXCEPTION 'Distinct existing Source252 two-record exact preimage repair changed';END IF;
+     RAISE EXCEPTION 'Distinct existing Source252 finite exact preimage repair changed';END IF;
    END LOOP;
    ALTER TABLE public.custodial_release_authority_restore_inventory ENABLE ALWAYS TRIGGER trg_custodial_release_authority_restore_inventory_immutable;
   END IF;

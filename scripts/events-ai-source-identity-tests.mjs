@@ -42,7 +42,8 @@ try {
   equal(onlyUncertain[0].source_index, 0, 'Unrequested complete local row stays original');
   equal(onlyUncertain[0].provider_used, 'local-parser', 'No provider merge into skipped local row');
   equal(onlyUncertain[1].source_index, 1, 'Exact requested identity accepted');
-  equal(onlyUncertain[1].gemini_candidate?.source_index, 1, 'Candidate binds to exact requested identity');
+  equal(onlyUncertain[1].provider_fallback, false, 'Valid source identity is not reported as provider failure');
+  equal(onlyUncertain[1].gemini_candidate, undefined, 'Unsupported candidate facts cannot become an accepted draft');
   const mixed = await parse([candidate, { ...candidate, source_index: 1 }], sourceTexts);
   equal(mixed[0].provider_fallback, false, 'Complete skipped local row is not falsely called provider fallback');
   equal(mixed[1].provider_fallback, true, 'An unsolicited complete-row ID invalidates the provider response');
@@ -50,10 +51,12 @@ try {
   const sparse = await parse([{ ...candidate, source_index: 1 }], ['', 'Event Area: Event Center']);
   equal(sparse.length, 1, 'Empty input keeps original index rather than reindexing');
   equal(sparse[0].source_index, 1, 'Sparse source identity retained');
-  equal(sparse[0].gemini_candidate?.source_index, 1, 'Sparse requested identity accepted');
+  equal(sparse[0].provider_fallback, false, 'Sparse requested identity is accepted');
+  equal(sparse[0].gemini_candidate, undefined, 'Sparse unsupported candidate is not promoted');
   const reordered = await parse([{ ...candidate, source_index: 1 }, candidate], ['Event Area: Event Center', 'Area: EC']);
   equal(reordered.map(row => row.source_index), [0, 1], 'Provider ordering cannot reorder caller rows');
-  equal(reordered.map(row => row.gemini_candidate?.source_index), [0, 1], 'Each reordered candidate binds by exact identity');
+  equal(reordered.map(row => row.provider_fallback), [false, false], 'Each reordered source identity is valid');
+  equal(reordered.map(row => row.gemini_candidate), [undefined, undefined], 'Neither reordered unsupported candidate is promoted');
   console.log(`events AI source identity: ${checks} checks PASS (actual parser, synthetic provider; source-evidence validation remains separate)`);
 } finally {
   globalThis.fetch = previousFetch;

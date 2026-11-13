@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import {assertReleaseWorkflowSource} from './release-migration-workflow-preflight.mjs';
+import {assertProductionDatabaseIdentity} from './production-database-identity.mjs';
 import {openIsolatedPreservationArchive} from './release-migration-isolated-preservation-archive.mjs';
 import {prepareIsolatedReleaseDataPreservation} from './isolated-release-data-preservation.mjs';
 import {runTargetCaptureStep,writeTargetCaptureRefusal} from './release-migration-target-refusal.mjs';
-import {prepareTargetCapture,writeTargetCapture} from './release-migration-target-capture.mjs';
+import {prepareTargetCapture,writeTargetCapture,assertTargetCapturePreservationPlan} from './release-migration-target-capture.mjs';
 import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import pg from "pg";
 import {
@@ -40,6 +42,8 @@ const candidateTree = String(process.env.RELEASE_MIGRATION_CANDIDATE_TREE || "")
 
 const targetCapture = String(process.env.RELEASE_MIGRATION_TARGET_CAPTURE || 'false') === 'true';
 let captureContext = null;
+let productionRefusal = null;
+let productionLockedSource = null;
 // A normal apply must have a complete current target before opening a DB.
 // The existing targetCapture route separately enforces signed archive + owned
 // loopback postgres-only rollback, and is the producer of these missing facts.
@@ -180,11 +184,18 @@ let isolatedPreservationArchive=null;
 let transactionStarted=false;
 try {
 // BEGIN ISOLATED PRESERVATION ARCHIVE
-isolatedPreservationArchive=rehearsal&&plan.length===160
+// New301/302 plans require the SAME complete source-derived closure before
+// opening the preservation archive; no guessed pending-count admission.
+const successorPreservationClosure=rehearsal&&![160,163,164,165,166].includes(plan.length)
+ ?assertTargetCapturePreservationPlan(root,plan):null;
+isolatedPreservationArchive=rehearsal&&([160,163,164,165,166].includes(plan.length)||successorPreservationClosure!==null)
  ?openIsolatedPreservationArchive({backendRoot:root,databaseUrl,rehearsal,apply,targetCapture,candidateCommit,candidateTree,
    sourceLedgerSha256,captureContext,env:process.env}):null;
 // END ISOLATED PRESERVATION ARCHIVE
   await db.connect();
+  // Production migrations use the existing migration-owning identity. A backup
+  // reader must be refused before transaction locks; never broaden its grants.
+  if (!rehearsal) await assertProductionDatabaseIdentity(db, { migrationAuthority: true });
   if (targetCapture) {
     const profile = (await db.query(`select current_user actor,session_user original_actor,
       (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
@@ -235,6 +246,8 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
   }
   if (targetCapture) captureContext.locked_source={fingerprint:beforeCatalogIdentity.fingerprint,
     counts:catalogCounts(beforeCatalog),ledger:beforeLedger.rows,database:currentDatabase};
+  if (!targetCapture && !rehearsal) productionLockedSource={fingerprint:beforeCatalogIdentity.fingerprint,
+    counts:catalogCounts(beforeCatalog),ledger:beforeLedger.rows,database:currentDatabase};
   const outlookBefore = await outlookSnapshot(db);
   if (outlookBefore.present !== state.observed_production.outlook_event_sync_table_present) {
     throw new Error("Restored Outlook event-sync authority presence differs from the admitted production state.");
@@ -250,7 +263,8 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
   for (const migration of plan) {
     try {
       await runTargetCaptureStep({db,migration,targetCapture,
-        onRefusal:diagnostic=>{captureContext.refusal=diagnostic;},
+        productionRefusal:!targetCapture && !rehearsal,
+        onRefusal:diagnostic=>{if(targetCapture)captureContext.refusal=diagnostic;else productionRefusal=diagnostic;},
         run:async()=>{
           await db.query(migration.body);
           await db.query(`
@@ -348,6 +362,7 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
     await db.query('rollback');
     if(!rollbackVerified)throw new Error('Target preparation rollback did not preserve the exact original catalog and ledger.');
     captureContext.assertSourceCurrent();
+    const captureReplay=readMigrationReplayPlan(root);
     writeTargetCapture(captureContext.output,{
       schema:'custodial.production-migration-target-preparation.v1',scope:'target_preparation',
       committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,
@@ -358,8 +373,9 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
       actual_private_schema_owners:privateSchemaOwners,source_data_preservation:originalDataPreservationReceipt,
       source_catalog_fingerprint:beforeCatalogIdentity.fingerprint,source_ledger_sha256:sourceLedgerSha256,
       source_ledger_count:beforeLedger.rowCount,source_ledger_head:beforeHead.version,
-      source_authority_migration_count:134,canonical_source_count:294,
-      canonical_replay_manifest_sha256:'5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121',
+      source_authority_migration_count:134,canonical_source_count:captureReplay.files.length,
+      canonical_replay_manifest_sha256:captureReplay.manifestSha256,
+      ...(successorPreservationClosure?{target_capture_source_closure:successorPreservationClosure}:{}),
       plan_sha256:planSha256,applied,target_catalog_fingerprint:afterCatalogIdentity.fingerprint,
       target_catalog_counts:catalogCounts(afterCatalog),target_ledger_count:afterLedger.rowCount,
       target_ledger_head:afterLedger.rows.at(-1).version,target_ledger_sha256:ledgerFileSha256(afterLedger.rows),
@@ -398,7 +414,26 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
   // pg queues queries before connect; never queue a rollback on that path.
   if (!transactionStarted) throw error;
   if (!targetCapture) {
-    await db.query("rollback").catch(() => {});
+    await db.query("rollback");
+    if (productionRefusal && productionLockedSource) {
+      const original=productionLockedSource;
+      await db.query('begin isolation level repeatable read read only');
+      const sourceCatalog=normalizeCatalog(await captureCatalogFromSnapshot(db),original.database);
+      const sourceLedger=await db.query('select version::text,name::text,statements from supabase_migrations.schema_migrations order by version');
+      const preserved=fingerprintSchemaCatalog(sourceCatalog).fingerprint===original.fingerprint
+        &&stableJson(catalogCounts(sourceCatalog))===stableJson(original.counts)
+        &&stableJson(sourceLedger.rows)===stableJson(original.ledger);
+      await db.query('rollback');
+      if(!preserved)throw new Error('Production refusal rollback failed exact original catalog/ledger readback.');
+      const receipt={schema:'custodial.production-source252-refusal.v1',committed:false,rollback_verified:true,
+        project_ref:projectRef,candidate_commit:candidateCommit,candidate_tree:candidateTree,
+        source_catalog_fingerprint:original.fingerprint,source_ledger_sha256:sourceLedgerSha256,
+        source_ledger_count:original.ledger.length,plan_sha256:planSha256,
+        refusal:productionRefusal,completed_at:new Date().toISOString()};
+      if(process.env.RUNNER_TEMP)writeFileSync(resolve(process.env.RUNNER_TEMP,'build52-production-migration-refusal.json'),
+        JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
+      else console.error(JSON.stringify(receipt));
+    }
     throw error;
   }
   await db.query("rollback");

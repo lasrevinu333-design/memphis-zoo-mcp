@@ -1,0 +1,19 @@
+{
+  "recorded_at_utc": "2026-10-06T11:21:22.838148+00:00",
+  "prior_backend_commit": "690e0b71b64b7584520f09d71f8a7257c798ed5f",
+  "fix": "Inspect supplied key entry with lstat before resolving symlinks. Existing permissions, outside-repository restrictions, clean-tree check, Ed25519 signature verification and exclusive artifact creation retained.",
+  "before_signer_cases": {
+    "passed": 7,
+    "failed": 2
+  },
+  "after_signer_cases": {
+    "passed": 9,
+    "failed": 0
+  },
+  "map_http_cases_rerun_passed": 63,
+  "acknowledgment_cases_rerun_passed": 23,
+  "production_key_opened_in_tests": false,
+  "production_signature_created_in_tests": false,
+  "not_established": "This symlink defect is not established as the cause of the prior platform denial. The current production key path is not a symlink.",
+  "regression_log_sha256": "604f7bfe3a560d556974d2bd7a53faf82aca2bb089b46564a82dc1411ef881ed"
+}

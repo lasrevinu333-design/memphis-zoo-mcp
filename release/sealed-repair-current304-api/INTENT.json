@@ -1,0 +1,9 @@
+{
+  "owner": "6626053b-5a7a-4bde-9660-c9f2d3bb2cd3",
+  "name": "mz_schema_rebuild_f08_6626053b5a7a4bde9660c9f2d3bb2cd3",
+  "restName": "mz_schema_rebuild_f08_6626053b5a7a4bde9660c9f2d3bb2cd3_rest",
+  "head": "74127cd2c6861d778ef86a3498ad3c878544db02",
+  "pid": 4058006,
+  "scope": "F08_FRESH304_REAL_API_AUTH_BOUNDARY_ONLY",
+  "production": false
+}

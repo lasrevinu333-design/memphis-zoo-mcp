@@ -205,6 +205,7 @@ const trustedDeviceRow = {
 const trustedManagerRow = {
   manager_id: managerId,
   display_name: "Read Only Custodial Manager",
+  is_system_principal: false,
   roles: ["CUSTODIAL_MANAGER"],
   active: true,
   revoked_at: null,

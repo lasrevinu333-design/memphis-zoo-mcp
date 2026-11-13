@@ -8,7 +8,7 @@ import { readVerifiedImmutableBootstrapInventory, readVerifiedPrivateImportSourc
 
 const Client=pg.Client, query=Client.prototype.query;
 const quoteIdentifier=value=>'"'+String(value).replaceAll('"','""')+'"';
-const scopes=Object.freeze(["public","auth","storage","custodial_release_identity"]);
+const scopes=Object.freeze(["public","auth","storage","custodial_release_identity","custodial_employment","custodial_coverall","custodial_leadership_private"]);
 const sha=value=>createHash("sha256").update(value).digest("hex");
 function fields(value,keys){
   assert.ok(value&&typeof value==="object"&&!types.isProxy(value)&&Object.getPrototypeOf(value)===Object.prototype,"Closed original metadata required");
@@ -101,7 +101,7 @@ const contextSql=`
       'relation_kind',c.relkind,'is_partition',c.relispartition,'relrowsecurity',c.relrowsecurity,'relforcerowsecurity',c.relforcerowsecurity)
       order by n.nspname collate "C",c.relname collate "C"),'[]'::jsonb)
       from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
-      where n.nspname in('public','auth','storage','custodial_release_identity') and c.relkind in('r','p','f'))
+      where n.nspname in('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in('r','p','f'))
   ) context
 `;
 
@@ -252,12 +252,12 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
     const compare=(a,b)=>{for(let i=0;i<a.length;i++){const n=Buffer.compare(Buffer.from(a[i]??'','utf8'),Buffer.from(b[i]??'','utf8'));if(n)return n;}return 0;};
     const objectKey=r=>[r.kind,r.schema_name,r.object_name,r.column_name];
     const grantKey=g=>[g.grantee,g.grantor,g.privilege_type];
-    const scopes=['public','auth','storage','custodial_release_identity'];
+    const scopes=['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'];
     const privileges={SCHEMA:['USAGE','CREATE'],COLUMN:['SELECT','INSERT','UPDATE','REFERENCES']};
     const rows=(await client.query(`
      with namespaces as (
       select oid,nspname,nspowner,nspacl from pg_catalog.pg_namespace
-      where nspname in ('public','auth','storage','custodial_release_identity')
+      where nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')
      ), objects as (
       select 'SCHEMA'::text kind,n.nspname schema_name,n.nspname object_name,
        n.nspowner owner_oid,null::text column_name,n.nspacl acl
@@ -337,7 +337,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
     const compare=(a,b)=>{for(let i=0;i<a.length;i++){const n=Buffer.compare(Buffer.from(a[i]??'','utf8'),Buffer.from(b[i]??'','utf8'));if(n)return n;}return 0;};
     const objectKey=r=>[r.kind,r.schema_name,r.object_name,r.column_name];
     const grantKey=g=>[g.grantee,g.grantor,g.privilege_type];
-    const scopes=['public','auth','storage','custodial_release_identity'];
+    const scopes=['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'];
     const privileges={SCHEMA:['USAGE','CREATE'],COLUMN:['SELECT','INSERT','UPDATE','REFERENCES']};
     // Clone closed DATA before the first await. In particular, never sort or
     // mutate the independently verified/deep-frozen signed original snapshot.
@@ -430,7 +430,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
        where a.grantee<>p.proowner),'[]'::jsonb))),'[]'::jsonb) routines
      from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
      left join pg_catalog.pg_roles owner_role on owner_role.oid=p.proowner
-     where n.nspname in ('public','auth','storage','custodial_release_identity')`);
+     where n.nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')`);
     assert.equal(reply.rows.length,1);assert.equal(reply.rows[0].search_path,'pg_catalog','Routine type identity requires Main pg_catalog search_path');
     const closed=(value,names)=>{
      assert.ok(value&&[Object.prototype,null].includes(Object.getPrototypeOf(value)));
@@ -450,7 +450,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
     const result=list(reply.rows[0].routines).map(value=>{
      const r=closed(value,['kind','schema_name','object_name','identity','owner_name','column_name','grants']);
      assert.ok(['FUNCTION','PROCEDURE'].includes(r.kind),'Unsupported selected pg_proc routine kind');
-     assert.ok(['public','auth','storage','custodial_release_identity'].includes(r.schema_name));
+     assert.ok(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(r.schema_name));
      text(r.object_name);text(r.identity,65536);text(r.owner_name);assert.equal(r.column_name,null);
      const seen=new Set();const grants=list(r.grants).map(value=>{
       const g=closed(value,['grantee','grantor','privilege_type','is_grantable']);
@@ -486,7 +486,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
     const identities=new Set();let previousRoutine=null;
     const expected=list(original).map(value=>{
      const r=closed(value,['kind','schema_name','object_name','identity','owner_name','column_name','grants']);
-     assert.ok(['FUNCTION','PROCEDURE'].includes(r.kind));assert.ok(['public','auth','storage','custodial_release_identity'].includes(r.schema_name));
+     assert.ok(['FUNCTION','PROCEDURE'].includes(r.kind));assert.ok(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(r.schema_name));
      text(r.object_name);text(r.identity,65536);text(r.owner_name);assert.equal(r.column_name,null);
      assert.ok(!identities.has(r.identity),'Duplicate original routine identity');identities.add(r.identity);
      const key=routineKey(r);if(previousRoutine!==null)assert.ok(compare(previousRoutine,key)<0,'Original routine array is not canonical');previousRoutine=key;
@@ -539,7 +539,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
 
    async function captureOriginalRelationAcls(client){
     const {types}=createRequire(import.meta.url)('node:util');
-    const fixedSchemas=new Set(['public','auth','storage','custodial_release_identity']);
+    const fixedSchemas=new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']);
     const kinds=new Set(['TABLE','PARTITIONED TABLE','VIEW','MATERIALIZED VIEW','FOREIGN TABLE','SEQUENCE']);
     const tablePrivileges=new Set(['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']);
     const sequencePrivileges=new Set(['SELECT','UPDATE','USAGE']);
@@ -573,7 +573,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
       where a.grantee<>c.relowner),'[]'::jsonb)) descriptor
      from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
      left join pg_catalog.pg_roles owner_role on owner_role.oid=c.relowner
-     where n.nspname in ('public','auth','storage','custodial_release_identity')
+     where n.nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')
        and c.relkind in ('r','p','v','m','f','S')`);
     const objects=[],seen=new Set();
     for(const row of array(result.rows)){
@@ -631,7 +631,7 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
     for(const item of expected){
      fields(item,['kind','schema_name','object_name','identity','owner_name','column_name','grants']);
      assert.ok(['TABLE','PARTITIONED TABLE','VIEW','MATERIALIZED VIEW','FOREIGN TABLE','SEQUENCE'].includes(item.kind));
-     assert.ok(['public','auth','storage','custodial_release_identity'].includes(item.schema_name));
+     assert.ok(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(item.schema_name));
      name(item.object_name);name(item.owner_name);assert.notEqual(item.owner_name,'PUBLIC');assert.equal(item.column_name,null);
      assert.equal(item.identity,q(item.schema_name)+'.'+q(item.object_name));assert.ok(Array.isArray(item.grants));
      assert.ok(previous===null||compare(previous,key(item))<0,'Original relation descriptors must be unique/canonical');previous=key(item);

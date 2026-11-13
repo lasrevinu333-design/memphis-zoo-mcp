@@ -12,7 +12,7 @@ for(let n=0;n<=9;n++){
 }
 const env={NODE_ENV:'production',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:'synthetic-oc24-manager-auth-secret-not-production'};
 const managerId='11111111-1111-4111-8111-111111111111',credentialId='22222222-2222-4222-8222-222222222222',deviceId='OC24_SYNTHETIC_MANAGER';
-const manager={manager_id:managerId,display_name:'Synthetic Manager',roles:['CUSTODIAL_MANAGER'],active:true,revoked_at:null};
+const manager={manager_id:managerId,display_name:'Synthetic Manager',roles:['CUSTODIAL_MANAGER'],active:true,revoked_at:null,is_system_principal:false,system_key:'eric_custodial_manager'};
 const device={credential_id:credentialId,device_id:deviceId,manager_id:managerId,max_access_level:'full_access',created_at:new Date().toISOString(),last_used_at:null,expires_at:new Date(Date.now()+86400000).toISOString(),revoked_at:null};
 let writes=0;const tables=[];
 const db={from(table){tables.push(table);const data=table==='ops_manager_trusted_devices'?device:table==='ops_manager_managers'?manager:[];

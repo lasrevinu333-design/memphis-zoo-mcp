@@ -1,3 +1,4 @@
+import {prepareApprovedManualPeriodWorkerData} from './approved-manual-period-worker.js';
 import { createHash } from "node:crypto";
 import { types as nativeTypes } from "node:util";
 import { readFileSync } from "node:fs";
@@ -125,7 +126,7 @@ try {
 let active = false;
 process.on("disconnect", () => process.exit(0));
 process.on("message", async (message) => {
-  if (!message || !new Set(["compile", "recurring-candidate", "recurring-admission-candidate", "approved-pending-staffing"]).has(message.type)) return;
+  if (!message || !new Set(["compile", "recurring-candidate", "recurring-admission-candidate", "approved-pending-staffing", "approved-manual-period"]).has(message.type)) return;
   if (active) {
     send({ type: "result", id: message.id, error: { code: "static_weekly_compiler_worker_busy", message: "The isolated compiler accepts one serialized request at a time." } });
     return;
@@ -133,7 +134,17 @@ process.on("message", async (message) => {
   active = true;
   let fixedInput=null;
   try {
-    if(message.type==='approved-pending-staffing'){
+    if(message.type==='approved-manual-period'){
+      if(preparationProfile!=='compiler'||!Number.isSafeInteger(message.id)||message.id<1
+        ||Object.keys(message).sort().join(',')!=='id,input,preparation,remainingMilliseconds,type'
+        ||message.preparation?.kind!=='approved-manual-period'||Object.keys(message.preparation).join(',')!=='kind'
+        ||!Number.isSafeInteger(message.remainingMilliseconds)||message.remainingMilliseconds<1||message.remainingMilliseconds>60_000)
+        throw new Error('Invalid manual period preparation IPC data.');
+      const deadline=performance.now()+message.remainingMilliseconds;
+      const result=await prepareApprovedManualPeriodWorkerData(message.input,deadline);
+      if(performance.now()>=deadline)throw new Error('The original manual preparation deadline elapsed.');
+      send({type:'result',id:message.id,result});
+    } else if(message.type==='approved-pending-staffing'){
       if(preparationProfile!=='fixed-pending'||!Number.isSafeInteger(message.id)||message.id<1
         ||Object.keys(message).sort().join(',')!=='id,input,preparation,remainingMilliseconds,type'
         ||message.preparation?.kind!=='approved-pending-staffing'||Object.keys(message.preparation).join(',')!=='kind'
@@ -349,7 +360,11 @@ process.on("message", async (message) => {
         : publicCandidate });
     }
   } catch (error) {
-    if(message.type==='approved-pending-staffing'){
+    if(message.type==='approved-manual-period'){
+      const failure=serializedError(error);
+      send({type:'result',id:message.id,error:{code:/^[A-Za-z0-9_]{1,100}$/.test(failure.code)?failure.code:'approved_manual_period_preparation_failed',
+        message:failure.message.slice(0,512)}});
+    } else if(message.type==='approved-pending-staffing'){
       let failure={code:'staffing_approved_pending_preparation_failed',message:'The fixed pending preparation is unavailable.'};
       if(fixedInput&&error&&typeof error==='object'&&!nativeTypes.isProxy(error)
         &&Object.getOwnPropertyDescriptor(error,'code')?.value==='static_template_dated_coverage_unresolved'){

@@ -1,0 +1,746 @@
+[
+  {
+    "command": "BEGIN",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "LOCK",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 1,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 7416,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 27,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "GRANT",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "GRANT",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "GRANT",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "UPDATE",
+    "rowCount": 0,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "UPDATE",
+    "rowCount": 0,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "GRANT",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "INSERT",
+    "rowCount": 0,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "UPDATE",
+    "rowCount": 1,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "GRANT",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "GRANT",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "LOCK",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "LOCK",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 7416,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 3,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "ALTER",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "REVOKE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "LOCK",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 1,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SET",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "LOCK",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 1,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "SELECT",
+    "rowCount": 1,
+    "rows": [
+      {
+        "install_application_mutation_fences": ""
+      }
+    ]
+  },
+  {
+    "command": "CREATE",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "DO",
+    "rowCount": null,
+    "rows": []
+  },
+  {
+    "command": "COMMIT",
+    "rowCount": null,
+    "rows": []
+  }
+]

@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import express from 'express';
-import {createGeneralJsonMiddleware} from '../src/request-json-parser.js';
+import {createGeneralJsonMiddleware,createGeneralUrlencodedMiddleware} from '../src/request-json-parser.js';
 import {makeDeviceCredentialMiddleware,deviceCredentialInternals,verifyNativeDeviceRequestAttestation} from '../src/auth/device-credential-auth.js';
 import {installAssignedActivationTransportRoutes} from '../src/assigned-activation-transport.js';
 const id=n=>`44000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -18,7 +18,7 @@ const base={credential_id:cid,device_id:pk,token_hash:deviceCredentialInternals.
 let row=structuredClone(base),calls=0,lastArgs,lastFunction,checks=0;
 const store={getPolicy:async()=>({mode:'enforce'}),findCredential:async n=>n===cid?row:null,touchCredential:async()=>{},audit:async()=>{}};
 const app=express();app.use(createGeneralJsonMiddleware());
-app.use(express.urlencoded({extended:false,limit:'32kb'}));
+app.use(createGeneralUrlencodedMiddleware());
 installAssignedActivationTransportRoutes(app,{env,db:{rpc:async(fn,args)=>{calls++;lastFunction=fn;lastArgs=args;return{data:{synthetic:true}};}},
  configured:(_q,_s,n)=>n(),requireManager:(_q,_s,n)=>n(),
  requireCurrentCredential:makeDeviceCredentialMiddleware({env,store,runReadOnlySql:async()=>[device],requireEnrolledCredential:true}),
@@ -61,10 +61,10 @@ function check(name,value){assert.ok(value,name);checks++;console.log('PASS',nam
 async function refused(name,body=binding,edit=()=>{},url=path){const before=calls,r=await send(body,edit,url);check(name,r.status>=400&&calls===before);await r.text();}
 try{
  const mount=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
- check('production imports the same middleware used by socket harness',mount.includes('import { createGeneralJsonMiddleware } from "./request-json-parser.js";'));
+ check('production imports the same middleware pair used by socket harness',mount.includes('import { createGeneralJsonMiddleware, createGeneralUrlencodedMiddleware } from "./request-json-parser.js";'));
  const generalAt=mount.indexOf('app.use(createGeneralJsonMiddleware());');
  check('production shared JSON mount precedes form parsing and credential routes',generalAt>0
-  &&generalAt<mount.indexOf('app.use(express.urlencoded(')&&generalAt<mount.indexOf('installDeviceCredentialRoutes(app'));
+  &&generalAt<mount.indexOf('app.use(createGeneralUrlencodedMiddleware());')&&generalAt<mount.indexOf('installDeviceCredentialRoutes(app'));
  check('no earlier production JSON parser silently consumes the signed bytes',!mount.slice(0,generalAt).includes('express.json('));
  let r=await send();check('real HTTP middleware authenticates native bind',r.status===200);await r.text();
  check('binding reaches only the intended SQL RPC',lastFunction==='custodial_legacy_activation_bind');

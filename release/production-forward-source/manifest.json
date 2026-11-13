@@ -171,7 +171,7 @@
       "canonical_file": "20261010193211_native_private_custody_chunk_retention.sql",
       "canonical_sha256": "28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b",
       "forward_file": "release/production-forward-source/20261010193211_native_private_custody_chunk_retention.sql",
-      "forward_sha256": "4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a",
+      "forward_sha256": "fffd25207dc1f7c1953bafe2dc23d4867c79724c4ed4f19995e36d3a71c95653",
       "profile": "existing-postgres-owner"
     },
     {
@@ -207,6 +207,27 @@
       "canonical_sha256": "4d201d542066718e58932199db06b358e19e947f60de72a0c1ca8097a79ff71a",
       "forward_file": "release/production-forward-source/20261022041249_original_schedule_delivery_outcome.sql",
       "forward_sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261102151842_current_source_recovery_binding.sql",
+      "canonical_sha256": "999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a",
+      "forward_file": "release/production-forward-source/20261102151842_current_source_recovery_binding.sql",
+      "forward_sha256": "adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261102161602_current_recovery_column_order.sql",
+      "canonical_sha256": "067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665",
+      "forward_file": "release/production-forward-source/20261102161602_current_recovery_column_order.sql",
+      "forward_sha256": "018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261103004520_authoritative_events_cancellation.sql",
+      "canonical_sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b",
+      "forward_file": "release/production-forward-source/20261103004520_authoritative_events_cancellation.sql",
+      "forward_sha256": "5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9",
       "profile": "existing-postgres-owner"
     }
   ]

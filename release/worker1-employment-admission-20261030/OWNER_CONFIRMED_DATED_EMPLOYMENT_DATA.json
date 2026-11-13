@@ -1,0 +1,40 @@
+{
+  "schema": "custodial.owner-confirmed-employment-facts.v1",
+  "recordedServiceDate": "2026-10-30",
+  "source": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/USER_DATED_AVAILABILITY_STEERING_20261030.json",
+    "sha256": "be6c3f5818a8ae1804b85064e083949662710c8d4ced118823ce2bbc6afdaf5c",
+    "bytes": 954,
+    "reportedBy": "Eric via Sophia",
+    "chatId": "01a18a02-a32d-745f-a640-03d4b60af031"
+  },
+  "referenceBindingsSha256": "7b578ab31362e632f03d21e5b3b2868aa6fef0478b9cc57c9a5cd8d3b07c7619",
+  "employees": [
+    {
+      "employeeId": "1318b295-fd70-4e78-8828-62c29302f96f",
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "employeeName": "Xavier Green",
+      "effectiveFrom": "2026-10-30",
+      "state": "START_DATE_CONFIRMED",
+      "firstServiceDate": "2026-11-01",
+      "approvedLunch": {
+        "start": "12:30",
+        "end": "13:30"
+      },
+      "unavailabilityClassification": "PRE_START_NOT_PTO"
+    },
+    {
+      "employeeId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "employeeName": "Jada Rawlings",
+      "effectiveFrom": "2026-10-30",
+      "state": "PRE_START",
+      "firstServiceDate": null,
+      "approvedLunch": null,
+      "unavailabilityClassification": "PRE_START_NOT_PTO"
+    }
+  ],
+  "normalSchedulesMayChange": false,
+  "productionWritten": false,
+  "admitted": false
+}

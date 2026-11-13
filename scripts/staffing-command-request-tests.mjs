@@ -19,6 +19,19 @@ const base = {
   clientPrepareKey: '20000000-0000-4000-8000-000000000001',
   expectedRevision: 19,
 };
+if(process.argv.includes('--authority-date-only')){
+ const input={...base,commandKind:'cancel_absence',absenceKind:undefined,
+  targetAbsenceId:'30000000-0000-4000-8000-000000000001',startDate:'2026-09-24'};
+ const delegated=createStaffingCommandRequest(input,{allowElapsedAuthorityReplay:true});
+ same(delegated,createStaffingCommandRequest(input,{minimumServiceDate:'2026-09-25',allowElapsedAuthorityReplay:true}),
+  'typed authority delegation preserves original canonical bytes/key/revision without fabricating a minimum');
+ assert.throws(()=>createStaffingCommandRequest(input),error=>error.code==='staffing_current_service_date_required');checks++;
+ assert.throws(()=>createStaffingCommandRequest(input,{minimumServiceDate:'2026-09-25'}),
+  error=>error.code==='staffing_cancellation_cannot_rewrite_elapsed_service_date');checks++;
+ assert.throws(()=>createStaffingCommandRequest(input,{minimumServiceDate:'2026-02-31',allowElapsedAuthorityReplay:true}),
+  error=>error.code==='staffing_current_service_date_required');checks++;
+ console.log(JSON.stringify({checks,scope:'affected canonical authority-date unit checks only; no SQL/date acceptance'}));
+}else{
 const absence = createStaffingCommandRequest(base);
 same(absence.schema, STAFFING_COMMAND_REQUEST_SCHEMA);
 same(absence.semanticBody, {
@@ -94,3 +107,4 @@ rejects({ ...base, startDate: '2026-01-01', endDate: '2027-01-02' }, 'staffing_d
 assert.equal(JSON.stringify(base).includes('reason'), false, 'private leave reasons are not accepted input'); checks++;
 console.log(JSON.stringify({ status: 'PASS', checks,
   scope: 'pure canonical staffing request; no auth, preview, compile, SQL, acceptance, delivery or phone proof' }));
+}

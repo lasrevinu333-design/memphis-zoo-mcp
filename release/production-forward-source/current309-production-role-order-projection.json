@@ -1,0 +1,50 @@
+{
+  "schema": "custodial.current309-production-role-order-projection.v1",
+  "source_run": 41766993454,
+  "source_commit": "c6188b9c7fa52227c2b66a84ec964689dc7d7d94",
+  "source_tree": "a32d2575c6d70b5cf0472535552c6ff2b8397626",
+  "archive_digest": "f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3",
+  "refusal_receipt_sha256": "cfc6c43275a0c4c15cde6e347ccabb822606d82486ca967ef1d17ea5649ac169",
+  "rollback_verified": true,
+  "historical_projection_sha256": "2ef92dd5f9c604cdcfd4aa96adca88820e17460836c984ee666ad3268998163b",
+  "measured_inventory": {
+    "count": "7700",
+    "sha256": "2c9da8fe8b1cb0a5f66aa2bd6e94e4f13adaa73753b6b7b8e1d4ce2e66730879"
+  },
+  "prior_inventory": {
+    "count": "7700",
+    "sha256": "3ad9148af807267bbf0ea00b893a720b760114244b92c97f6d76ea1805f77e8f"
+  },
+  "differences": [
+    {
+      "expected": {
+        "restore_order": 950012,
+        "object_kind": "grant",
+        "object_identity": "static_weekly_v8_read_lunch_document(date)",
+        "definition_sha256": "d8e6d38d5d06db6e2b0f45209c3c3e282df12e345d29cb962ae8505ca7e8efd1",
+        "actual_definition_sha256": "d8e6d38d5d06db6e2b0f45209c3c3e282df12e345d29cb962ae8505ca7e8efd1"
+      },
+      "observed": {
+        "restore_order": 950012,
+        "object_kind": "grant",
+        "object_identity": "static_weekly_v8_read_lunch_document(date)",
+        "definition_sha256": "67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791",
+        "actual_definition_sha256": "67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791"
+      }
+    }
+  ],
+  "measured_canary": {
+    "function_sha256": "55fe3e609c8a145f946602c6fbf16df4aa1eab410f50e048b778e7f4bfe72b33",
+    "surface_count": "1727",
+    "surface_sha256": "5fb9e516db6c710a84ab1d1d3c44c67ed06173feafbcc3f8e1c2436ea3a05e70"
+  },
+  "measured_renderer": {
+    "sha256": "a9f77828c5917b95f5dea85ee46bed6ef6581e203cb468a7f15647b59fd7f125"
+  },
+  "all_240_relation_predecessors_exact": true,
+  "relation_comparison_note": "Every field present in the historical 240 relation rows matches. Current capture adds definition_sql; whole-object equality alone was therefore false.",
+  "derived_current310_inventory_sha256": "4cb0ab4c8248557decffbf23878124483cfb16e620f851d8404bd46c9c74caf1",
+  "changed_rows": 239,
+  "derived_current310_actual_SQL_verified": false,
+  "production_authorized": false
+}

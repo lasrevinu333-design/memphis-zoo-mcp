@@ -1,0 +1,207 @@
+{
+  "status": "PASS",
+  "scope": "ACTUAL_FRESH304_CONSTRUCTION_AND_READ_ONLY_CATALOG_BEFORE_INITIAL_ACTIVATION",
+  "expectedCanonicalMigration": {
+    "name": "20261031225210_custodial_sealed_repairs_current_eight.sql",
+    "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73",
+    "bytes": 211245
+  },
+  "constructionMigrations": 304,
+  "actualReceipt": {
+    "schema": "custodial.ci-fresh-only-migrations-construction.v1",
+    "state": "CONSTRUCTED_NOT_FUNCTIONALLY_QUALIFIED",
+    "container": "314412dd369431fcfe129f01a07bc2407166f8f5862c10935a7431bd32ceb411",
+    "name": "mz_schema_rebuild_atomic304_2ff8029e89314598b07176274ece3d4b",
+    "owner": "ed89f79c-14b9-4210-afcd-512a2f4edd12",
+    "database": "postgres",
+    "image": "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+    "image_id": "sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+    "custody_directory": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB/custodial-ci-fresh-custody-sSUPBQ",
+    "socket_directory": "/run/user/1000/custodial-s27-5z88Kw/socket",
+    "max_connections": 60,
+    "selected_replay": {
+      "format": "custodial.ci-fresh-only-selected-replay.v1",
+      "manifest_sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+      "migrations": 304,
+      "overrides": 22,
+      "source_successor": {
+        "sha256": "90bc59181179c0640a0490b545e0078285cbdbc8e372125fb332ecfa3e5d6ebe",
+        "predecessor_manifest_sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+        "predecessor_successor_sha256": "d51728e9973dcfba729164bce441d45efff8cf10b59f3382ade56efbae515e27",
+        "appended_migration": "20261031225210_custodial_sealed_repairs_current_eight.sql"
+      },
+      "full_vendor_NORMAL": false,
+      "expected_fingerprint_authority": null
+    },
+    "data_storage": "owned-disk",
+    "owned_disk_storage": {
+      "schema": "custodial.ci-owned-disk.v1",
+      "kind": "owned-disk",
+      "parent": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp",
+        "dev": 2099,
+        "ino": 61105473,
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448
+      },
+      "namespace": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB",
+        "dev": 2099,
+        "ino": 61105481,
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448
+      },
+      "data": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB/pgdata",
+        "dev": 2099,
+        "ino": 61105482,
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448
+      },
+      "filesystem": {
+        "type": 61267,
+        "bsize": 4096,
+        "available_bytes": 2491258171392
+      },
+      "budget": {
+        "max_data_bytes": 1073741824,
+        "min_available_bytes": 536870912,
+        "hard_quota": false,
+        "observation_only_between_operations": true
+      },
+      "settings_source_sha256": "a42bde5d3934d628fe43be6deb881ba44ae3670c8996b250dea70b8cc37b696e",
+      "settings_source_scope": "Observed postgres owner session PG17.6/170006; not either Render runtime account",
+      "settings": {
+        "jit": "off",
+        "work_mem": "2184kB",
+        "shared_buffers": "224MB",
+        "max_connections": "60",
+        "maintenance_work_mem": "32MB",
+        "statement_timeout": "2min",
+        "lock_timeout": "0",
+        "idle_in_transaction_session_timeout": "0",
+        "temp_file_limit": "-1"
+      },
+      "original_mount": {
+        "type": "bind",
+        "source": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB/pgdata",
+        "target": "/var/lib/postgresql/data",
+        "read_only": false,
+        "bind_propagation": "rprivate",
+        "bind_recursive": "disabled"
+      }
+    },
+    "owned_disk_settings_readback": {
+      "settings": {
+        "jit": "off",
+        "work_mem": "2184kB",
+        "lock_timeout": "0",
+        "shared_buffers": "224MB",
+        "max_connections": "60",
+        "temp_file_limit": "-1",
+        "statement_timeout": "2min",
+        "maintenance_work_mem": "32MB",
+        "idle_in_transaction_session_timeout": "0"
+      },
+      "server_version_num": "170006"
+    },
+    "owned_disk_budget_observation": {
+      "at_ms": 1793492229776,
+      "data_bytes": 137056256,
+      "available_bytes": 2491120750592,
+      "current_data_identity": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB/pgdata",
+        "dev": 2099,
+        "ino": 61105482,
+        "uid": 100,
+        "gid": 1000,
+        "mode": 448
+      },
+      "budget": {
+        "max_data_bytes": 1073741824,
+        "min_available_bytes": 536870912,
+        "hard_quota": false,
+        "observation_only_between_operations": true
+      },
+      "hard_quota": false,
+      "cached": false
+    },
+    "fingerprint_check": "PASS_COMMITTED_CANONICAL_FILE",
+    "no_auto_table_grants": false,
+    "measured_no_auto_catalog": null,
+    "fingerprint_file_sha256": "bc15a8e5d5e550194f957ce6d1e632e14e03d02e39ee653dfd99bedfbe1122e6",
+    "full_suite_PASS": false,
+    "synthetic_fixture_checks_executed": false,
+    "migration_witnesses": null,
+    "original_child": {
+      "schema": "custodial.ci-fixture.original-child-closed.v1",
+      "pid": 3729615,
+      "pgid": 3729615,
+      "actual_wait_returned": true,
+      "exit": 0,
+      "signal": null,
+      "timed_out": false,
+      "stream_limit_exceeded": false,
+      "child_error": null,
+      "fresh_PID_PGID_proc_absent": true,
+      "seconds": 165.487,
+      "stdout_bytes": 25946,
+      "stderr_bytes": 0,
+      "stdout_sha256": "43059ac3c507a6810308c1613d2b2b4ea67d90b6998633c361e66a5fffe17ed7",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB/PARENT_ORIGINAL_CHILD.stdout",
+      "stderr_path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB/PARENT_ORIGINAL_CHILD.stderr"
+    },
+    "parent_custody_directory": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_001/tmp/custodial-ci-fixture-DQHhMB"
+  },
+  "appliedAtomicAppendCount": 1,
+  "fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
+  "counts": {
+    "column_grants": 43,
+    "columns": 3344,
+    "constraints": 2105,
+    "cron_jobs": 9,
+    "default_privileges": 12,
+    "extensions": 8,
+    "functions": 1105,
+    "indexes": 986,
+    "owned_scheduler_role_memberships": 3,
+    "owned_scheduler_roles": 3,
+    "policies": 50,
+    "private_schema_owners": 3,
+    "privilege_bearing_roles": 4,
+    "recovery_schema_owners": 1,
+    "role_memberships": 10,
+    "routine_grants": 674,
+    "schema_grants": 19,
+    "sequence_grants": 0,
+    "sequences": 0,
+    "table_grants": 1808,
+    "tables": 316,
+    "triggers": 658,
+    "type_grants": 0,
+    "types": 0,
+    "views": 33
+  },
+  "closedFunctionNames": 41,
+  "allFunctionGrantInventoryDigestsAndRootsCurrent": true,
+  "newRpcOnlyPublicTablesDirectApiDenied": true,
+  "readOnlyRepeatableRead": true,
+  "readOnlyTransactionRolledBack": true,
+  "samePhysicalBackendPid": 2655,
+  "artifacts": {
+    "raw": "MAIN_FRESH304_RAW_CATALOG.json",
+    "normalized": "MAIN_FRESH304_NORMALIZED_CATALOG.json",
+    "bindings": "MAIN_FRESH304_RECOVERY_BINDINGS.json"
+  },
+  "actualFresh304": true,
+  "functionalAppAcceptance": false,
+  "fullVendorNormal": false,
+  "productionWritten": false,
+  "hostedEquivalence": false,
+  "wholeProgramAcceptance": false,
+  "providerCalls": 0
+}

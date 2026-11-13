@@ -29,7 +29,7 @@ try {
     console.log('Annie tables already exist, skipping DDL migration');
   } else {
     const fs = await import('node:fs');
-    const sql = new URL('../supabase/migrations/005_annie_log.sql', import.meta.url).pathname;
+    const sql = new URL('../supabase/legacy_migrations/005_annie_log.sql', import.meta.url).pathname;
     const migration = fs.readFileSync(sql, 'utf-8');
     await client.query(migration);
     console.log('Migration 005_annie_log.sql applied successfully');

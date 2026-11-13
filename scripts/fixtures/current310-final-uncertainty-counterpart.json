@@ -1,0 +1,29 @@
+{
+  "schema": "custodial.current310-final-uncertainty-counterpart.v1",
+  "scope": "SEPARATE_CURRENT_CANONICAL_CONTEXT_ONLY",
+  "original": {
+    "path": "scripts/final-uncertainty-closure-database-tests.mjs",
+    "sha256": "d3d209aa96e494723ddc71a20454620bb668da57d383f9317d43facf5f44bca0",
+    "bytes": 71923
+  },
+  "counterpart": {
+    "path": "scripts/current-qualified-final-uncertainty-database-tests.mjs",
+    "sha256": "280581ea7af5ceb989a17e482510aa2eae20f52b9f0c00ed205f8e426c9e840d",
+    "bytes": 71953
+  },
+  "transformation": {
+    "old_literal": "scripts/refresh-schema-fingerprint.mjs",
+    "new_literal": "scripts/current-qualified-catalog-invariant-check.mjs",
+    "exact_occurrences": 2,
+    "original_line_numbers": [
+      84,
+      99
+    ],
+    "all_other_bytes_identical": true,
+    "behavior_assertions_modified": 0
+  },
+  "historical_test_pass_claimed": false,
+  "historical_canonical_modified": false,
+  "production": false,
+  "release_admission": false
+}

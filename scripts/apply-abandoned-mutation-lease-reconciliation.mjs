@@ -38,15 +38,29 @@ if (!/^[0-9a-f-]{36}$/i.test(String(intent.reconciliation_id || ""))
 }
 const expiresAt = Date.parse(String(intent.expires_at || ""));
 const approvedAt = Date.parse(String(intent.approved_at || ""));
-if (!Number.isFinite(expiresAt) || !Number.isFinite(approvedAt) || approvedAt > Date.now()
-    || expiresAt <= Date.now() || expiresAt > Date.now() + 24 * 60 * 60 * 1000) throw new Error("Abandoned lease reconciliation is expired or exceeds the 24-hour authorization window.");
+function requireAuthorizationFresh() {
+  const now = Date.now();
+  if (!Number.isFinite(expiresAt) || !Number.isFinite(approvedAt) || approvedAt > now
+      || expiresAt <= now || expiresAt > now + 24 * 60 * 60 * 1000) throw new Error("Abandoned lease reconciliation is expired or exceeds the 24-hour authorization window.");
+}
+requireAuthorizationFresh();
 const intentDigest = createHash("sha256").update(stableJson(abandonedMutationLeaseReconciliationBinding(intent))).digest("hex");
 
 function iso(value) { return new Date(value).toISOString(); }
+function sqlAuthorityGeneration(value) {
+  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]{0,18})(?![\s\S])/.test(value)) {
+    throw new Error("Original SQL authority generation must be canonical nonnegative decimal TEXT.");
+  }
+  const exact = BigInt(value);
+  if (exact > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Original SQL authority generation exceeds the supported v1 safe-integer contract.");
+  }
+  return Number(exact);
+}
 function normalizeLease(row) {
   return {
     request_id: String(row.request_id),
-    authority_generation: Number(row.authority_generation),
+    authority_generation: sqlAuthorityGeneration(row.authority_generation),
     service_name: String(row.service_name),
     admitted_at: iso(row.admitted_at),
     heartbeat_at: iso(row.heartbeat_at),
@@ -62,11 +76,14 @@ const db = new Client({
 await db.connect();
 await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
 try {
+  requireAuthorizationFresh();
   await db.query("begin isolation level serializable");
   await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))");
   const controlResult = await db.query("select authority_generation,mutations_paused,state,restore_id,target_project_ref from custodial_dr.restore_control where singleton=true for update");
+  requireAuthorizationFresh();
   const control = controlResult.rows[0];
-  if (!control || Number(control.authority_generation) !== intent.authority_generation
+  const authorityGeneration = control ? sqlAuthorityGeneration(control.authority_generation) : null;
+  if (!control || authorityGeneration !== intent.authority_generation
       || control.state !== intent.control_state || String(control.restore_id || "") !== String(intent.restore_id || "")
       || (control.target_project_ref && control.target_project_ref !== projectRef)) throw new Error("Restore control changed after abandoned-lease approval.");
   const prior = await db.query("select intent_sha256 from custodial_dr.application_mutation_lease_reconciliations where reconciliation_id=$1", [intent.reconciliation_id]);
@@ -98,6 +115,7 @@ try {
       })) {
     throw new Error("Signed process-termination evidence does not cover the exact lease set.");
   }
+  requireAuthorizationFresh();
   const deleted = await db.query("delete from custodial_dr.application_mutation_leases where request_id=any($1::uuid[])", [actual.map((row) => row.request_id)]);
   if (deleted.rowCount !== actual.length) throw new Error("Failed to delete the exact reconciled lease set.");
   await db.query(`
@@ -105,6 +123,7 @@ try {
       reconciliation_id,authority_generation,restore_id,intent_sha256,actor,leases_json,evidence_json
     ) values($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)
   `, [intent.reconciliation_id, intent.authority_generation, intent.restore_id, intentDigest, intent.actor, JSON.stringify(intent.leases), JSON.stringify(intent.evidence)]);
+  requireAuthorizationFresh();
   await db.query("commit");
   console.log(JSON.stringify({ ok: true, idempotent_replay: false, reconciliation_id: intent.reconciliation_id, reconciled_leases: actual.length, control_state_unchanged: control.state }));
 } catch (error) {

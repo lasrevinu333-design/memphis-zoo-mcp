@@ -3,6 +3,137 @@ import express from "express";
 import { createMemphisResponder } from "../src/memphis-ai.js";
 import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
+import {makeDeviceCredentialMiddleware,deviceCredentialInternals} from '../src/auth/device-credential-auth.js';
+
+async function withServer(app, fn) {
+  const server = await new Promise((resolve, reject) => {
+    const listener = app.listen(0, '127.0.0.1', error => error ? reject(error) : resolve(listener));
+  });
+  try {
+    const { port } = server.address();
+    return await fn(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+// Existing route facility, selected owning cases only. The NORMAL enrolled
+// middleware uses an in-memory fixture store. Read callbacks never create a
+// genuine accepted START; SQL/native receipt qualification remains MAIN's.
+export async function runAcceptedStartReminderProducerTests({routerFactory=createMessagingRouter,baselineOnly=false}={}) {
+  const day='2026-10-12',deviceId='KIOSK_06',devicePk='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const employee='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',credentialId='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const projection='dddddddd-dddd-4ddd-8ddd-dddddddddddd',publication='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const version='ffffffff-ffff-4fff-8fff-ffffffffffff',location='11111111-1111-4111-8111-111111111111';
+  const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'device-credential-foundation-test-secret'};
+  const secret='existing-fixture-token-not-a-real-credential-123456';
+  const now=new Date(),checks=[];
+  async function scenario(options={}) {
+    let changed=false,authorityReads=0,acceptedReads=0,credentialReads=0,requests=[];
+    const queries=[];
+    let device={canonical_device_pk:devicePk,canonical_device_id:deviceId,device_id:deviceId,
+      device_active:true,employee_active:true,role:'employee',assigned_employee_id:employee,assignment_epoch:'7',
+      assigned_employee_name:'Synthetic route employee',employee_code:'EMP9406',assignment_valid:true};
+    let credential={credential_id:credentialId,device_id:devicePk,confirmed_at:now.toISOString(),revoked_at:null,
+      expires_at:new Date(now.getTime()+86400000).toISOString(),last_used_at:now.toISOString(),
+      token_hash:deviceCredentialInternals.tokenHash(secret,env),metadata_json:deviceCredentialInternals.deviceCredentialSecretMetadata(env)};
+    const store={async getPolicy(){return {mode:'enforced'};},async findCredential(){credentialReads++;
+      if(options.unavailable&&changed)throw new Error('synthetic store unavailable');return credential;},
+      async touchCredential(){},async audit(){}};
+    const change=stage=>{
+      if(changed||options.at!==stage)return;
+      changed=true;
+      if(options.revoke)credential={...credential,revoked_at:new Date().toISOString()};
+      if(options.expire)credential={...credential,expires_at:new Date(Date.now()-1).toISOString()};
+      if(options.replaceCredential)credential={...credential,credential_id:'cccccccc-cccc-4ccc-8ccc-cccccccccccd'};
+      if(options.reassign)device={...device,assigned_employee_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc',assignment_epoch:'8'};
+      if(options.deactivate)device={...device,device_active:false};
+    };
+    const authority=()=>({service_date:day,governed:true,projection_status:'current',version_id:version,
+      publication_id:publication,projection_id:projection,schedule_authority_revision:'24'});
+    const read=async sql=>{
+      queries.push(sql);
+      if(/public\.device_aliases/.test(sql)&&/order by match_rank/.test(sql))return [structuredClone(device)];
+      if(/msg_get_user_by_device/.test(sql))return [{msg_user_id:employee,role:'employee',canonical_device_id:deviceId}];
+      if(/notification_state/.test(sql)){change('notification');return [{employee_id:employee,service_date:day,
+        is_employee_device:true,notifications_silent:false,silent_reason:'notifications_allowed'}];}
+      if(/custodial_open_work\(\)/.test(sql)){
+        acceptedReads++;change('accepted');
+        if(options.badRow)return [{service_date:day,device_id:deviceId,employee_id:employee,assignment_epoch:'7',
+          location_id:location,projection_id:projection,credential_id:credentialId,schedule_authority_revision:'24',
+          open_session_uuid:'unqualified-callback-row',open_session_status:'active',
+          open_session_started_at:'2026-10-12T12:00:00.000001Z',open_session_device_identifier:deviceId,...options.badRow}];
+        return []; // No fabricated accepted native/canonical positive proof.
+      }
+      if(/static_weekly_v6_schedule_authority_state/.test(sql)){
+        authorityReads++;change(authorityReads===1?'authority':'authorityAfter');
+        if(options.noAuthority)return [];
+        const a=authority();if(authorityReads>1&&options.revisionDrift)a.schedule_authority_revision='25';
+        if(authorityReads>1&&options.projectionDrift)a.projection_id='dddddddd-dddd-4ddd-8ddd-ddddddddddde';
+        return [a];
+      }
+      if(/custodial_operational_location_assignments/.test(sql)){change('reminders');return [];}
+      throw new Error('unexpected source fixture read');
+    };
+    const normal=makeDeviceCredentialMiddleware({env,store,runReadOnlySql:read,requireEnrolledCredential:true});
+    const app=express();app.use(express.json());
+    app.use('/messaging-api',routerFactory({runReadOnlySql:read,runRpc:async()=>{throw Error('no writer allowed');},
+      requireDeviceAccess:normal,buildHealthPayload:()=>({ok:true}),appVersion:'source-test',releaseId:'source-test',contractVersion:'source-test'}));
+    let response;
+    await withServer(app,async origin=>{
+      const raw=await fetch(origin+'/messaging-api/device-location-status-reminders?device_id='+deviceId+'&service_date='+day+'&accepted_sessions=1',
+        {headers:{'x-device-credential':credentialId+'.'+secret}});
+      response={status:raw.status,body:await raw.json(),cache:raw.headers.get('cache-control')};
+    });
+    return {response,queries,acceptedReads,credentialReads,authorityReads};
+  }
+  if(baselineOnly){
+    const revoked=await scenario({at:'accepted',revoke:true});
+    assert.equal(revoked.response.status,200);assert.equal(revoked.credentialReads,1);
+    const sql=revoked.queries.find(q=>q.includes('custodial_open_work()'));
+    assert.doesNotMatch(sql,/schedule_authority_revision|credential_id/);
+    return {classification:'BASELINE_ROUTE_SOURCE_REPRODUCTION_NO_ACCEPTED_START_CREATED',
+      defects:['withdrawn credential after accepted-session read still returns HTTP200 without normal auth revalidation',
+        'accepted-session SQL omits original read-owner credential and current projection revision'],
+      acceptedSTARTProofs:0};
+  }
+  const empty=await scenario();assert.equal(empty.response.status,200);assert.deepEqual(empty.response.body.meta.accepted_location_sessions,[]);
+  assert.equal(empty.response.cache,'private, no-store');assert.ok(empty.credentialReads>1);
+  const source=empty.queries.find(q=>q.includes('custodial_open_work()'));
+  assert.match(source,/custodial_open_work\(\)/);assert.match(source,/source_kind in \('session','native_offline_context'\)/);
+  assert.match(source,/credential_id/);assert.match(source,/authority\.projection_authority_revision::text schedule_authority_revision/);
+  assert.match(source,/authority\.version_id=a\.version_id/);assert.match(source,/authority\.publication_id=a\.publication_id/);
+  assert.match(source,/authority\.projection_id=a\.projection_id/);assert.match(source,/isfinite\(w\.started_at\)/);
+  assert.match(source,/to_char\(w\.started_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS\.US"Z"'\)/);
+  checks.push('bounded current read returns empty acceptance only, private no-store, normal reauth and exact fixed source/receipt-revision/UTC-microsecond SQL shape');
+  for(const at of ['notification','authority','reminders','accepted','authorityAfter']){
+    const f=await scenario({at,revoke:true});assert.notEqual(f.response.status,200);assert.equal(f.response.body.ok,false);
+    checks.push('credential revoked at '+at+' await refuses original response');
+  }
+  for(const [name,options] of [
+    ['unavailable current credential',{at:'accepted',unavailable:true}],
+    ['expired current credential',{at:'accepted',expire:true}],
+    ['changed credential',{at:'accepted',replaceCredential:true}],
+    ['reassigned original employee/epoch',{at:'accepted',reassign:true}],
+    ['withdrawn device',{at:'accepted',deactivate:true}],
+    ['changed same-projection revision',{revisionDrift:true}],
+    ['changed projection identity',{projectionDrift:true}],
+    ['missing current projection authority',{noAuthority:true}],
+    ['foreign read-owner row',{badRow:{credential_id:'cccccccc-cccc-4ccc-8ccc-cccccccccccd'}}],
+    ['stale revision row',{badRow:{schedule_authority_revision:'23'}}],
+    ['malformed original time',{badRow:{open_session_started_at:'2026-02-31T12:00:00.000001Z'}}],
+  ]){
+    const f=await scenario(options);assert.notEqual(f.response.status,200,name);assert.equal(f.response.body.ok,false);
+    checks.push(name+' refuses without affirmative retirement DTO');
+  }
+  return {classification:'NORMAL_MIDDLEWARE_IN_MEMORY_ROUTE_SOURCE_ONLY',checks,acceptedSTARTProofs:0,
+    actualSQL:false,provider:false,native:false,humanManager:false};
+}
+
+if (!new URL(import.meta.url).searchParams.has('acceptedStartReminderMember')) {
+await import('./memphis-authoritative-date-tests.mjs');
+await import('./memphis-event-read-tests.mjs');
+await import('./memphis-current-authority-route-tests.mjs');
 
 process.env.GEMINI_API_KEY = "";
 process.env.MEMPHIS_GEMINI_API_KEY = "";
@@ -161,6 +292,13 @@ for (const testCase of replyCases) {
 }
 
 const eventCenterThreadId = "00000000-0000-0000-0000-000000000002";
+const eventCenterPublicationId = "33333333-3333-4333-8333-333333333333";
+const eventCenterProjectionId = "44444444-4444-4444-8444-444444444444";
+const eventCenterEmployees = [
+  { employee_id: "55555555-5555-4555-8555-555555555555", employee_name: "Aquarium Keeper", working: true, shift_start: "07:00", shift_end: "15:00" },
+  { employee_id: "66666666-6666-4666-8666-666666666666", employee_name: "Karen Robinson", working: true, shift_start: "07:00", shift_end: "15:00" },
+  { employee_id: "77777777-7777-4777-8777-777777777777", employee_name: "Michael McWright", working: true, shift_start: "15:00", shift_end: "21:00" },
+];
 const eventCenterResponder = createMemphisResponder({
   runReadOnlySql: async (sql) => {
     const query = String(sql || "");
@@ -173,10 +311,13 @@ const eventCenterResponder = createMemphisResponder({
         { location_group_id: "22222222-2222-2222-2222-222222222222", group_name: "Event Center", group_code: "EC", aliases: ["event center", "ec"] },
       ];
     }
-    if (query.includes("from public.v_memphis_area_schedule")) {
-      const dateMatch = query.match(/service_date = '([^']+)'::date/);
+    if (query.includes("custodial_memphis_schedule_day")) {
+      return [{ data: { schema: "memphis.schedule-day.v1", status: "current", projection_status: "current",
+        publication_id: eventCenterPublicationId, projection_id: eventCenterProjectionId, rows: eventCenterEmployees } }];
+    }
+    if (query.includes("static_weekly_v6_schedule_authority_state")) {
+      const dateMatch = query.match(/static_weekly_v6_schedule_authority_state\('([^']+)'::date/);
       const serviceDate = dateMatch?.[1] || SERVICE_DATE;
-      const eventCenterOnly = query.includes("22222222-2222-2222-2222-222222222222") || query.includes("Event Center") || query.includes("EC");
       const rows = [
         { service_date: serviceDate, location_group_id: "11111111-1111-1111-1111-111111111111", employee_name: "Aquarium Keeper", group_name: "Aquarium", group_code: "AQU", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
@@ -184,7 +325,10 @@ const eventCenterResponder = createMemphisResponder({
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "10:00:00", coverage_end: "12:00:00", segment_number: 3 },
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Michael McWright", group_name: "Event Center", group_code: "EC", coverage_start: "15:00:00", coverage_end: "21:00:00", segment_number: 4 },
       ];
-      return eventCenterOnly ? rows.filter((row) => row.group_name === "Event Center") : rows;
+      return [{ authority: { governed: true, projection_status: "current", publication_id: eventCenterPublicationId,
+        projection_id: eventCenterProjectionId }, assignments: rows.map(row => ({ ...row,
+          assigned_employee_id: eventCenterEmployees.find(employee => employee.employee_name === row.employee_name).employee_id,
+          assigned_employee_name: row.employee_name, owner_type: "EMPLOYEE", status: "ASSIGNED" })) }];
     }
     if (query.includes("from public.events_app_events")) return [];
     return [];
@@ -203,7 +347,8 @@ assert.ok(!eventCenterWeekly.text.includes("Aquarium Keeper"), "Event Center wee
 assert.equal((eventCenterWeekly.text.match(/Karen Robinson 07:00-15:00/g) || []).length, 7, "Event Center weekly answer should collapse exact duplicate person/time segments per day");
 assert.equal((eventCenterWeekly.text.match(/Karen Robinson 10:00-12:00/g) || []).length, 7, "Event Center weekly answer should preserve distinct time blocks for the same person");
 assert.ok(eventCenterWeekly.text.length <= 1900, `Event Center weekly answer should fit message body limits, got ${eventCenterWeekly.text.length}`);
-assert.match(eventCenterWeekly.text, /unless absence, PTO, or Coverall/i, "Event Center weekly answer should state normal schedule exception policy");
+assert.match(eventCenterWeekly.text, /Current published Event Center assignments for these dates/i, "Event Center weekly answer must identify the actual dated publication rather than a presumed baseline");
+assert.doesNotMatch(eventCenterWeekly.text, /normal weekly|unless absence|PTO/i, "Event Center weekly answer must not invent exceptions to the current published assignments");
 
 const eventCenterToday = await eventCenterResponder.generateReply({
   userMessage: "What custodians are assigned to event center today?",
@@ -222,18 +367,6 @@ const falseLocationCodeCases = [
 for (const prompt of falseLocationCodeCases) {
   assert.equal(findLocationCode(prompt), "", `${prompt} should not produce a false location code`);
   assert.equal(hasLocationKeyword(prompt), false, `${prompt} should not match a location keyword`);
-}
-
-async function withServer(app, fn) {
-  const server = await new Promise((resolve) => {
-    const listener = app.listen(0, () => resolve(listener));
-  });
-  try {
-    const { port } = server.address();
-    return await fn(`http://127.0.0.1:${port}`);
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-  }
 }
 
 const threadMetadataReadCalls = [];
@@ -920,3 +1053,4 @@ assert.equal(adminAuditRpcCalls.length, 0, 'Retired Gemini routes must not call 
 assert.equal(adminAuditReadCalls.length, 0, 'Retired Gemini routes must not query operational data');
 
 console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, off_shift_notification_guard_contract: true, off_shift_location_notification_guard_contract: true, location_identity_mismatch_guard_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true, retired_gemini_admin_routes: true }, null, 2));
+}

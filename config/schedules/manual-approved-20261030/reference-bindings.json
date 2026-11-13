@@ -1,0 +1,514 @@
+{
+  "schema": "custodial.manual-reference-bindings.v1",
+  "packetManifestSha256": "fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f",
+  "reference": {
+    "path": "release/static-schedules/custodial-eight-20261102-registration.json",
+    "sha256": "2f8b138c0cddf9e05741ddf63c2bc774bbf3f3abac2b8a908e0fd93aa84bafdc",
+    "sourceId": "834b76c4-94b6-5191-84c9-89e7547d38fa",
+    "classification": "RETAINED_CANDIDATE_IDENTITY_REFERENCES_NOT_LIVE_ROSTER_ADMISSION",
+    "bytes": 1486395
+  },
+  "people": [
+    {
+      "approvedName": "Alijah Collins",
+      "employeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+      "slotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+      "referenceEffectiveStart": "2020-01-01",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Derrick Henderson",
+      "employeeId": "8067cca2-7487-4589-ba7c-aa442e135045",
+      "slotId": "e91b7a47-f20f-5777-a5d3-9c0ce8778df5",
+      "referenceEffectiveStart": "2026-11-02",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Jada Rawlings",
+      "employeeId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "referenceEffectiveStart": "2026-11-02",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Karen Robinson",
+      "employeeId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+      "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+      "referenceEffectiveStart": "2020-01-01",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Kathy Phelps",
+      "employeeId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+      "slotId": "55e5939c-175c-5026-94fd-c4350d538922",
+      "referenceEffectiveStart": "2020-01-01",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Kiltra Horton",
+      "employeeId": "06228c5d-5123-4b8b-b730-e01114bdc971",
+      "slotId": "7044faec-4bbd-57ca-a898-ddd719503113",
+      "referenceEffectiveStart": "2026-11-02",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Tammy Miller",
+      "employeeId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+      "slotId": "4a5a83ca-d297-5a30-8344-db08d05b978c",
+      "referenceEffectiveStart": "2020-01-01",
+      "referenceEffectiveEnd": null
+    },
+    {
+      "approvedName": "Xavier Green",
+      "employeeId": "1318b295-fd70-4e78-8828-62c29302f96f",
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "referenceEffectiveStart": "2026-11-02",
+      "referenceEffectiveEnd": null
+    }
+  ],
+  "groups": [
+    {
+      "approvedGroup": "Teton and restrooms",
+      "referenceCode": "TETON",
+      "primaryLocationId": "e127dc20-98ea-4c21-9a8d-5274d29f8508",
+      "referenceLabel": "Teton",
+      "includedLocations": [
+        {
+          "locationId": "e127dc20-98ea-4c21-9a8d-5274d29f8508",
+          "locationNameSnapshot": "Teton"
+        },
+        {
+          "locationId": "a269e6f3-dbdc-481a-aa0b-fb3cdfde8606",
+          "locationNameSnapshot": "Teton Men's Restroom"
+        },
+        {
+          "locationId": "7f890aeb-87df-4255-9116-9d465b4b5121",
+          "locationNameSnapshot": "Teton Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Zambezi and restrooms",
+      "referenceCode": "ZAMBEZI",
+      "primaryLocationId": "ca8da3d2-57e0-40be-ae23-f06810ca835b",
+      "referenceLabel": "Zambezi",
+      "includedLocations": [
+        {
+          "locationId": "ca8da3d2-57e0-40be-ae23-f06810ca835b",
+          "locationNameSnapshot": "Zambezi"
+        },
+        {
+          "locationId": "1886dfe1-4ba4-47dc-8bb9-c2e26df0aa31",
+          "locationNameSnapshot": "Zambezi Men's Restroom"
+        },
+        {
+          "locationId": "56a18f41-be6c-4bbe-a138-4a3df040b0a9",
+          "locationNameSnapshot": "Zambezi Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Expo and restrooms",
+      "referenceCode": "EXPO",
+      "primaryLocationId": "81c5cf06-3808-4da9-88d3-408ecc3d9afd",
+      "referenceLabel": "Expo",
+      "includedLocations": [
+        {
+          "locationId": "81c5cf06-3808-4da9-88d3-408ecc3d9afd",
+          "locationNameSnapshot": "Expo"
+        },
+        {
+          "locationId": "021b598d-dedf-4de8-8d91-df6d8617d826",
+          "locationNameSnapshot": "Expo Men's Restroom"
+        },
+        {
+          "locationId": "9e4f0ebd-7a0d-462f-aa8f-3aca2da98f14",
+          "locationNameSnapshot": "Expo Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Courtyard restrooms",
+      "referenceCode": "COURTYARD_RESTROOMS",
+      "primaryLocationId": "79edb5d2-e792-4464-9725-780123431dee",
+      "referenceLabel": "Courtyard Restrooms",
+      "includedLocations": [
+        {
+          "locationId": "79edb5d2-e792-4464-9725-780123431dee",
+          "locationNameSnapshot": "Courtyard Men's Restroom"
+        },
+        {
+          "locationId": "fc0b970a-5c8e-46a0-aaf5-e72e131b2c3e",
+          "locationNameSnapshot": "Courtyard Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Cat House Cafe restrooms",
+      "referenceCode": "CATHOUSE_CAFE_RESTROOMS",
+      "primaryLocationId": "9eb69196-c103-4a9f-873a-227d32c42ccd",
+      "referenceLabel": "Cathouse Cafe Restrooms",
+      "includedLocations": [
+        {
+          "locationId": "9eb69196-c103-4a9f-873a-227d32c42ccd",
+          "locationNameSnapshot": "Cathouse Cafe Men's Restroom"
+        },
+        {
+          "locationId": "37e2746d-6116-48df-9c04-912180e614fc",
+          "locationNameSnapshot": "Cathouse Cafe Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Breezeway restrooms",
+      "referenceCode": "BREEZEWAY_RESTROOMS",
+      "primaryLocationId": "403edde1-f4c5-4c57-8d9d-b2c2703667f4",
+      "referenceLabel": "Breezeway Restrooms",
+      "includedLocations": [
+        {
+          "locationId": "403edde1-f4c5-4c57-8d9d-b2c2703667f4",
+          "locationNameSnapshot": "Breezeway Men's Restroom"
+        },
+        {
+          "locationId": "2e728747-5681-4641-a22a-15922ab22845",
+          "locationNameSnapshot": "Breezeway Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+      "referenceCode": "EDUCATION",
+      "primaryLocationId": "5933e02f-1dca-4d19-a5c0-e40e5d2f229c",
+      "referenceLabel": "Education",
+      "includedLocations": [
+        {
+          "locationId": "5933e02f-1dca-4d19-a5c0-e40e5d2f229c",
+          "locationNameSnapshot": "Education"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Nocturnal",
+      "referenceCode": "NOCTURNAL",
+      "primaryLocationId": "22b1e8d2-e0ba-4ff8-ae4e-3cbe85df27d3",
+      "referenceLabel": "Nocturnal",
+      "includedLocations": [
+        {
+          "locationId": "22b1e8d2-e0ba-4ff8-ae4e-3cbe85df27d3",
+          "locationNameSnapshot": "Nocturnal"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Primate Canyon",
+      "referenceCode": "PRIMATE_CANYON",
+      "primaryLocationId": "0da4b781-f2d2-49c5-af9a-a81e607a85e2",
+      "referenceLabel": "Primate Canyon",
+      "includedLocations": [],
+      "retainedServiceModes": [
+        "response_only_no_clean"
+      ]
+    },
+    {
+      "approvedGroup": "Cat Country",
+      "referenceCode": "CAT_COUNTRY",
+      "primaryLocationId": "6bab7a02-7053-4dc3-88b2-784b15e48d4a",
+      "referenceLabel": "Cat Country",
+      "includedLocations": [],
+      "retainedServiceModes": [
+        "response_only_no_clean"
+      ]
+    },
+    {
+      "approvedGroup": "Primate Pavilion",
+      "referenceCode": "PRIMATE_PAVILLION",
+      "primaryLocationId": "b47d52a4-15aa-4498-be58-cf8a716e8510",
+      "referenceLabel": "Primate Pavillion",
+      "includedLocations": [
+        {
+          "locationId": "b47d52a4-15aa-4498-be58-cf8a716e8510",
+          "locationNameSnapshot": "Primate Pavillion"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "China and restrooms",
+      "referenceCode": "CHINA",
+      "primaryLocationId": "cde94274-5631-401d-9d57-812e6b47f5ee",
+      "referenceLabel": "China",
+      "includedLocations": [
+        {
+          "locationId": "cde94274-5631-401d-9d57-812e6b47f5ee",
+          "locationNameSnapshot": "China"
+        },
+        {
+          "locationId": "ae049ef7-66d8-4ab7-94e1-48189ab03ab0",
+          "locationNameSnapshot": "China Men's Restroom"
+        },
+        {
+          "locationId": "efece506-df23-42f7-837e-7df4cd0bcb06",
+          "locationNameSnapshot": "China Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Event Center and restrooms",
+      "referenceCode": "EVENT_CENTER",
+      "primaryLocationId": "a6ae6887-394a-42e2-b406-8d3c99395be6",
+      "referenceLabel": "Event Center",
+      "includedLocations": [
+        {
+          "locationId": "a6ae6887-394a-42e2-b406-8d3c99395be6",
+          "locationNameSnapshot": "Event Center"
+        },
+        {
+          "locationId": "0ae9d4a9-1c0b-432d-aac1-2d9eb3fafa1e",
+          "locationNameSnapshot": "Event Center Left Restroom"
+        },
+        {
+          "locationId": "4c54e3f9-de0b-4fe6-8116-2e32c0d3cc4d",
+          "locationNameSnapshot": "Event Center Right Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Herpetarium",
+      "referenceCode": "HERPETARIUM",
+      "primaryLocationId": "7a6ef424-142e-4d0b-9202-8007c3283ae7",
+      "referenceLabel": "Herpetarium",
+      "includedLocations": [
+        {
+          "locationId": "7a6ef424-142e-4d0b-9202-8007c3283ae7",
+          "locationNameSnapshot": "Herpetarium"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Komodos",
+      "referenceCode": "KOMODOS",
+      "primaryLocationId": "8513ed80-a2da-4eb4-be09-156f62053a05",
+      "referenceLabel": "Komodos",
+      "includedLocations": [
+        {
+          "locationId": "8513ed80-a2da-4eb4-be09-156f62053a05",
+          "locationNameSnapshot": "Komodos"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Tropical Birds",
+      "referenceCode": "TROPICAL_BIRDS",
+      "primaryLocationId": "d7d70c17-86cd-4f77-be6b-74b4665cfb9c",
+      "referenceLabel": "Tropical Birds",
+      "includedLocations": [
+        {
+          "locationId": "d7d70c17-86cd-4f77-be6b-74b4665cfb9c",
+          "locationNameSnapshot": "Tropical Birds"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Aquarium",
+      "referenceCode": "AQUARIUM",
+      "primaryLocationId": "c09dd3a9-808b-4c41-a237-9759a91be3ab",
+      "referenceLabel": "Aquarium",
+      "includedLocations": [
+        {
+          "locationId": "c09dd3a9-808b-4c41-a237-9759a91be3ab",
+          "locationNameSnapshot": "Aquarium"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "MemMex restrooms",
+      "referenceCode": "MEMMEX_RESTROOMS",
+      "primaryLocationId": "8f158d2b-6a2b-4091-9a3a-ed5cf535f627",
+      "referenceLabel": "MemMex Restrooms",
+      "includedLocations": [
+        {
+          "locationId": "8f158d2b-6a2b-4091-9a3a-ed5cf535f627",
+          "locationNameSnapshot": "MemMex Men's Restroom"
+        },
+        {
+          "locationId": "ef3711b2-ddce-4f8e-8749-15002a4bc0c7",
+          "locationNameSnapshot": "MemMex Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Northwest Passage",
+      "referenceCode": "NORTH_WEST_PASSAGE",
+      "primaryLocationId": "a92ecadc-c286-47c7-aaad-2550642abedf",
+      "referenceLabel": "North West Passage",
+      "includedLocations": [
+        {
+          "locationId": "a92ecadc-c286-47c7-aaad-2550642abedf",
+          "locationNameSnapshot": "North West Passage"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "East End restrooms",
+      "referenceCode": "EAST_END_RESTROOMS",
+      "primaryLocationId": "72ba55c0-6f64-42dd-a721-98d1717ae350",
+      "referenceLabel": "East End Restrooms",
+      "includedLocations": [
+        {
+          "locationId": "72ba55c0-6f64-42dd-a721-98d1717ae350",
+          "locationNameSnapshot": "East End Men's Restroom"
+        },
+        {
+          "locationId": "62ff1f51-1be7-4fed-8b72-a97c942f7561",
+          "locationNameSnapshot": "East End Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "West Admin and restrooms",
+      "referenceCode": "WEST_ADMIN",
+      "primaryLocationId": "58418743-10d7-4d22-97f8-1a33d4a969d4",
+      "referenceLabel": "West Admin",
+      "includedLocations": [
+        {
+          "locationId": "58418743-10d7-4d22-97f8-1a33d4a969d4",
+          "locationNameSnapshot": "West Admin Building"
+        },
+        {
+          "locationId": "12c90b1e-d53e-47b6-860e-823ae0fee1a8",
+          "locationNameSnapshot": "West Admin Downstairs Men's Restroom"
+        },
+        {
+          "locationId": "c51107e4-2d66-487b-9765-09489e2f84c9",
+          "locationNameSnapshot": "West Admin Downstairs Women's Restroom"
+        },
+        {
+          "locationId": "a8fa8f6b-6a90-4448-a125-ea1045fbe261",
+          "locationNameSnapshot": "West Admin Upstairs Men's Restroom"
+        },
+        {
+          "locationId": "c33d6d08-95bb-40df-ad88-03482df6165d",
+          "locationNameSnapshot": "West Admin Upstairs Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "East Admin and restrooms",
+      "referenceCode": "EAST_ADMIN",
+      "primaryLocationId": "7fdde9c1-b334-4adc-ae3e-350ff9419b2b",
+      "referenceLabel": "East Admin",
+      "includedLocations": [
+        {
+          "locationId": "7fdde9c1-b334-4adc-ae3e-350ff9419b2b",
+          "locationNameSnapshot": "East Admin Building"
+        },
+        {
+          "locationId": "181a8d59-3a98-4823-8ca4-b9ecd958d90e",
+          "locationNameSnapshot": "East Admin Men's Restroom"
+        },
+        {
+          "locationId": "198be106-b98d-4604-b323-a0c8d5e4fd1a",
+          "locationNameSnapshot": "East Admin Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    },
+    {
+      "approvedGroup": "Bonobos restrooms",
+      "referenceCode": "BONOBOS_RESTROOMS",
+      "primaryLocationId": "d6f8ab36-555b-4a08-8763-272ba37d2b04",
+      "referenceLabel": "Bonobos Restrooms",
+      "includedLocations": [
+        {
+          "locationId": "d6f8ab36-555b-4a08-8763-272ba37d2b04",
+          "locationNameSnapshot": "Bonobos Men's Restroom"
+        },
+        {
+          "locationId": "e975ebbf-bb10-49c7-9d37-efac51e6b4e0",
+          "locationNameSnapshot": "Bonobos Women's Restroom"
+        }
+      ],
+      "retainedServiceModes": [
+        "scan_tracked"
+      ]
+    }
+  ],
+  "approvedEducationScope": {
+    "display": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+    "one_group": true,
+    "classroom_count": 4,
+    "source": "Eric's current explicit voice clarification; assignment owners unchanged."
+  },
+  "unresolvedLegacyDuties": [
+    {
+      "referenceCode": "ELEPHANT_TRUNK_RESTROOMS",
+      "primaryLocationId": "c283eb27-56a0-4cf5-9deb-482b0b0117fa",
+      "approvedOwner": null,
+      "weeklyDecision": null,
+      "score": null,
+      "status": "UNRESOLVED_NOT_SILENTLY_REMOVED"
+    }
+  ],
+  "bindingStatus": "CANDIDATE_REFERENCES_ONLY",
+  "liveRosterReadbackRequired": true,
+  "canonicalRegistrationSource": false,
+  "productionPublished": false
+}

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Disposable current-head proof for the exact verified-visit/dashboard read path.
 // The historical OC24 runner remains pinned to its original 150-migration head.
 import assert from 'node:assert/strict';
@@ -8,7 +9,7 @@ import {createHash} from 'node:crypto';
 
 const container=`mz_verified_visit_${process.pid}`;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
-const files=readdirSync('supabase/migrations').filter(file=>file.endsWith('.sql')).sort();
+const files=migrationReplayNames(process.cwd());
 assert.equal(files.length,153,'current changed-input migration count');
 assert.equal(files.at(-1),'20260925190000_gps_exact_location_authority_boundary.sql','current changed-input migration head');
 const docker=(args,options={})=>execFileSync('docker',args,{encoding:'utf8',timeout:60000,maxBuffer:32*1024*1024,...options});

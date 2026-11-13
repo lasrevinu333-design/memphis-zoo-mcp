@@ -16,11 +16,12 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((rows, value, index
 for (const name of ["private-key", "output", "key-id"]) assert.ok(args[name], `--${name} is required`);
 for (const name of ["private-key", "output"]) assert.ok(isAbsolute(args[name]), `--${name} must be absolute`);
 const outside = (path) => { const value = relative(root, realpathSync(resolve(path))); return value === ".." || value.startsWith(`..${sep}`) || isAbsolute(value); };
-const privatePath = realpathSync(args["private-key"]);
-const privateEntry = lstatSync(privatePath);
+// Inspect the supplied entry before resolving it, otherwise a symlink is invisible.
+const privateEntry = lstatSync(args["private-key"]);
 assert.equal(privateEntry.isSymbolicLink(), false, "release private key must not be a symlink");
 assert.equal(privateEntry.isFile(), true, "release private key must be a regular file");
 assert.equal(privateEntry.mode & 0o077, 0, "release private key must not be accessible to group or other users");
+const privatePath = realpathSync(args["private-key"]);
 assert.equal(outside(privatePath), true, "release private key must remain outside the worktree");
 const outputParent = realpathSync(resolve(args.output, ".."));
 assert.equal(outside(outputParent), true, "release attestation must be written outside the worktree");

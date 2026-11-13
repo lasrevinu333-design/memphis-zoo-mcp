@@ -1,0 +1,45 @@
+{
+  "schema": "custodial.ci-fresh-only-exact-source-successor.v1",
+  "scope": "DISPOSABLE_CONSTRUCTION_ONLY_NOT_VENDOR_NORMAL_OR_PRODUCTION_ADMISSION",
+  "predecessor_manifest": {
+    "path": "release/fresh-only-replay/MANIFEST.json",
+    "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 297,
+    "overrides": 22
+  },
+  "predecessor_successor": {
+    "path": "release/fresh-only-replay/SOURCE299_SUCCESSOR.json",
+    "sha256": "aacbb20c43419718fce0b4fbf1d5845a45c48700fb1a2a51b1b07ad184327de8",
+    "bytes": 2012,
+    "source_migrations": 299
+  },
+  "preserved_predecessor_replay": {
+    "path": "release/fresh-only-replay/SOURCE299_REPLAY_ORDER.json",
+    "sha256": "965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001",
+    "bytes": 56748
+  },
+  "source_migrations": 300,
+  "replay_manifest": {
+    "path": "supabase/canonical/migration-replay-order.json",
+    "sha256": "be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1",
+    "bytes": 56934
+  },
+  "append": {
+    "name": "20261030050235_compact_approved_initial_confirmation.sql",
+    "original": {
+      "path": "supabase/migrations/20261030050235_compact_approved_initial_confirmation.sql",
+      "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469",
+      "bytes": 6030
+    },
+    "selected": {
+      "path": "supabase/migrations/20261030050235_compact_approved_initial_confirmation.sql",
+      "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469",
+      "bytes": 6030
+    },
+    "atomic_mode": "exact-Source-BEGIN-COMMIT"
+  },
+  "observed_empty_source_fingerprint": "aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40",
+  "source_capture_scope": "Actual maintained source299 construction plus exact source300 forward SQL; two functions changed and every other canonical catalog section was preserved. This is not fresh source300 construction, populated-target or runtime admission.",
+  "full_vendor_NORMAL": false,
+  "expected_fingerprint_authority": null
+}

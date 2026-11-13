@@ -1,9 +1,9 @@
 // Normal selected-phase evidence only. No publication, generic owner unlock,
 // solver, dated priority change, physical-time claim or caller-supplied witness.
 import {contentDigest,canonicalJson,bytewiseCompare} from './static-weekly-schedule-model.js';
-import {prepareStaticWeeklySchedulingProblem,buildStaticWeeklySchedulingModel} from './static-weekly-schedule-program.js';
+import {prepareStaticWeeklyHardModelFacts,prepareStaticWeeklyDescriptorFacts,buildStaticWeeklySchedulingModel} from './static-weekly-schedule-program.js';
 import {getScheduleComponentWeightLedger,COMPONENT_WEIGHT_UNIT} from './schedule-component-weight-authority.js';
-import {normalGeographyRestrictionApplies,validateOwnerEligibilityConfig} from './static-weekly-owner-eligibility.js';
+import {normalGeographyRestrictionApplies,validateOwnerEligibilityConfig,isHardForbidden,mandatoryNormalOwner} from './static-weekly-owner-eligibility.js';
 export const RECURRING_PHASE_SCHEMA='custodial.recurring-selected-phase-authority.v1';
 export const RECURRING_PHASE_ENUMERATION_LIMIT=64;
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
@@ -16,7 +16,12 @@ function inputFor(source){
  if(x.version){x.versions=[x.version];delete x.version;}return x;
 }
 function prepared(source){
- const p=prepareStaticWeeklySchedulingProblem(inputFor(source));
+ const p=prepareStaticWeeklyHardModelFacts(inputFor(source));
+ if(p.error)fail(p.error.code||'recurring_phase_source_invalid',p.error.message||'Canonical source preparation failed.');
+ return p;
+}
+function preparedDescriptorFacts(source){
+ const p=prepareStaticWeeklyDescriptorFacts(inputFor(source));
  if(p.error)fail(p.error.code||'recurring_phase_source_invalid',p.error.message||'Canonical source preparation failed.');
  return p;
 }
@@ -37,7 +42,7 @@ function packageFact(row,config){
   memberIds:row.includedLocations.map(x=>x.locationId),serviceMode:row.serviceMode,
   doubledWeight:w*2,componentBinding:k?'EXACT_KNOWN_COMPONENTS':'EXPLICIT_SOURCE_PACKAGE_AND_CONFIG_AGGREGATE_ONLY'};
 }
-function descriptorWithPreparation({source,ownerConfig,dayOfWeek,selectedWorkIds=[]},prepareDescriptorSource=prepared){
+function descriptorWithPreparation({source,ownerConfig,dayOfWeek,selectedWorkIds=[]},prepareDescriptorSource=preparedDescriptorFacts){
  requireFact(source&&ownerConfig&&Array.isArray(selectedWorkIds),'Explicit source/config/selection required.');
  if(ownerConfig.schema==='custodial.owner-corrected-recurring-schedule.v2')validateOwnerEligibilityConfig(ownerConfig);
  requireFact(Number.isInteger(dayOfWeek)&&dayOfWeek>=0&&dayOfWeek<=6,'Explicit weekday required.');
@@ -67,7 +72,8 @@ function descriptorWithPreparation({source,ownerConfig,dayOfWeek,selectedWorkIds
    &&h.locationCode===r.family&&h.at===original.window.end&&h.fromSlotId===(original.originSlotId||original.ownerSlotId));
   return !(ownerConfig.mondayOnlyFamilies?.includes(r.family)&&(original.originSlotId||original.ownerSlotId)!==o.slotId)
    &&named.every(h=>h.fromSlotId===o.slotId&&h.at===o.shift.end)
-   &&!c.hardForbiddenFamilies?.includes(r.family)
+   &&!isHardForbidden(c,r.family,dayOfWeek)
+   &&(!mandatoryNormalOwner(ownerConfig,r.family,dayOfWeek)||mandatoryNormalOwner(ownerConfig,r.family,dayOfWeek)===o.slotId)
    &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.family))&&o.shift.end>'09:45';
  }).map(o=>({slotId:o.slotId,window:{start:'09:45',end:o.shift.end},
   prospectiveWorkId:`${dayOfWeek}:${r.family}:equalized:${o.slotId.slice(0,8)}`}))}));
@@ -326,6 +332,9 @@ export function assertRecurringPhaseIdentityEncoding({proof,ownerConfig}){
  requireFact(identityTiers.length===layout.chunks.length,'Missing/extra identity tier.');const originalTerms=[],representations=[];
  const first=raw.tiers[0],preference=raw.tiers[1];
  requireFact(first?.name==='raw_spread'&&preference?.name==='inherited_preference','Original identity predecessor tiers required.');
+ requireFact(first.model.integerLoadBoundsVersion===undefined||first.model.integerLoadBoundsVersion===1,'Unknown integer load representation.');
+ const integerRows=first.model.integerLoadBoundsVersion===1
+  ?phaseIntegerLoadRows({descriptor:d,owners,choices,source:raw.candidateSource,spread:first.objectiveValue}):[];
  const fixed=[{name:'phase_fixed_1',terms:clone(first.model.terms),relation:'=',value:first.objectiveValue},
   {name:'phase_fixed_2',terms:clone(preference.objectiveNormalization.originalTerms),relation:'=',value:preference.originalScaleObjectiveValue}];
  for(const [chunkIndex,chunk]of layout.chunks.entries()){
@@ -334,7 +343,7 @@ export function assertRecurringPhaseIdentityEncoding({proof,ownerConfig}){
   const tier=identityTiers[chunkIndex],values=new Map(tier.integerWitness);
   requireFact(tier.name===`inherited_identity_${chunk.offset}`&&tier.model.name===tier.name&&tier.model.descriptorDigest===d.descriptorDigest
    &&tier.modelDigest===digest(tier.model),'Identity tier model/order/coefficients changed.');
-  const model={...clone(first.model),name:tier.name,terms,rows:[...clone(first.model.rows),...clone(fixed)]};
+  const model={...clone(first.model),name:tier.name,terms,rows:[...clone(first.model.rows),...integerRows,...clone(fixed)]};
   requireFact(model.descriptorDigest===d.descriptorDigest,'Original identity predecessor descriptor changed.');
   const reconstructed=assertRecurringIdentityUnitWitness({model,layout,choices,owners,offset:chunk.offset,
    received:{model:tier.model,lp:phaseModelLp(tier.model),representation:tier.identityObjectiveRepresentation},
@@ -391,14 +400,21 @@ function inheritedPreferenceTerms({descriptor,source,ownerConfig,fullOwners}){
  const owners=descriptor.owners.slice().sort((a,b)=>codeUnitCompare(keyBySlot.get(a.slotId),keyBySlot.get(b.slotId))),
   packages=new Map(descriptor.packages.map(p=>[p.workId,p])),
   choices=descriptor.choices.slice().sort((a,b)=>codeUnitCompare(packages.get(a.workId).family,packages.get(b.workId).family)),terms=[],binary=[];
- for(const [i,c]of choices.entries())for(const [j,o]of owners.entries())if(c.owners.some(x=>x.slotId===o.slotId)){
-  const pkg=packages.get(c.workId),rows=version(source).assignments.filter(r=>r.workId===c.workId);
-  requireFact(rows.length===1&&rows[0].dayOfWeek===descriptor.dayOfWeek&&canonicalJson(packageFact(rows[0],ownerConfig))===canonicalJson(pkg),'Preference original source package drift.');
-  const key=keyBySlot.get(o.slotId),guided=fullOwners?.[String(descriptor.dayOfWeek)]?.equalized?.[pkg.family];
-  requireFact(typeof guided==='string'&&keys.includes(guided),'Exact existing full-position guidance missing.');
-  const cost=((rows[0].originSlotId||rows[0].ownerSlotId)!==o.slotId?100:0)+(guided!==key?4:0)
-   +(ownerConfig.slots[key].normalAssignmentFamilies?.includes(pkg.family)?0:2);
-  const name=`phase_x_${i}_${j}`;binary.push(name);if(cost)terms.push([cost,name]);
+ for(const [i,c]of choices.entries()){
+  let original=null,guided=null;
+  for(const [j,o]of owners.entries())if(c.owners.some(x=>x.slotId===o.slotId)){
+   if(!original){
+    const pkg=packages.get(c.workId),rows=version(source).assignments.filter(r=>r.workId===c.workId);
+    requireFact(rows.length===1&&rows[0].dayOfWeek===descriptor.dayOfWeek&&canonicalJson(packageFact(rows[0],ownerConfig))===canonicalJson(pkg),'Preference original source package drift.');
+    guided=fullOwners?.[String(descriptor.dayOfWeek)]?.equalized?.[pkg.family];
+    requireFact(typeof guided==='string'&&keys.includes(guided),'Exact existing full-position guidance missing.');
+    original={row:rows[0],family:pkg.family};
+   }
+   const key=keyBySlot.get(o.slotId);
+   const cost=((original.row.originSlotId||original.row.ownerSlotId)!==o.slotId?100:0)+(guided!==key?4:0)
+    +(ownerConfig.slots[key].normalAssignmentFamilies?.includes(original.family)?0:2);
+   const name=`phase_x_${i}_${j}`;binary.push(name);if(cost)terms.push([cost,name]);
+  }
  }return {terms,binary};
 }
 function assertPreferenceNormalization({proof,source,ownerConfig,fullOwners},lookupDescriptor=null){
@@ -441,11 +457,11 @@ function deepFreezeFact(x){if(x&&typeof x==='object'){for(const v of Object.valu
 // identity cannot be serialized or supplied by a caller, and only a freshly
 // solved/checkPhaseTerminal/full-canonical result can populate its descriptor.
 // No solver optimum, terminal evidence or canonical witness is cached.
-export function createRecurringPhaseEvidenceInvocation(){
+function createRecurringPhaseInvocation(includeRebinding){
  const descriptors=new WeakMap(),originalDescriptors=new WeakMap(),preparedFacts=new Map();
  const prepareDescriptorSource=source=>{
   const key=digest(source);let fact=preparedFacts.get(key);
-  if(!fact){const p=prepared(source);fact=deepFreezeFact({
+  if(!fact){const p=preparedDescriptorFacts(source);fact=deepFreezeFact({
    availability:[...p.availabilityByDaySlot].map(([id,x])=>[id,{slot:{id:x.slot.id,contractorCapacity:x.slot.contractorCapacity},
     availability:{dayOfWeek:x.availability.dayOfWeek,shift:clone(x.availability.shift),lunch:clone(x.availability.lunch)}}]),
    incumbencies:[...p.incumbencyByDaySlot].map(([id,x])=>[id,{personId:x.personId,displayName:x.displayName}]),
@@ -463,6 +479,13 @@ export function createRecurringPhaseEvidenceInvocation(){
   return sealed?.key===key?sealed.descriptor:createRecurringPhaseDescriptor(facts);
  });
  return Object.freeze({
+  ...(includeRebinding ? {rebind(input){
+   // Descriptor and prospective source are reconstructed together from actual
+   // bytes in this invocation. A caller descriptor or validation-skip flag
+   // is never accepted. Complete canonical witnesses are still checked later.
+   const descriptor=createDescriptor(input);
+   return {descriptor,candidate:createProspective({...input,descriptor})};
+  }} : {}),
   solve(input){const proof=solvePhaseMinimum(input,createDescriptor,createProspective);
    if(proof.status==='PROVEN_CANONICAL_PHASE_MINIMUM'){
     requireFact(proof.descriptor.sourceDigest===digest(input.source)&&proof.descriptor.configDigest===digest(input.ownerConfig),'Invocation source/config mutated during solve.');
@@ -473,6 +496,9 @@ export function createRecurringPhaseEvidenceInvocation(){
   assertPreference(input){return assertPreferenceNormalization(input,(proof,key)=>{const sealed=descriptors.get(proof);return sealed?.key===key?sealed.descriptor:null;});},
  });
 }
+export function createRecurringPhaseEvidenceInvocation(){return createRecurringPhaseInvocation(false);}
+export function createRecurringPhaseWeekInvocation(){return createRecurringPhaseInvocation(true);}
+
 const pinnedPhaseSolver={package:'highs@1.15.2',packageJsonSha256:'21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56',
  wrapperJavaScriptSha256:'6d5be3ed3cbd1ce1924cc66cc9302b50753dabdb8c6e0e815845dce7f1890033',
  wasmSha256:'7e6432b2b26f4fab9f6d9bac55da43307c7a4b1b071cb204cb4d23e1901bc4d0',embeddedRuntimeBanner:'HiGHS 1.15.1 (git hash: 04024d7)'};
@@ -526,6 +552,39 @@ function checkPhaseTerminal(solved,expected,attestation){
 // Existing portable hash implementation; raw receipts hash BYTES, not JSON.
 import {sha256Hex as contentDigestBytes} from './static-weekly-schedule-model.js';
 
+// Exact integer consequence of pairwise load spread <= spread and fixed total.
+// It is redundant for every feasible integer assignment, including partial
+// selections with fixed owned packages. BigInt keeps intermediate sums exact.
+export function recurringIntegerLoadRange({total,owners,spread}) {
+ requireFact(Number.isSafeInteger(total)&&total>=0&&Number.isSafeInteger(owners)&&owners>=1
+  &&Number.isSafeInteger(spread)&&spread>=0,'Exact nonnegative load totals/spread and positive owner count required.');
+ const w=BigInt(total),n=BigInt(owners),s=BigInt(spread),low=w-(n-1n)*s,high=w+(n-1n)*s;
+ const lower=low<=0n?0n:(low+n-1n)/n,upper=high/n;
+ return {lower:Number(lower),upper:Number(upper>w?w:upper)};
+}
+
+// Reconstruct every added bound from the source-owned fixed packages and
+// descriptor choices. The verifier calls this independently on the full raw
+// witness source, whose unselected rows retain their original identities.
+function phaseIntegerLoadRows({descriptor,owners,choices,source,spread}) {
+ const packages=new Map(descriptor.packages.map(p=>[p.workId,p])),selected=new Set(descriptor.selectedWorkIds),
+  rows=version(source)?.assignments;requireFact(Array.isArray(rows),'Actual phase witness source required for integer bounds.');
+ const fixedByOwner=new Map(owners.map(o=>[o.slotId,0]));
+ for(const pkg of descriptor.packages)if(!selected.has(pkg.workId)){
+  const matches=rows.filter(r=>r.workId===pkg.workId);requireFact(matches.length===1,'Fixed phase package identity changed.');
+  const id=matches[0].originSlotId||matches[0].ownerSlotId;
+  if(fixedByOwner.has(id))fixedByOwner.set(id,fixedByOwner.get(id)+pkg.doubledWeight);
+ }
+ const total=choices.reduce((sum,c)=>sum+packages.get(c.workId).doubledWeight,0)+[...fixedByOwner.values()].reduce((a,b)=>a+b,0),
+  range=recurringIntegerLoadRange({total,owners:owners.length,spread}),out=[];
+ for(const [j,o]of owners.entries()){
+  const terms=choices.flatMap((c,i)=>c.owners.some(x=>x.slotId===o.slotId)?[[packages.get(c.workId).doubledWeight,`phase_x_${i}_${j}`]]:[]);
+  out.push({name:`phase_integer_load_floor_${j}`,terms,relation:'>=',value:range.lower-fixedByOwner.get(o.slotId)});
+  out.push({name:`phase_integer_load_ceiling_${j}`,terms,relation:'<=',value:range.upper-fixedByOwner.get(o.slotId)});
+ }
+ return out;
+}
+
 function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWorkIds=[],solver},createDescriptor=createRecurringPhaseDescriptor,createProspective=createRecurringPhaseProspectiveSource){
  const descriptor=createDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds});
  const basis={schema:RECURRING_PHASE_SCHEMA,descriptor,fullOwnersDigest:digest(fullOwners),published:false,sourceMutated:false,
@@ -559,14 +618,26 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
    constraints.push({name:`phase_sites_${i}_${j}`,terms:[...sites(a),...sites(b).map(([n,v])=>[-n,v])],relation:'<=',value:1+siteFixed(b)-siteFixed(a)});
   }
   const maximum=descriptor.packages.reduce((n,p)=>n+p.doubledWeight,0);requireFact(Number.isSafeInteger(maximum),'Phase coefficient range unsupported.');
+  // All owner loads are integers and their sum is fixed by the selected
+  // one-owner equalities plus the fixed packages actually owned by this set.
+  // When that sum is not divisible by the number of owners, equality of all
+  // loads is impossible. This redundant integer bound changes no feasible
+  // allocation, objective ordering or tolerance; it avoids proving the same
+  // divisibility fact by branch-and-bound in every phase.
+  const assignedTotal=choices.reduce((sum,c)=>sum+packages.get(c.workId).doubledWeight,0)
+    +owners.reduce((sum,o)=>sum+loadFixed(o),0);
+  requireFact(Number.isSafeInteger(assignedTotal)&&assignedTotal>=0&&assignedTotal<=maximum,
+    'Exact phase total is outside the package range.');
+  const integerSpreadFloor=assignedTotal%owners.length===0?0:1;
   bounds.push(`0 <= phase_spread <= ${maximum}`);
+  if(integerSpreadFloor)constraints.push({name:'phase_integer_spread_floor',terms:[[1,'phase_spread']],relation:'>=',value:integerSpreadFloor});
   for(const row of constraints)deepFreezeFact(row);
   const identityLayout=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)});
   const run=(name,terms,identityOffset=null)=>{
    const remaining=budgetMs-(performance.now()-started);requireFact(remaining>0,'Phase total time bound exhausted.');
    const normalization=name==='inherited_preference'?createRecurringPreferencePrimitiveObjective(terms,binary):null,
     actualTerms=normalization?.primitiveTerms||terms;
-   const originalBody={descriptorDigest:descriptor.descriptorDigest,name,terms:actualTerms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds,
+   const originalBody={descriptorDigest:descriptor.descriptorDigest,integerLoadBoundsVersion:1,name,terms:actualTerms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds,
     ...(normalization?{objectiveNormalization:normalization}:{})};
    const identity=identityOffset===null?null:privateIdentityUnitObjective({model:originalBody,layout:identityLayout,choices,owners,offset:identityOffset}),
     body=identity?.model||originalBody;
@@ -579,7 +650,7 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
     terminalReport:solved?.evidence?.terminalReport,solverIdentity:solved?.identity,solverOptions:solved?.options};
    const values=new Map([...body.binary,...body.general].map(v=>{const x=solved?.result?.Columns?.[v]?.Primal;
     requireFact(Number.isFinite(x)&&Math.abs(x-Math.round(x))<=1e-9,'Missing/noninteger phase primal.');return[v,Math.round(x)];}));
-   requireFact(binary.every(v=>[0,1].includes(values.get(v)))&&values.get('phase_spread')>=0&&values.get('phase_spread')<=maximum,'Phase primal bounds violated.');
+   requireFact(binary.every(v=>[0,1].includes(values.get(v)))&&values.get('phase_spread')>=integerSpreadFloor&&values.get('phase_spread')<=maximum,'Phase primal bounds violated.');
    for(const row of body.rows){const n=row.terms.reduce((x,[c,v])=>x+BigInt(c)*BigInt(values.get(v)),0n),rhs=BigInt(row.value);
     requireFact(row.relation==='='?n===rhs:row.relation==='<='?n<=rhs:n>=rhs,'Phase primal exact row violation.');}
    const sum=body.terms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n);
@@ -600,6 +671,10 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
    bindings.push(deepFreezeFact({name:`phase_fixed_${tiers.length}`,terms:clone(terms),relation:'=',value:optimum}));return {values,optimum};
   };
   const min=run('raw_spread',[[1,'phase_spread']]);
+  // The exact raw optimum is already fixed by phase_fixed_1. These integral
+  // per-owner bounds follow from that same pairwise spread and total; all
+  // original rows, fixed equalities and complete witness checks remain.
+  for(const row of phaseIntegerLoadRows({descriptor,owners,choices,source,spread:min.optimum}))constraints.push(deepFreezeFact(row));
   const preference=run('inherited_preference',options.filter(o=>o.cost).map(o=>[o.cost,o.name]));
   let final=preference;
   // Smaller radix chunks preserve the identical complete code-unit lexvector

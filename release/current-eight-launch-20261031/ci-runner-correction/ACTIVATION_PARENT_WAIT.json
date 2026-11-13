@@ -1,0 +1,18 @@
+{
+  "pid": 2345692,
+  "pgid": 2345692,
+  "actualWaitReturned": true,
+  "actual_Popen_wait": true,
+  "exit": 0,
+  "exit_code": 0,
+  "absence": {
+    "pid": true,
+    "pgid": true,
+    "proc": true
+  },
+  "fresh_PGID_ESRCH": true,
+  "fresh_proc_ENOENT": true,
+  "positiveSignals": 0,
+  "stdoutClosed": true,
+  "stderrClosed": true
+}

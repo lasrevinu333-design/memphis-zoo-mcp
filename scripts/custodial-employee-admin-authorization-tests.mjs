@@ -52,6 +52,8 @@ const databaseCalls = [];
 const trustedManager = {
   manager_id: managerId,
   display_name: "Authorization Contract Manager",
+  system_key: "eric_custodial_manager",
+  is_system_principal: false,
   roles: ["CUSTODIAL_MANAGER"],
   active: true,
   revoked_at: null,
@@ -160,12 +162,13 @@ const db = {
   },
 };
 
-function managerToken(accessLevel, roles = ["CUSTODIAL_MANAGER"]) {
+function managerToken(accessLevel, roles = ["CUSTODIAL_MANAGER"], owner = true) {
+  trustedManager.system_key = owner ? "eric_custodial_manager" : "authorization_delegate";
   trustedManager.roles = [...roles];
   return createOpsManagerSession({
     credentialId: managerCredentialId,
     deviceId: managerDeviceId,
-    manager: { manager_id: managerId, display_name: "Authorization Contract Manager", roles },
+    manager: { ...trustedManager, roles },
     authMode: "trusted_device",
     accessLevel,
     maximumAccessLevel: "full_access",
@@ -381,18 +384,21 @@ try {
     assert.equal(databaseCalls.length, callsBefore, `${route.family} touched the database outside the roster transaction`);
   }
 
-  const ordinaryManagerToken = managerToken("full_access", ["OPS_MANAGER"]);
-  for (const route of [managerReads[0], managerMutations[0]]) {
-    const callsBefore = databaseCalls.length;
-    const result = await request(route.path, {
-      method: route.method,
-      token: ordinaryManagerToken,
-      body: route.body,
-    });
-    assert.equal(result.status, 403, `ordinary Ops Manager bypassed the Custodial Manager role on ${route.path}`);
-    assert.match(result.body.error, /custodial manager access is required/i);
-    assert.equal(databaseCalls.length, callsBefore, `role-denied ${route.path} touched the database`);
+  const ordinaryManagerToken = managerToken("full_access", ["OPS_MANAGER"], false);
+  for (const route of managerReads) {
+    const result = await request(route.path, { token: ordinaryManagerToken });
+    assert.equal(result.status, 200, "authorized delegates retain read-only assignment visibility");
+    assert.doesNotMatch(JSON.stringify(result.body), /token_hash|enrollment_code|device_credential/,
+      "read-only assignment snapshots cannot expose enrollment secrets");
   }
+  for (const route of [...managerMutations, ...rosterOnlyMutations]) {
+    const callsBefore = databaseCalls.length;
+    const result = await request(route.path, { method: route.method, token: ordinaryManagerToken, body: route.body });
+    assert.equal(result.status, 403, `delegate must not mutate ${route.family}`);
+    assert.match(result.body.error, /read-only ops manager session cannot make changes/i);
+    assert.equal(databaseCalls.length, callsBefore, "delegated writes must stop before business data access");
+  }
+
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }

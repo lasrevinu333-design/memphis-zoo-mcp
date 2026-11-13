@@ -1,0 +1,779 @@
+{
+  "schema": "custodial.current-departure-source-proof-successor.v1",
+  "scope": "TEST_ONLY_EXACT_HISTORICAL_RECONSTRUCTION_AND_CURRENT_BEHAVIOR",
+  "runtime_admission": false,
+  "sql_execution": false,
+  "clock_qualification": false,
+  "audio_qualification": false,
+  "worker_activation": false,
+  "historical_pins_rewritten": false,
+  "profiles": [
+    {
+      "path": "src/native-schedule-source-producer.js",
+      "current_sha256": "0f9d0f482773563ba09e4fa4c05d966d9caa8e0cb0cec83d0097f5b32043d1bb",
+      "prior_sha256": "a5ffbb3f816ba32e8bf2e2ab8583786a2983cb0ea7cb43eddaa970c9250828bb",
+      "hunks": [
+        {
+          "current": "import {readNativeScheduleSourceRequests} from './native-schedule-source-discovery.js';\nimport {prepareDiscoveredNativeScheduleJob} from './native-schedule-source-orchestration.js';\n// Client I/O budget only; it does not define cue timing or extend SQL validity.\nexport const NATIVE_SCHEDULE_PREPARATION_BUDGET_MS=10_000;\nconst allowed=new Set(['custodial_native_departure_source_requests','custodial_native_departure_preparation_source','custodial_native_departure_source_reserve','custodial_native_schedule_source_requests','custodial_native_schedule_preparation_source',\n 'custodial_native_schedule_source_reserve','custodial_native_schedule_content_source','custodial_native_schedule_job_prepare']);\nconst skipped=new Set(['NO_OWNERSHIP_CHANGE','SOURCE_WINDOW_EXPIRED']);\nconst freeze=v=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};\nexport function boundedNativeScheduleSourceDb(db,signal){\n",
+          "prior": "import {readNativeScheduleSourceRequests} from './native-schedule-source-discovery.js';\nimport {prepareDiscoveredNativeScheduleJob} from './native-schedule-source-orchestration.js';\n// Client I/O budget only; it does not define cue timing or extend SQL validity.\nexport const NATIVE_SCHEDULE_PREPARATION_BUDGET_MS=10_000;\nconst allowed=new Set(['custodial_native_schedule_source_requests','custodial_native_schedule_preparation_source',\n 'custodial_native_schedule_source_reserve','custodial_native_schedule_content_source','custodial_native_schedule_job_prepare']);\nconst skipped=new Set(['NO_OWNERSHIP_CHANGE','SOURCE_WINDOW_EXPIRED']);\nconst freeze=v=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};\nexport function boundedNativeScheduleSourceDb(db,signal){\n"
+        },
+        {
+          "current": "  if(typeof builder?.abortSignal!=='function'||typeof builder?.retry!=='function')throw Error('native_schedule_source_rpc_capability_unavailable');\n  return builder.retry(false).abortSignal(signal);\n }});\n}\nexport async function prepareNativeScheduleSourceJobs({db,departure=false}){\n const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),NATIVE_SCHEDULE_PREPARATION_BUDGET_MS);timer.unref?.();\n const base={schema:'custodial.native-schedule-source-producer.v1',dispatch_authorized:false,delivery_admitted:false,\n  clock_effect_authority:null,retention_authority:null,native_qualified:false};\n let requested=null,prepared=0,replayed=0,pending=0,skip=0;const jobs=[],reasons=[];\n try{\n  const sourceDb=boundedNativeScheduleSourceDb(db,controller.signal),discovery=await readNativeScheduleSourceRequests({db:sourceDb,departure});\n  if(discovery.status!=='SOURCE_CANDIDATES_ONLY')return freeze({...base,status:discovery.status,requested:null,prepared,replayed,pending:null,skipped:skip,jobs,reasons:[discovery.status]});\n  requested=discovery.requests.length;\n  for(const request of discovery.requests){\n   if(controller.signal.aborted){pending++;reasons.push('SOURCE_RPC_BUDGET');continue;}\n",
+          "prior": "  if(typeof builder?.abortSignal!=='function'||typeof builder?.retry!=='function')throw Error('native_schedule_source_rpc_capability_unavailable');\n  return builder.retry(false).abortSignal(signal);\n }});\n}\nexport async function prepareNativeScheduleSourceJobs({db}){\n const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),NATIVE_SCHEDULE_PREPARATION_BUDGET_MS);timer.unref?.();\n const base={schema:'custodial.native-schedule-source-producer.v1',dispatch_authorized:false,delivery_admitted:false,\n  clock_effect_authority:null,retention_authority:null,native_qualified:false};\n let requested=null,prepared=0,replayed=0,pending=0,skip=0;const jobs=[],reasons=[];\n try{\n  const sourceDb=boundedNativeScheduleSourceDb(db,controller.signal),discovery=await readNativeScheduleSourceRequests({db:sourceDb});\n  if(discovery.status!=='SOURCE_CANDIDATES_ONLY')return freeze({...base,status:discovery.status,requested:null,prepared,replayed,pending:null,skipped:skip,jobs,reasons:[discovery.status]});\n  requested=discovery.requests.length;\n  for(const request of discovery.requests){\n   if(controller.signal.aborted){pending++;reasons.push('SOURCE_RPC_BUDGET');continue;}\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/native-schedule-source-producer-tests.mjs",
+      "current_sha256": "878b6c427ce471629d18f426efec670cd08aee461836dffd43f29c32fbe598f4",
+      "prior_sha256": "c3ffbedf1b27f74ff571df7062d8a5b52118bcf9b517420ceb83b9c0fdf58410",
+      "hunks": [
+        {
+          "current": " // Execute the actual worker sweep. Source preparation only; its hard native\n // hold must run before OAuth/provider/finish and create no second timer.\n const workerFake=nativeScheduleSourceProducerFixture(),sourceRpc=workerFake.db.rpc.bind(workerFake.db),ordinary=[];\n workerFake.db.rpc=(fn,args)=>{\n  if(fn==='custodial_native_departure_source_requests')return {retry(){return this;},abortSignal(){return this;},then(resolve){return resolve({data:{...clone(workerFake.f.discovery),schema:'custodial.native-schedule-source-requests.v2',requests:[]}});}};\n  if(fn.startsWith('custodial_native_schedule_'))return sourceRpc(fn,args);\n  ordinary.push(fn);if(fn.startsWith('mz_enqueue_'))return Promise.resolve({data:0});\n  if(fn==='claim_operational_notification_job_by_key')return Promise.resolve({data:{job_type:'employee_native_push',job_key:'employee-schedule-push:'+workerFake.f.first.reservation.reservation_id,\n   payload_json:{data_json:{kind:'employee_schedule_ownership'}}}});\n",
+          "prior": " // Execute the actual worker sweep. Source preparation only; its hard native\n // hold must run before OAuth/provider/finish and create no second timer.\n const workerFake=nativeScheduleSourceProducerFixture(),sourceRpc=workerFake.db.rpc.bind(workerFake.db),ordinary=[];\n workerFake.db.rpc=(fn,args)=>{\n  if(fn.startsWith('custodial_native_schedule_'))return sourceRpc(fn,args);\n  ordinary.push(fn);if(fn.startsWith('mz_enqueue_'))return Promise.resolve({data:0});\n  if(fn==='claim_operational_notification_job_by_key')return Promise.resolve({data:{job_type:'employee_native_push',job_key:'employee-schedule-push:'+workerFake.f.first.reservation.reservation_id,\n   payload_json:{data_json:{kind:'employee_schedule_ownership'}}}});\n"
+        },
+        {
+          "current": " };\n workerFake.db.from=table=>{eq(table,'operational_notification_jobs');const q={select(){return this;},in(){return this;},lte(){return this;},order(){return this;},limit(){return Promise.resolve({data:[{job_key:'synthetic-schedule'}]});}};return q;};\n const runtime=await qualifiedAlertDispatcher({db:workerFake.db,pushRuntime:{configured:true,send(){throw Error('no source send');}}});\n const sweep=await runtime.sweep();eq(sweep.ok,true,'ordinary sweep completed, not program readiness');eq(sweep.claimed,1);\n eq(sweep.departure_preparation.status,'NO_SOURCE_REQUESTS');eq(sweep.departure_preparation.dispatch_authorized,false);\n eq(sweep.schedule_preparation.status,'SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED');eq(sweep.schedule_preparation.delivery_admitted,false);\n eq(ordinary,['mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes','mz_enqueue_employee_lunch_coverage_pushes','claim_operational_notification_job_by_key'],'old lanes unchanged; held schedule has no finish');\n for(const failOrdinary of [false,true]){\n  const f=fixture(),log=[];let release,reads=0,fail=failOrdinary;const gate=new Promise(r=>release=r);\n  const db={rpc(fn){\n   if(['custodial_native_schedule_source_requests','custodial_native_departure_source_requests'].includes(fn))return {retry(){return this;},abortSignal(){return this;},async then(resolve){reads++;await gate;resolve({data:{...clone(f.discovery),schema:fn.includes('departure')?'custodial.native-schedule-source-requests.v2':f.discovery.schema,requests:[]}});}};\n   log.push(fn);return Promise.resolve(fail?{error:Error('SYNTHETIC_ORDINARY_FAILURE')}:{data:0});\n  },from(){const q={select(){return this;},in(){return this;},lte(){return this;},order(){return this;},limit(){return Promise.resolve({data:[]});}};return q;}};\n  const r=await qualifiedAlertDispatcher({db,pushRuntime:{configured:true}});const first=r.sweep();first.catch(()=>{});\n  await new Promise(done=>setImmediate(done));eq(log.slice(0,3),['mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes','mz_enqueue_employee_lunch_coverage_pushes'],'ordinary work starts without waiting on source');\n  eq((await r.sweep()).skipped,'in_flight','source lifetime remains single-flight even ordinary failure');eq(reads,2,'one pass for each version; no duplicate sweep');\n  release();if(failOrdinary){await assert.rejects(()=>first,/SYNTHETIC_ORDINARY_FAILURE/);checks++;}else eq((await first).schedule_preparation.status,'NO_SOURCE_REQUESTS');\n  fail=false;eq((await r.sweep()).ok,true,'single-flight clears after all owned source work settles');\n }\n return{status:'PASS',checks,actual_worker_sweep:true,real_helpers:true,synthetic_RPC:true,actual_SQL:false,provider_dispatch:false,phone:false};\n",
+          "prior": " };\n workerFake.db.from=table=>{eq(table,'operational_notification_jobs');const q={select(){return this;},in(){return this;},lte(){return this;},order(){return this;},limit(){return Promise.resolve({data:[{job_key:'synthetic-schedule'}]});}};return q;};\n const runtime=await qualifiedAlertDispatcher({db:workerFake.db,pushRuntime:{configured:true,send(){throw Error('no source send');}}});\n const sweep=await runtime.sweep();eq(sweep.ok,true,'ordinary sweep completed, not program readiness');eq(sweep.claimed,1);\n eq(sweep.schedule_preparation.status,'SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED');eq(sweep.schedule_preparation.delivery_admitted,false);\n eq(ordinary,['mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes','mz_enqueue_employee_lunch_coverage_pushes','claim_operational_notification_job_by_key'],'old lanes unchanged; held schedule has no finish');\n for(const failOrdinary of [false,true]){\n  const f=fixture(),log=[];let release,reads=0,fail=failOrdinary;const gate=new Promise(r=>release=r);\n  const db={rpc(fn){\n   if(fn==='custodial_native_schedule_source_requests')return {retry(){return this;},abortSignal(){return this;},async then(resolve){reads++;await gate;resolve({data:{...clone(f.discovery),requests:[]}});}};\n   log.push(fn);return Promise.resolve(fail?{error:Error('SYNTHETIC_ORDINARY_FAILURE')}:{data:0});\n  },from(){const q={select(){return this;},in(){return this;},lte(){return this;},order(){return this;},limit(){return Promise.resolve({data:[]});}};return q;}};\n  const r=await qualifiedAlertDispatcher({db,pushRuntime:{configured:true}});const first=r.sweep();first.catch(()=>{});\n  await new Promise(done=>setImmediate(done));eq(log.slice(0,3),['mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes','mz_enqueue_employee_lunch_coverage_pushes'],'ordinary work starts without waiting on source');\n  eq((await r.sweep()).skipped,'in_flight','source lifetime remains single-flight even ordinary failure');eq(reads,1,'no second source pass');\n  release();if(failOrdinary){await assert.rejects(()=>first,/SYNTHETIC_ORDINARY_FAILURE/);checks++;}else eq((await first).schedule_preparation.status,'NO_SOURCE_REQUESTS');\n  fail=false;eq((await r.sweep()).ok,true,'single-flight clears after all owned source work settles');\n }\n return{status:'PASS',checks,actual_worker_sweep:true,real_helpers:true,synthetic_RPC:true,actual_SQL:false,provider_dispatch:false,phone:false};\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-schedule-source-orchestration.js",
+      "current_sha256": "caf6c18172c6db7b1f06acaaf24bed09ef8c1edd34f0ef01160b73be76498fff",
+      "prior_sha256": "6d68683bf89bb3505ca82a297365d5c6cfac53957f99715fcc9c17bd6109446c",
+      "hunks": [
+        {
+          "current": "}\n// Every write below uses the existing\n// typed source/job RPCs; all native qualification/send permissions stay false.\nexport async function prepareDiscoveredNativeScheduleJob({db,discovery,request,sourceOperationId,jobOperationId}){\n const c=context(discovery,request),departure=c.discovery.schema==='custodial.native-schedule-source-requests.v2';\n if(typeof db?.rpc!=='function'||![sourceOperationId,jobOperationId].every(x=>typeof x==='string'&&UUID.test(x)))invalid();\n const pending=reason=>freeze({schema:'custodial.native-schedule-source-orchestration.v1',status:'SOURCE_JOB_PENDING',reason,\n  dispatch_authorized:false,delivery_admitted:false,clock_effect_authority:null,retention_authority:null,job:null});\n let r;try{r=await db.rpc(departure?'custodial_native_departure_preparation_source':'custodial_native_schedule_preparation_source',{p_source:c.request.source_key,p_employee:c.request.employee_id,p_generation:c.request.generation_id});}\n catch{return pending('PREPARATION_SOURCE_UNAVAILABLE');}\n if(r?.error)return pending('PREPARATION_SOURCE_UNAVAILABLE');\n const source=validateNativeSchedulePreparationSource(r?.data,c);\n if(source.status!=='CURRENT_PREPARATION_SOURCE_ONLY')return pending(source.source_status);\n const p=source.preparation;\n const content=await prepareNativeScheduleContent({db,departure,sourceKey:p.source_key,employeeId:p.employee_id,generationId:p.generation_id,\n  expectedSourceSha256:p.expected_source_sha256,operationId:sourceOperationId});\n if(content.status!=='CONTENT_PREPARED_NATIVE_UNQUALIFIED')return pending(content.reason);\n const candidate=content.candidate;\n if(candidate.server_source_sha256!==p.expected_source_sha256||candidate.service_date!==p.service_date\n",
+          "prior": "}\n// Every write below uses the existing\n// typed source/job RPCs; all native qualification/send permissions stay false.\nexport async function prepareDiscoveredNativeScheduleJob({db,discovery,request,sourceOperationId,jobOperationId}){\n const c=context(discovery,request);\n if(typeof db?.rpc!=='function'||![sourceOperationId,jobOperationId].every(x=>typeof x==='string'&&UUID.test(x)))invalid();\n const pending=reason=>freeze({schema:'custodial.native-schedule-source-orchestration.v1',status:'SOURCE_JOB_PENDING',reason,\n  dispatch_authorized:false,delivery_admitted:false,clock_effect_authority:null,retention_authority:null,job:null});\n let r;try{r=await db.rpc('custodial_native_schedule_preparation_source',{p_source:c.request.source_key,p_employee:c.request.employee_id,p_generation:c.request.generation_id});}\n catch{return pending('PREPARATION_SOURCE_UNAVAILABLE');}\n if(r?.error)return pending('PREPARATION_SOURCE_UNAVAILABLE');\n const source=validateNativeSchedulePreparationSource(r?.data,c);\n if(source.status!=='CURRENT_PREPARATION_SOURCE_ONLY')return pending(source.source_status);\n const p=source.preparation;\n const content=await prepareNativeScheduleContent({db,sourceKey:p.source_key,employeeId:p.employee_id,generationId:p.generation_id,\n  expectedSourceSha256:p.expected_source_sha256,operationId:sourceOperationId});\n if(content.status!=='CONTENT_PREPARED_NATIVE_UNQUALIFIED')return pending(content.reason);\n const candidate=content.candidate;\n if(candidate.server_source_sha256!==p.expected_source_sha256||candidate.service_date!==p.service_date\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-schedule-source-discovery.js",
+      "current_sha256": "cc2e47e94b5e0acba491123fc4828253baeb94aa4b928a47e85d6ff123db2289",
+      "prior_sha256": "d486ee71f4ca00d6e12a80120dc48664d1339578785a5a20cf4271c0afd7d481",
+      "hunks": [
+        {
+          "current": " if(typeof v!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(v)||v.startsWith('0000'))return false;\n const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.valueOf())&&d.toISOString().slice(0,10)===v;\n}\nexport function validateNativeScheduleSourceRequests(v){\n if(!exact(v,keys)||!['custodial.native-schedule-source-requests.v1','custodial.native-schedule-source-requests.v2'].includes(v.schema)||!date(v.service_date)\n  ||v.timezone!=='America/Chicago'||v.dispatch_authorized!==false||v.delivery_admitted!==false\n  ||v.clock_effect_authority!==null||v.retention_authority!==null||!Array.isArray(v.requests)\n  ||Object.getPrototypeOf(v.requests)!==Array.prototype||v.requests.length>4096\n  ||Reflect.ownKeys(v.requests).length!==v.requests.length+1||Reflect.ownKeys(v.requests).some(k=>typeof k!=='string'\n",
+          "prior": " if(typeof v!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(v)||v.startsWith('0000'))return false;\n const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.valueOf())&&d.toISOString().slice(0,10)===v;\n}\nexport function validateNativeScheduleSourceRequests(v){\n if(!exact(v,keys)||v.schema!=='custodial.native-schedule-source-requests.v1'||!date(v.service_date)\n  ||v.timezone!=='America/Chicago'||v.dispatch_authorized!==false||v.delivery_admitted!==false\n  ||v.clock_effect_authority!==null||v.retention_authority!==null||!Array.isArray(v.requests)\n  ||Object.getPrototypeOf(v.requests)!==Array.prototype||v.requests.length>4096\n  ||Reflect.ownKeys(v.requests).length!==v.requests.length+1||Reflect.ownKeys(v.requests).some(k=>typeof k!=='string'\n"
+        },
+        {
+          "current": "  if(v.status!=='SOURCE_CANDIDATES_ONLY'||!exact(v.authority,['projection_id','publication_id','version_id','source_revision'])\n   ||!['projection_id','publication_id','version_id'].every(k=>id(v.authority[k]))\n   ||typeof v.authority.source_revision!=='string'||!/^[1-9][0-9]{0,15}$/.test(v.authority.source_revision)\n   ||!Number.isSafeInteger(Number(v.authority.source_revision)))invalid();\n  let previous='';const departure=v.schema==='custodial.native-schedule-source-requests.v2',employeeGenerations=new Map();\n  const anchors=new Set(),generations=new Set();\n  for(const r of v.requests){\n   if(!exact(r,['source_key','employee_id','generation_id'])||!Object.values(r).every(id)\n    ||(departure?`${r.employee_id}:${r.source_key}`:r.employee_id)<=previous||(!departure&&generations.has(r.generation_id))\n    ||(departure&&employeeGenerations.has(r.employee_id)&&employeeGenerations.get(r.employee_id)!==r.generation_id))invalid();\n   // A temporary lunch coverer may legitimately share an anchor with its\n   // normal owner. Logical episodes are per employee, never per artwork pin.\n   previous=departure?`${r.employee_id}:${r.source_key}`:r.employee_id;generations.add(r.generation_id);anchors.add(r.source_key);employeeGenerations.set(r.employee_id,r.generation_id);\n  }\n }\n return freeze(structuredClone(v));\n}\n// Read-only service seam. No caller date/time, direct table access, source\n// reservation, new timer, provider, token, clock permit or worker activation.\nexport async function readNativeScheduleSourceRequests({db,departure=false}){\n if(typeof db?.rpc!=='function')invalid();\n let r;try{r=await db.rpc(departure?'custodial_native_departure_source_requests':'custodial_native_schedule_source_requests',{});}catch{\n  return freeze({status:'SOURCE_READ_PENDING',dispatch_authorized:false,delivery_admitted:false,requests:[]});\n }\n if(r?.error)return freeze({status:'SOURCE_READ_PENDING',dispatch_authorized:false,delivery_admitted:false,requests:[]});\n return validateNativeScheduleSourceRequests(r?.data);\n",
+          "prior": "  if(v.status!=='SOURCE_CANDIDATES_ONLY'||!exact(v.authority,['projection_id','publication_id','version_id','source_revision'])\n   ||!['projection_id','publication_id','version_id'].every(k=>id(v.authority[k]))\n   ||typeof v.authority.source_revision!=='string'||!/^[1-9][0-9]{0,15}$/.test(v.authority.source_revision)\n   ||!Number.isSafeInteger(Number(v.authority.source_revision)))invalid();\n  let previous='';\n  const anchors=new Set(),generations=new Set();\n  for(const r of v.requests){\n   if(!exact(r,['source_key','employee_id','generation_id'])||!Object.values(r).every(id)\n    ||r.employee_id<=previous||generations.has(r.generation_id))invalid();\n   // A temporary lunch coverer may legitimately share an anchor with its\n   // normal owner. Logical episodes are per employee, never per artwork pin.\n   previous=r.employee_id;generations.add(r.generation_id);anchors.add(r.source_key);\n  }\n }\n return freeze(structuredClone(v));\n}\n// Read-only service seam. No caller date/time, direct table access, source\n// reservation, new timer, provider, token, clock permit or worker activation.\nexport async function readNativeScheduleSourceRequests({db}){\n if(typeof db?.rpc!=='function')invalid();\n let r;try{r=await db.rpc('custodial_native_schedule_source_requests',{});}catch{\n  return freeze({status:'SOURCE_READ_PENDING',dispatch_authorized:false,delivery_admitted:false,requests:[]});\n }\n if(r?.error)return freeze({status:'SOURCE_READ_PENDING',dispatch_authorized:false,delivery_admitted:false,requests:[]});\n return validateNativeScheduleSourceRequests(r?.data);\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-schedule-dispatch.js",
+      "current_sha256": "ccbb04b7b1099132cb63a10dfeb58dfab99697905357511b6e867f065f7d213d",
+      "prior_sha256": "80ec4199f56f3cf1de4eeac86057480f7db370d33fb1acf186eb2b3a88e04dab",
+      "hunks": [
+        {
+          "current": "import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';\nimport{createHash}from'node:crypto';import{isDeepStrictEqual}from'node:util';\nimport{validateNativeLocationRecipient}from'./native-location-reservation.js';\nimport{prepareNativeScheduleAttempt,validateNativeScheduleDispatch,readNativeScheduleAttempt,recordNativeScheduleOutcome}from'./native-schedule-attempt-lifecycle.js';\nconst UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,SHA=/^[0-9a-f]{64}$/;\n",
+          "prior": "import{createHash}from'node:crypto';import{isDeepStrictEqual}from'node:util';\nimport{validateNativeLocationRecipient}from'./native-location-reservation.js';\nimport{prepareNativeScheduleAttempt,validateNativeScheduleDispatch,readNativeScheduleAttempt,recordNativeScheduleOutcome}from'./native-schedule-attempt-lifecycle.js';\nconst UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,SHA=/^[0-9a-f]{64}$/;\n"
+        },
+        {
+          "current": "const invalid=()=>{throw failure('native_schedule_dispatch_contract_invalid');};\nfunction candidate(v,expected,source){\n if(!exact(v,KEYS)||Object.entries(v).some(([k,x])=>typeof x!=='string'||!x||Buffer.from(x,'utf8').toString('utf8')!==x\n  ||/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(x)||Buffer.byteLength(x)>({title:180,notification_key:240}[k]||1000))\n  ||!scheduleVersion(v.schema,'content-candidate')||v.kind!=='employee_schedule_ownership'||v.notification_type!=='schedule_ownership'\n  ||v.channel_id!=='employee-schedule-ownership'||v.route!=='employee-schedule.html?hub=employee'||!scheduleBoundaryValid(v.boundary_local,scheduleVersion(v.schema,'content-candidate'))\n  ||v.employee_id!==expected.employee_id||v.generation_id!==expected.generation_id||v.source_reservation_id!==source\n  ||v.notification_key!==scheduleNotificationKey(v,expected.employee_id,scheduleVersion(v.schema,'content-candidate'))\n  ||!['source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'].every(k=>id(v[k]))\n  ||!['source_window_sha256','server_source_sha256'].every(k=>SHA.test(v[k]))\n  ||!/^[1-9][0-9]{0,15}$/.test(v.source_revision)||BigInt(v.source_revision)>9007199254740991n)invalid();\n return Object.freeze({...v});\n",
+          "prior": "const invalid=()=>{throw failure('native_schedule_dispatch_contract_invalid');};\nfunction candidate(v,expected,source){\n if(!exact(v,KEYS)||Object.entries(v).some(([k,x])=>typeof x!=='string'||!x||Buffer.from(x,'utf8').toString('utf8')!==x\n  ||/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(x)||Buffer.byteLength(x)>({title:180,notification_key:240}[k]||1000))\n  ||v.schema!=='custodial.native-schedule-content-candidate.v1'||v.kind!=='employee_schedule_ownership'||v.notification_type!=='schedule_ownership'\n  ||v.channel_id!=='employee-schedule-ownership'||v.route!=='employee-schedule.html?hub=employee'||v.boundary_local!=='09:45'\n  ||v.employee_id!==expected.employee_id||v.generation_id!==expected.generation_id||v.source_reservation_id!==source\n  ||v.notification_key!==`schedule-ownership:${v.service_date}:${expected.employee_id}:09:45`\n  ||!['source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'].every(k=>id(v[k]))\n  ||!['source_window_sha256','server_source_sha256'].every(k=>SHA.test(v[k]))\n  ||!/^[1-9][0-9]{0,15}$/.test(v.source_revision)||BigInt(v.source_revision)>9007199254740991n)invalid();\n return Object.freeze({...v});\n"
+        }
+      ]
+    },
+    {
+      "path": "src/employee-notifications.js",
+      "current_sha256": "98242aa35439d5e3c8c0a6527e7823fe891dfe3def814b4fb0afbcec5a522d34",
+      "prior_sha256": "75e140b93efa27c046909f584b947420e80f5834cf00d60882758396feb9da07",
+      "hunks": [
+        {
+          "current": "    inFlight = true;\n    // One bounded preparation pass in the existing sweep, not another timer.\n    // It never delays current human-message delivery or authorizes native send.\n    const schedulePreparation = prepareNativeScheduleSourceJobs({ db });\n    const departurePreparation = prepareNativeScheduleSourceJobs({ db, departure: true });\n    try {\n      const now = new Date().toISOString();\n      const [eventsEnqueued, locationsEnqueued, lunchEnqueued] = await Promise.all([\n        db.rpc('mz_enqueue_employee_event_pushes', { p_now: now }),\n",
+          "prior": "    inFlight = true;\n    // One bounded preparation pass in the existing sweep, not another timer.\n    // It never delays current human-message delivery or authorizes native send.\n    const schedulePreparation = prepareNativeScheduleSourceJobs({ db });\n    try {\n      const now = new Date().toISOString();\n      const [eventsEnqueued, locationsEnqueued, lunchEnqueued] = await Promise.all([\n        db.rpc('mz_enqueue_employee_event_pushes', { p_now: now }),\n"
+        },
+        {
+          "current": "        ok: true,\n        enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data, lunch: lunchEnqueued.data },\n        claimed: jobs.length,\n        schedule_preparation: await schedulePreparation,\n        departure_preparation: await departurePreparation,\n      };\n    } finally {\n      // Keep the existing single-flight lifecycle until its bounded source\n      // work settles, including an unrelated ordinary-lane failure.\n      try { await Promise.all([schedulePreparation, departurePreparation]); } finally { inFlight = false; }\n    }\n  }\n\n  if (typeof registerOperationalJobHandler === 'function') {\n",
+          "prior": "        ok: true,\n        enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data, lunch: lunchEnqueued.data },\n        claimed: jobs.length,\n        schedule_preparation: await schedulePreparation,\n      };\n    } finally {\n      // Keep the existing single-flight lifecycle until its bounded source\n      // work settles, including an unrelated ordinary-lane failure.\n      try { await schedulePreparation; } finally { inFlight = false; }\n    }\n  }\n\n  if (typeof registerOperationalJobHandler === 'function') {\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-provider-inventory-payload.js",
+      "current_sha256": "2ccae41a31da12370cb3661ae03f475483cbf8e1a6f75dc60cf5132a0a351ed0",
+      "prior_sha256": "0994ae2f5ef507bfd90c574a097042a17602290d550e21c15be433992db7edba",
+      "hunks": [
+        {
+          "current": "import {createHash} from 'node:crypto';\nimport {isDeepStrictEqual} from 'node:util';\nimport {NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA,NATIVE_EVENT_KEYS,NATIVE_MESSAGE_KEYS,canonicalNativeAlert} from './native-alert-reservation.js';\nimport {NATIVE_SCHEDULE_PAYLOAD_KEYS} from './native-schedule-payload.js';\nimport {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';\n\n// Inventory response validation ONLY. SQL owns current business source and\n// original registration/token bindings; this parser does not manufacture a\n// reservation recipient/registration/source candidate or grant dispatch.\n",
+          "prior": "import {createHash} from 'node:crypto';\nimport {isDeepStrictEqual} from 'node:util';\nimport {NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA,NATIVE_EVENT_KEYS,NATIVE_MESSAGE_KEYS,canonicalNativeAlert} from './native-alert-reservation.js';\nimport {NATIVE_SCHEDULE_PAYLOAD_SCHEMA,NATIVE_SCHEDULE_PAYLOAD_KEYS} from './native-schedule-payload.js';\n\n// Inventory response validation ONLY. SQL owns current business source and\n// original registration/token bindings; this parser does not manufacture a\n// reservation recipient/registration/source candidate or grant dispatch.\n"
+        },
+        {
+          "current": "  ||![actor.generation_id,actor.credential_id,actor.employee_id].every(v=>UUID.test(v))\n  ||!SHA.test(actor.principal_digest)||!/^KIOSK_(?:0[2-9]|10)$/.test(actor.device_id))fail();\n positive(actor.assignment_epoch,16);\n const schema=p&&Object.getPrototypeOf(p)===Object.prototype?Object.getOwnPropertyDescriptor(p,'schema')?.value:null;\n const schedule=scheduleVersion(schema,'payload'),event=schema===NATIVE_EVENT_SCHEMA,message=schema===NATIVE_MESSAGE_SCHEMA;\n if(!schedule&&!event&&!message)fail();\n if(!exact(p,schedule?NATIVE_SCHEDULE_PAYLOAD_KEYS:event?NATIVE_EVENT_KEYS:NATIVE_MESSAGE_KEYS)\n  ||Object.entries(p).some(([k,v])=>!text(v)||!v||/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(v)\n   ||Buffer.byteLength(v)>({title:180,notification_key:240}[k]||1000)))fail();\n",
+          "prior": "  ||![actor.generation_id,actor.credential_id,actor.employee_id].every(v=>UUID.test(v))\n  ||!SHA.test(actor.principal_digest)||!/^KIOSK_(?:0[2-9]|10)$/.test(actor.device_id))fail();\n positive(actor.assignment_epoch,16);\n const schema=p&&Object.getPrototypeOf(p)===Object.prototype?Object.getOwnPropertyDescriptor(p,'schema')?.value:null;\n const schedule=schema===NATIVE_SCHEDULE_PAYLOAD_SCHEMA,event=schema===NATIVE_EVENT_SCHEMA,message=schema===NATIVE_MESSAGE_SCHEMA;\n if(!schedule&&!event&&!message)fail();\n if(!exact(p,schedule?NATIVE_SCHEDULE_PAYLOAD_KEYS:event?NATIVE_EVENT_KEYS:NATIVE_MESSAGE_KEYS)\n  ||Object.entries(p).some(([k,v])=>!text(v)||!v||/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(v)\n   ||Buffer.byteLength(v)>({title:180,notification_key:240}[k]||1000)))fail();\n"
+        },
+        {
+          "current": " const wire=canonicalNativeAlert(p);if(Buffer.byteLength(wire)>3500\n  ||createHash('sha256').update(canonicalNativeAlert(p,{excludeHash:true})).digest('hex')!==p.content_sha256)fail();\n if(schedule){\n  if(p.kind!=='employee_schedule_ownership'||p.notification_type!=='schedule_ownership'||p.channel_id!=='employee-schedule-ownership'\n   ||p.route!=='employee-schedule.html?hub=employee'||!scheduleBoundaryValid(p.boundary_local,schedule)\n   ||p.notification_key!==scheduleNotificationKey(p,actor.employee_id,schedule))fail();\n  for(const k of ['source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'])if(!UUID.test(p[k]))fail();\n  for(const k of ['source_window_sha256','server_source_sha256'])if(!SHA.test(p[k]))fail();positive(p.source_revision,16);\n  const start=instant(p.source_valid_from),end=instant(p.source_valid_until);if(start>from||until>end||start>=end)fail();\n  const x=scheduleLocalBoundary(start);\n  if(x.date!==p.service_date||x.boundary!==p.boundary_local||!x.exactMinute)fail();\n }else if(event){\n  if(p.kind!=='employee_event'||p.notification_type!=='event'||p.channel_id!=='employee-events'\n   ||![p.event_id,p.instance_id,p.recipient_device_uuid].every(v=>UUID.test(v))||!SHA.test(p.source_revision)\n   ||!['three_days_before','two_days_before','shift_plus_15'].includes(p.notification_kind))fail();positive(p.event_revision,10);\n",
+          "prior": " const wire=canonicalNativeAlert(p);if(Buffer.byteLength(wire)>3500\n  ||createHash('sha256').update(canonicalNativeAlert(p,{excludeHash:true})).digest('hex')!==p.content_sha256)fail();\n if(schedule){\n  if(p.kind!=='employee_schedule_ownership'||p.notification_type!=='schedule_ownership'||p.channel_id!=='employee-schedule-ownership'\n   ||p.route!=='employee-schedule.html?hub=employee'||p.boundary_local!=='09:45'\n   ||p.notification_key!==`schedule-ownership:${p.service_date}:${actor.employee_id}:09:45`)fail();\n  for(const k of ['source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'])if(!UUID.test(p[k]))fail();\n  for(const k of ['source_window_sha256','server_source_sha256'])if(!SHA.test(p[k]))fail();positive(p.source_revision,16);\n  const start=instant(p.source_valid_from),end=instant(p.source_valid_until);if(start>from||until>end||start>=end)fail();\n  const x=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'})\n   .formatToParts(new Date(start)).map(v=>[v.type,v.value]));\n  if(`${x.year.padStart(4,'0')}-${x.month}-${x.day}`!==p.service_date||x.hour!=='09'||x.minute!=='45'||x.second!=='00'||!start.endsWith('00.000000Z'))fail();\n }else if(event){\n  if(p.kind!=='employee_event'||p.notification_type!=='event'||p.channel_id!=='employee-events'\n   ||![p.event_id,p.instance_id,p.recipient_device_uuid].every(v=>UUID.test(v))||!SHA.test(p.source_revision)\n   ||!['three_days_before','two_days_before','shift_plus_15'].includes(p.notification_kind))fail();positive(p.event_revision,10);\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-location-lifecycle.js",
+      "current_sha256": "9f77c87d2b9bc99305f3edc3a47b482602782e4cd4b4902a2a490faafb4dc75b",
+      "prior_sha256": "52f6e6c3d415da5214f91b3f633e26152dbb6cf3c06897e509302ee915eb0c67",
+      "hunks": [
+        {
+          "current": "import {canonicalNativeLocation,NATIVE_LOCATION_PAYLOAD_KEYS,validateNativeLocationRecipient,validateNativeLocationReservation} from './native-location-reservation.js';\nimport {NATIVE_LUNCH_SCHEMA,validateNativeLunchPayload} from './native-lunch-reservation.js';\nimport {validateNativeProviderInventoryPayload} from './native-provider-inventory-payload.js';\nimport {NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA} from './native-alert-reservation.js';\nimport {scheduleVersion} from './native-schedule-version.js';\n\nconst uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,sha=/^[0-9a-f]{64}$/;\nconst exact=(v,fields)=>v&&Object.getPrototypeOf(v)===Object.prototype&&isDeepStrictEqual(Object.keys(v).sort(),[...fields].sort());\nconst invalid=()=>Object.assign(new Error('native_location_lifecycle_contract_invalid'),{status:400,code:'native_location_lifecycle_contract_invalid'});\n",
+          "prior": "import {canonicalNativeLocation,NATIVE_LOCATION_PAYLOAD_KEYS,validateNativeLocationRecipient,validateNativeLocationReservation} from './native-location-reservation.js';\nimport {NATIVE_LUNCH_SCHEMA,validateNativeLunchPayload} from './native-lunch-reservation.js';\nimport {validateNativeProviderInventoryPayload} from './native-provider-inventory-payload.js';\nimport {NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA} from './native-alert-reservation.js';\nimport {NATIVE_SCHEDULE_PAYLOAD_SCHEMA} from './native-schedule-payload.js';\n\nconst uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,sha=/^[0-9a-f]{64}$/;\nconst exact=(v,fields)=>v&&Object.getPrototypeOf(v)===Object.prototype&&isDeepStrictEqual(Object.keys(v).sort(),[...fields].sort());\nconst invalid=()=>Object.assign(new Error('native_location_lifecycle_contract_invalid'),{status:400,code:'native_location_lifecycle_contract_invalid'});\n"
+        },
+        {
+          "current": "  if(p?.schema===NATIVE_LUNCH_SCHEMA){\n   try{validateNativeLunchPayload(p,{jobId:p.receipt_job_id,expected:{generation_id:p.generation_id,\n    principal_digest:q.principal_digest,credential_id:q.credential_id,employee_id:q.employee_id,\n    device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)}})}catch{fail()}\n  }else if([NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA].includes(p?.schema)||scheduleVersion(p?.schema,'payload')){\n   try{validateNativeProviderInventoryPayload(p,{generation_id:p.generation_id,principal_digest:q.principal_digest,\n    credential_id:q.credential_id,employee_id:q.employee_id,device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)});}catch{fail();}\n  }else if(!exact(p,NATIVE_LOCATION_PAYLOAD_KEYS)||Object.values(p).some(v=>typeof v!=='string')||p.schema!=='custodial.native-location-payload.v2'\n   ||!sha.test(p.content_sha256)||digest(canonicalNativeLocation(p,{excludeHash:true}))!==p.content_sha256||Buffer.byteLength(canonicalNativeLocation(p))>3500)fail();\n",
+          "prior": "  if(p?.schema===NATIVE_LUNCH_SCHEMA){\n   try{validateNativeLunchPayload(p,{jobId:p.receipt_job_id,expected:{generation_id:p.generation_id,\n    principal_digest:q.principal_digest,credential_id:q.credential_id,employee_id:q.employee_id,\n    device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)}})}catch{fail()}\n  }else if([NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA,NATIVE_SCHEDULE_PAYLOAD_SCHEMA].includes(p?.schema)){\n   try{validateNativeProviderInventoryPayload(p,{generation_id:p.generation_id,principal_digest:q.principal_digest,\n    credential_id:q.credential_id,employee_id:q.employee_id,device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)});}catch{fail();}\n  }else if(!exact(p,NATIVE_LOCATION_PAYLOAD_KEYS)||Object.values(p).some(v=>typeof v!=='string')||p.schema!=='custodial.native-location-payload.v2'\n   ||!sha.test(p.content_sha256)||digest(canonicalNativeLocation(p,{excludeHash:true}))!==p.content_sha256||Buffer.byteLength(canonicalNativeLocation(p))>3500)fail();\n"
+        }
+      ]
+    },
+    {
+      "path": "supabase/canonical/migration-replay-order.json",
+      "current_sha256": "84ac9ee339abf929a2d50c411b0c69b4cb05699f71fa13ee9ddb17606cd5dabe",
+      "prior_sha256": "abba683ec10c75fb3ab585e8a12351a410438bd24822569d3f3671c9ae6fa751",
+      "hunks": [
+        {
+          "current": "        },\n        {\n          \"name\": \"20261031225210_custodial_sealed_repairs_current_eight.sql\",\n          \"sha256\": \"f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73\"\n        },\n        {\n          \"name\": \"20261101034931_custodial_completion_evidence_cohort_read.sql\",\n          \"sha256\": \"99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630\"\n        },\n        {\n          \"name\": \"20261101044239_custodial_cohort_places_feedback.sql\",\n          \"sha256\": \"d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78\"\n        },\n        {\n          \"name\": \"20261102000000_unfinished_work_owner_attention.sql\",\n          \"sha256\": \"e8fb1bb569b653a53b05f52944a14ab232e5e0542eaeec30173a9194fd6ca835\"\n        },\n        {\n          \"name\": \"20261102010000_local_retained_enrollment_partition.sql\",\n          \"sha256\": \"83f817a25ffe468c715323cf71f62a0c65cbe5a2fe68fde9d75903b55678a4d1\"\n        },\n        {\n          \"name\": \"20261102151842_current_source_recovery_binding.sql\",\n          \"sha256\": \"999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a\"\n        },\n        {\n          \"name\": \"20261102161602_current_recovery_column_order.sql\",\n          \"sha256\": \"067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665\"\n        },\n        {\n          \"name\": \"20261103004520_authoritative_events_cancellation.sql\",\n          \"sha256\": \"21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b\"\n        }\n      ]\n    }\n  ],\n  \"integration_base_source_commit\": \"6b6caecff2f8a6b182f570e84d96e6876c6fdbc9\",\n  \"solo_audit_repair_append\": {\n    \"previous_migration_count\": 304,\n    \"previous_replay_manifest_sha256\": \"abba683ec10c75fb3ab585e8a12351a410438bd24822569d3f3671c9ae6fa751\",\n    \"previous_rows_unchanged\": true,\n    \"appended\": [\n      {\n        \"name\": \"20261101034931_custodial_completion_evidence_cohort_read.sql\",\n        \"sha256\": \"99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630\"\n      },\n      {\n        \"name\": \"20261101044239_custodial_cohort_places_feedback.sql\",\n        \"sha256\": \"d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78\"\n      }\n    ],\n    \"scope\": \"Source reconstruction order only; no applied, canonical fingerprint, release or production admission claim\"\n  },\n  \"current_qualification_append\": {\n    \"previous_migration_count\": 308,\n    \"previous_replay_manifest_sha256\": \"6037f9ef923c4173e0f5287ff4036d248c4afc18e5a130f380a413139e7a456b\",\n    \"previous_rows_unchanged\": true,\n    \"appended\": [\n      {\n        \"name\": \"20261102151842_current_source_recovery_binding.sql\",\n        \"sha256\": \"999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a\"\n      }\n    ],\n    \"scope\": \"Additive current local recovery binding; production execution remains unauthorized\"\n  },\n  \"current_column_order_qualification_append\": {\n    \"previous_migration_count\": 309,\n    \"previous_replay_manifest_sha256\": \"2e1c3938fa129063dc836839449e1d9769fa4a1fcf8078c867296e00bf9ebd0f\",\n    \"previous_rows_unchanged\": true,\n    \"appended\": [\n      {\n        \"name\": \"20261102161602_current_recovery_column_order.sql\",\n        \"sha256\": \"067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665\"\n      }\n    ],\n    \"scope\": \"Additive R008 exact column order recovery repair; local qualification only; no production admission\"\n  }\n}\n",
+          "prior": "        },\n        {\n          \"name\": \"20261031225210_custodial_sealed_repairs_current_eight.sql\",\n          \"sha256\": \"f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73\"\n        }\n      ]\n    }\n  ],\n  \"integration_base_source_commit\": \"6b6caecff2f8a6b182f570e84d96e6876c6fdbc9\"\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-schedule-payload.js",
+      "current_sha256": "dc4a9d3391c1b7467560a574afc33cd8e81c1f45840a6a47fbbb23b0c69a6f2e",
+      "prior_sha256": "d48c5204a6b277c57013d7b8affa67977822b33064d85b1abc2bbe017624fff2",
+      "hunks": [
+        {
+          "current": "import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';\nimport {createHash} from 'node:crypto';\nimport {isDeepStrictEqual} from 'node:util';\nimport {canonicalNativeLocation,validateNativeLocationRecipient} from './native-location-reservation.js';\n\n",
+          "prior": "import {createHash} from 'node:crypto';\nimport {isDeepStrictEqual} from 'node:util';\nimport {canonicalNativeLocation,validateNativeLocationRecipient} from './native-location-reservation.js';\n\n"
+        },
+        {
+          "current": "export function validateNativeSchedulePayload(p,{jobId,expected,sourceCandidate}){\n expected=validateNativeLocationRecipient(expected);\n if(!UUID.test(jobId)||!exact(p,NATIVE_SCHEDULE_PAYLOAD_KEYS)||!exact(sourceCandidate,candidateKeys)\n  ||Object.entries(p).some(([key,x])=>!text(x)||!x||/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(x)||Buffer.byteLength(x)>({title:180,notification_key:240}[key]||1000))\n  ||Object.values(sourceCandidate).some(x=>!text(x))||!scheduleVersion(p.schema,'payload')\n  ||scheduleVersion(sourceCandidate.schema,'content-candidate')!==scheduleVersion(p.schema,'payload')||p.kind!=='employee_schedule_ownership'\n  ||p.notification_type!=='schedule_ownership'||p.channel_id!=='employee-schedule-ownership'\n  ||p.route!=='employee-schedule.html?hub=employee'||!scheduleBoundaryValid(p.boundary_local,scheduleVersion(p.schema,'payload'))||p.receipt_job_id!==jobId)invalid();\n for(const [field,key] of Object.entries({generation_id:'generation_id',principal_digest:'principal_digest',token_digest:'token_digest',receipt_credential_id:'credential_id',\n  receipt_employee_id:'employee_id',receipt_device_id:'device_id',receipt_assignment_epoch:'assignment_epoch'}))if(p[field]!==expected[key])invalid();\n if(sourceCandidate.employee_id!==expected.employee_id||sourceCandidate.generation_id!==expected.generation_id)invalid();\n for(const key of candidateKeys)if(!['schema','employee_id'].includes(key)&&p[key]!==sourceCandidate[key])invalid();\n for(const field of ['generation_id','receipt_credential_id','receipt_employee_id','source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'])if(!UUID.test(p[field]))invalid();\n for(const field of ['principal_digest','token_digest','content_sha256','source_window_sha256','server_source_sha256'])if(!SHA.test(p[field]))invalid();\n if(!/^[1-9][0-9]{0,15}$/.test(p.source_revision)||!Number.isSafeInteger(Number(p.source_revision))\n  ||p.notification_key!==scheduleNotificationKey(p,p.receipt_employee_id,scheduleVersion(p.schema,'payload')))invalid();\n const from=instant(p.source_valid_from),end=instant(p.source_valid_until),at=instant(p.reservation_at),until=instant(p.valid_until);\n if(!(scheduleLocalBoundary(from).date===p.service_date&&scheduleLocalBoundary(from).boundary===p.boundary_local&&scheduleLocalBoundary(from).exactMinute)||from>at||at>=until||until>end||from>=end)invalid();\n const wire=canonicalNativeLocation(p);\n if(Buffer.byteLength(p.title)>180||Buffer.byteLength(p.notification_key)>240||Buffer.byteLength(wire)>3500\n  ||createHash('sha256').update(canonicalNativeLocation(p,{excludeHash:true})).digest('hex')!==p.content_sha256)invalid();\n return Object.freeze({...p});\n",
+          "prior": "export function validateNativeSchedulePayload(p,{jobId,expected,sourceCandidate}){\n expected=validateNativeLocationRecipient(expected);\n if(!UUID.test(jobId)||!exact(p,NATIVE_SCHEDULE_PAYLOAD_KEYS)||!exact(sourceCandidate,candidateKeys)\n  ||Object.entries(p).some(([key,x])=>!text(x)||!x||/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(x)||Buffer.byteLength(x)>({title:180,notification_key:240}[key]||1000))\n  ||Object.values(sourceCandidate).some(x=>!text(x))||p.schema!==NATIVE_SCHEDULE_PAYLOAD_SCHEMA\n  ||sourceCandidate.schema!=='custodial.native-schedule-content-candidate.v1'||p.kind!=='employee_schedule_ownership'\n  ||p.notification_type!=='schedule_ownership'||p.channel_id!=='employee-schedule-ownership'\n  ||p.route!=='employee-schedule.html?hub=employee'||p.boundary_local!=='09:45'||p.receipt_job_id!==jobId)invalid();\n for(const [field,key] of Object.entries({generation_id:'generation_id',principal_digest:'principal_digest',token_digest:'token_digest',receipt_credential_id:'credential_id',\n  receipt_employee_id:'employee_id',receipt_device_id:'device_id',receipt_assignment_epoch:'assignment_epoch'}))if(p[field]!==expected[key])invalid();\n if(sourceCandidate.employee_id!==expected.employee_id||sourceCandidate.generation_id!==expected.generation_id)invalid();\n for(const key of candidateKeys)if(!['schema','employee_id'].includes(key)&&p[key]!==sourceCandidate[key])invalid();\n for(const field of ['generation_id','receipt_credential_id','receipt_employee_id','source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'])if(!UUID.test(p[field]))invalid();\n for(const field of ['principal_digest','token_digest','content_sha256','source_window_sha256','server_source_sha256'])if(!SHA.test(p[field]))invalid();\n if(!/^[1-9][0-9]{0,15}$/.test(p.source_revision)||!Number.isSafeInteger(Number(p.source_revision))\n  ||p.notification_key!==`schedule-ownership:${p.service_date}:${p.receipt_employee_id}:09:45`)invalid();\n const from=instant(p.source_valid_from),end=instant(p.source_valid_until),at=instant(p.reservation_at),until=instant(p.valid_until);\n if(!chicagoBoundary(from,p.service_date)||from>at||at>=until||until>end||from>=end)invalid();\n const wire=canonicalNativeLocation(p);\n if(Buffer.byteLength(p.title)>180||Buffer.byteLength(p.notification_key)>240||Buffer.byteLength(wire)>3500\n  ||createHash('sha256').update(canonicalNativeLocation(p,{excludeHash:true})).digest('hex')!==p.content_sha256)invalid();\n return Object.freeze({...p});\n"
+        }
+      ]
+    },
+    {
+      "path": "src/native-schedule-delivery-preparation.js",
+      "current_sha256": "949cb07bfb858d439dc4ba6401d02cdd093c9b6f574144974de28e0e27a0ddb5",
+      "prior_sha256": "71b2bed9fc70b2cd6a2d57517fade21ded08f52e09fed460f211c1b1239baa78",
+      "hunks": [
+        {
+          "current": "import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';\nimport {isDeepStrictEqual} from 'node:util';\nimport {postgresJsonbContentDigest} from './static-weekly-schedule-program.js';\n\n// Content preparation ONLY. The immutable SQL SOURCE original is not a\n",
+          "prior": "import {isDeepStrictEqual} from 'node:util';\nimport {postgresJsonbContentDigest} from './static-weekly-schedule-program.js';\n\n// Content preparation ONLY. The immutable SQL SOURCE original is not a\n"
+        },
+        {
+          "current": "function original(value,expected){\n requireValue(exact(value,['reservation_id','operation_id','reserved_at','window','window_sha256']));\n requireValue([value.reservation_id,value.operation_id].every(x=>utf8(x)&&UUID.test(x))&&utf8(value.window_sha256)&&SHA.test(value.window_sha256));\n const w=value.window;requireValue(exact(w,windowKeys)&&exact(w.recipient,recipientKeys));\n requireValue(scheduleVersion(w.schema,'server-window')>0&&w.timezone==='America/Chicago'\n  &&w.employee_id===expected.employeeId&&w.generation_id===expected.generationId&&w.assignment_occurrence_id===expected.sourceKey\n  &&w.server_source_sha256===expected.expectedSourceSha256&&w.server_digest_format==='postgres-jsonb-sha256.v1'\n  &&[w.projection_id,w.publication_id,w.version_id].every(x=>utf8(x)&&UUID.test(x))\n  &&clean(w.employee_name,180)&&w.employee_name.trim().length>0\n  &&utf8(w.source_revision)&&/^[1-9][0-9]{0,15}$/.test(w.source_revision)&&Number.isSafeInteger(Number(w.source_revision))\n  &&w.logical_key===scheduleNotificationKey({...w,boundary_local:scheduleLocalBoundary(w.valid_from).boundary},w.employee_id,scheduleVersion(w.schema,'server-window')));\n const r=w.recipient;requireValue(r.employee_id===w.employee_id&&r.generation_id===w.generation_id\n  &&[r.device_id,r.credential_id].every(x=>utf8(x)&&UUID.test(x))&&/^KIOSK_(?:0[2-9]|10)$/.test(r.device_identifier)\n  &&Number.isSafeInteger(r.assignment_epoch)&&r.assignment_epoch>=1&&[r.principal_digest,r.token_digest].every(x=>utf8(x)&&SHA.test(x)));\n const from=micros(w.valid_from),until=micros(w.valid_until),at=micros(w.server_now);\n requireValue(from<=at&&at<until&&value.reserved_at===w.server_now&&scheduleLocalBoundary(w.valid_from).date===w.service_date&&scheduleLocalBoundary(w.valid_from).exactMinute&&scheduleBoundaryValid(scheduleLocalBoundary(w.valid_from).boundary,scheduleVersion(w.schema,'server-window')));\n units(w.before_units);units(w.after_units);requireValue(!isDeepStrictEqual(w.before_units,w.after_units));\n requireValue(Buffer.byteLength(JSON.stringify(w))<=2097152&&postgresJsonbContentDigest(w)===value.window_sha256);\n return value;\n}\n",
+          "prior": "function original(value,expected){\n requireValue(exact(value,['reservation_id','operation_id','reserved_at','window','window_sha256']));\n requireValue([value.reservation_id,value.operation_id].every(x=>utf8(x)&&UUID.test(x))&&utf8(value.window_sha256)&&SHA.test(value.window_sha256));\n const w=value.window;requireValue(exact(w,windowKeys)&&exact(w.recipient,recipientKeys));\n requireValue(w.schema==='custodial.native-schedule-server-window.v1'&&w.timezone==='America/Chicago'\n  &&w.employee_id===expected.employeeId&&w.generation_id===expected.generationId&&w.assignment_occurrence_id===expected.sourceKey\n  &&w.server_source_sha256===expected.expectedSourceSha256&&w.server_digest_format==='postgres-jsonb-sha256.v1'\n  &&[w.projection_id,w.publication_id,w.version_id].every(x=>utf8(x)&&UUID.test(x))\n  &&clean(w.employee_name,180)&&w.employee_name.trim().length>0\n  &&utf8(w.source_revision)&&/^[1-9][0-9]{0,15}$/.test(w.source_revision)&&Number.isSafeInteger(Number(w.source_revision))\n  &&w.logical_key===`schedule-ownership:${w.service_date}:${w.employee_id}:09:45`);\n const r=w.recipient;requireValue(r.employee_id===w.employee_id&&r.generation_id===w.generation_id\n  &&[r.device_id,r.credential_id].every(x=>utf8(x)&&UUID.test(x))&&/^KIOSK_(?:0[2-9]|10)$/.test(r.device_identifier)\n  &&Number.isSafeInteger(r.assignment_epoch)&&r.assignment_epoch>=1&&[r.principal_digest,r.token_digest].every(x=>utf8(x)&&SHA.test(x)));\n const from=micros(w.valid_from),until=micros(w.valid_until),at=micros(w.server_now);\n requireValue(from<=at&&at<until&&value.reserved_at===w.server_now&&boundaryDate(w.valid_from)===w.service_date);\n units(w.before_units);units(w.after_units);requireValue(!isDeepStrictEqual(w.before_units,w.after_units));\n requireValue(Buffer.byteLength(JSON.stringify(w))<=2097152&&postgresJsonbContentDigest(w)===value.window_sha256);\n return value;\n}\n"
+        },
+        {
+          "current": " return freeze(structuredClone(value));\n}\nexport function buildNativeScheduleContentCandidate(value,context){\n const source=validateNativeScheduleSourceReservation(value,context);requireValue(source.reserved===true);\n const r=source.reservation,w=r.window,version=scheduleVersion(w.schema,'server-window'),boundary=scheduleLocalBoundary(w.valid_from).boundary;\n const [h,m]=boundary.split(':').map(Number),label=`${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;\n const candidate={schema:version===2?'custodial.native-schedule-content-candidate.v2':NATIVE_SCHEDULE_CONTENT_SCHEMA,kind:'employee_schedule_ownership',notification_type:'schedule_ownership',\n  title:version===2?'Assignment update':'9:45 assignment update',body:version===2?`${w.employee_name}, your assignments changed at ${label} as a scheduled shift ended. Please see your Schedule page for your updated assignments.`:`${w.employee_name}, your scheduled responsibilities have changed at 9:45 AM. Please see your Schedule page for your updated assignments.`,\n  channel_id:'employee-schedule-ownership',route:'employee-schedule.html?hub=employee',notification_key:w.logical_key,\n  service_date:w.service_date,boundary_local:boundary,employee_id:w.employee_id,generation_id:w.generation_id,\n  source_reservation_id:r.reservation_id,source_operation_id:r.operation_id,source_window_sha256:r.window_sha256,\n  server_source_sha256:w.server_source_sha256,source_revision:w.source_revision,projection_id:w.projection_id,\n  publication_id:w.publication_id,version_id:w.version_id,assignment_occurrence_id:w.assignment_occurrence_id,\n  source_valid_from:w.valid_from,source_valid_until:w.valid_until};\n requireValue(Object.values(candidate).every(x=>clean(x,1000))&&Buffer.byteLength(candidate.title)<=180\n  &&Buffer.byteLength(candidate.notification_key)<=240&&Buffer.byteLength(JSON.stringify(candidate))<=3500);\n return freeze(candidate);\n}\nexport async function prepareNativeScheduleContent({db,departure=false,...context}){\n const expected=request(context);requireValue(typeof db?.rpc==='function');\n const pending=reason=>freeze({schema:'custodial.native-schedule-content-preparation.v1',status:'SOURCE_PENDING',reason,\n  delivery_admitted:false,dispatch_authorized:false,clock_effect_authority:null,retention_authority:null,candidate:null});\n let first;\n try{first=await db.rpc(departure?'custodial_native_departure_source_reserve':'custodial_native_schedule_source_reserve',{p_source_key:expected.sourceKey,p_employee_id:expected.employeeId,\n  p_generation_id:expected.generationId,p_expected_source_sha256:expected.expectedSourceSha256,p_operation_id:expected.operationId});}\n catch{return pending('SOURCE_RESERVATION_UNAVAILABLE');}\n if(first?.error)return pending('SOURCE_RESERVATION_UNAVAILABLE');\n // Validate before cloning; unsupported prototypes must not become trusted DTOs.\n",
+          "prior": " return freeze(structuredClone(value));\n}\nexport function buildNativeScheduleContentCandidate(value,context){\n const source=validateNativeScheduleSourceReservation(value,context);requireValue(source.reserved===true);\n const r=source.reservation,w=r.window;\n const candidate={schema:NATIVE_SCHEDULE_CONTENT_SCHEMA,kind:'employee_schedule_ownership',notification_type:'schedule_ownership',\n  title:'9:45 assignment update',body:`${w.employee_name}, your scheduled responsibilities have changed at 9:45 AM. Please see your Schedule page for your updated assignments.`,\n  channel_id:'employee-schedule-ownership',route:'employee-schedule.html?hub=employee',notification_key:w.logical_key,\n  service_date:w.service_date,boundary_local:'09:45',employee_id:w.employee_id,generation_id:w.generation_id,\n  source_reservation_id:r.reservation_id,source_operation_id:r.operation_id,source_window_sha256:r.window_sha256,\n  server_source_sha256:w.server_source_sha256,source_revision:w.source_revision,projection_id:w.projection_id,\n  publication_id:w.publication_id,version_id:w.version_id,assignment_occurrence_id:w.assignment_occurrence_id,\n  source_valid_from:w.valid_from,source_valid_until:w.valid_until};\n requireValue(Object.values(candidate).every(x=>clean(x,1000))&&Buffer.byteLength(candidate.title)<=180\n  &&Buffer.byteLength(candidate.notification_key)<=240&&Buffer.byteLength(JSON.stringify(candidate))<=3500);\n return freeze(candidate);\n}\nexport async function prepareNativeScheduleContent({db,...context}){\n const expected=request(context);requireValue(typeof db?.rpc==='function');\n const pending=reason=>freeze({schema:'custodial.native-schedule-content-preparation.v1',status:'SOURCE_PENDING',reason,\n  delivery_admitted:false,dispatch_authorized:false,clock_effect_authority:null,retention_authority:null,candidate:null});\n let first;\n try{first=await db.rpc('custodial_native_schedule_source_reserve',{p_source_key:expected.sourceKey,p_employee_id:expected.employeeId,\n  p_generation_id:expected.generationId,p_expected_source_sha256:expected.expectedSourceSha256,p_operation_id:expected.operationId});}\n catch{return pending('SOURCE_RESERVATION_UNAVAILABLE');}\n if(first?.error)return pending('SOURCE_RESERVATION_UNAVAILABLE');\n // Validate before cloning; unsupported prototypes must not become trusted DTOs.\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/native-schedule-source-ci-tests.mjs",
+      "current_sha256": "3b055dea9328b648313ccc8a83b0a85255e4ae980afac6e14446a4e901181e2d",
+      "prior_sha256": "5d3395cab057c115d836d3971f59580629404666cb856fb443f34b1bf5028f98",
+      "hunks": [
+        {
+          "current": "await import('./current-full-hour-ci-tests.mjs');\nawait import('./current-device-auth-ci-tests.mjs');\nawait import('./fixtures/current-departure-source-successor-tests.mjs');\nimport {withCurrentMigrationSourceFixture} from './fixtures/current-migration-source-fixtures.mjs';\n// Mandatory executed consumer proof; no SQL, clock or delivery qualification.\nimport assert from 'node:assert/strict';\nimport {runNativeScheduleOccurrenceTests} from './native-schedule-occurrence-tests.mjs';\n\n",
+          "prior": "// Mandatory executed consumer proof; no SQL, clock or delivery qualification.\nimport assert from 'node:assert/strict';\nimport {runNativeScheduleOccurrenceTests} from './native-schedule-occurrence-tests.mjs';\n\n"
+        },
+        {
+          "current": "assert.equal(payloadReceipt.phone,false);\nconsole.log(JSON.stringify({suite:'native-schedule-closed-wire-called',...payloadReceipt}));\n\nimport {runNativeScheduleFinalizationSourceTests} from './native-schedule-finalization-source-tests.mjs';\nconst finalizationReceipt=await withCurrentMigrationSourceFixture(process.cwd(),311,root=>runNativeScheduleFinalizationSourceTests(root));\nassert.equal(finalizationReceipt.status,'PASS');\nassert.equal(finalizationReceipt.checks,20);\nfor(const field of ['new_sql_executed','provider_dispatch','native_qualified','phone'])assert.equal(finalizationReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-schedule-server-finalization-source-called',...finalizationReceipt}));\n",
+          "prior": "assert.equal(payloadReceipt.phone,false);\nconsole.log(JSON.stringify({suite:'native-schedule-closed-wire-called',...payloadReceipt}));\n\nimport {runNativeScheduleFinalizationSourceTests} from './native-schedule-finalization-source-tests.mjs';\nconst finalizationReceipt=runNativeScheduleFinalizationSourceTests();\nassert.equal(finalizationReceipt.status,'PASS');\nassert.equal(finalizationReceipt.checks,20);\nfor(const field of ['new_sql_executed','provider_dispatch','native_qualified','phone'])assert.equal(finalizationReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-schedule-server-finalization-source-called',...finalizationReceipt}));\n"
+        },
+        {
+          "current": "\nimport {runNativeScheduleSourceProducerTests} from './native-schedule-source-producer-tests.mjs';\nconst producerReceipt=await runNativeScheduleSourceProducerTests();\nassert.equal(producerReceipt.status,'PASS');\nassert.equal(producerReceipt.checks,64);\nassert.equal(producerReceipt.actual_worker_sweep,true);\nfor(const field of ['actual_SQL','provider_dispatch','phone'])assert.equal(producerReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-schedule-source-producer-called',...producerReceipt}));\nawait import('./native-schedule-source-producer-sdk-tests.mjs');\n",
+          "prior": "\nimport {runNativeScheduleSourceProducerTests} from './native-schedule-source-producer-tests.mjs';\nconst producerReceipt=await runNativeScheduleSourceProducerTests();\nassert.equal(producerReceipt.status,'PASS');\nassert.equal(producerReceipt.checks,62);\nassert.equal(producerReceipt.actual_worker_sweep,true);\nfor(const field of ['actual_SQL','provider_dispatch','phone'])assert.equal(producerReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-schedule-source-producer-called',...producerReceipt}));\nawait import('./native-schedule-source-producer-sdk-tests.mjs');\n"
+        },
+        {
+          "current": "assert.equal(factoryReceipt.actual_strict_sender,true);\nassert.equal(factoryReceipt.synthetic_OAuth_and_fetch,true);\nfor(const field of ['SQL_executed','real_key_access','provider_dispatch','native_qualified','phone'])assert.equal(factoryReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-schedule-private-factory-called',...factoryReceipt}));\n\nimport {runNativeDepartureCurrentCiTests} from './native-departure-current-ci-tests.mjs';\nconst departureReceipt=await runNativeDepartureCurrentCiTests();\nassert.equal(departureReceipt.status,'PASS');\nassert.equal(departureReceipt.checks,390);\nassert.equal(departureReceipt.retained_sql_cases,37);\nassert.equal(departureReceipt.actual_current_modules,true);\nassert.equal(departureReceipt.actual_HTTP_cases,37);\nassert.equal(departureReceipt.retained_SQL_evidence_only,true);\nfor(const field of ['new_SQL','provider_dispatch','clock_qualified','audio_qualified','worker_activated','phone'])assert.equal(departureReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-departure-current-called',...departureReceipt}));\n",
+          "prior": "assert.equal(factoryReceipt.actual_strict_sender,true);\nassert.equal(factoryReceipt.synthetic_OAuth_and_fetch,true);\nfor(const field of ['SQL_executed','real_key_access','provider_dispatch','native_qualified','phone'])assert.equal(factoryReceipt[field],false);\nconsole.log(JSON.stringify({suite:'native-schedule-private-factory-called',...factoryReceipt}));\n"
+        }
+      ]
+    },
+    {
+      "path": "src/auth/device-credential-auth.js",
+      "current_sha256": "65c7604bb58e775e74eddf5aeb8ac1506c61048f3843e9de9fe45e81a52ed335",
+      "prior_sha256": "a373bb095671298fdcf70b826b3cc435d9c2a1116a056a84cf938ea8672dcb97",
+      "hunks": [
+        {
+          "current": "      && row.token_hash\n      && secretGenerationMatches\n      && safeEqual(row.token_hash, tokenHash(parts.secret, env))\n    );\n    // A preserved original enrollment is never the next employee's authority,\n    // including observe-policy fallback and read-only freshness validation.\n    if(tokenMatchesDevice&&Object.prototype.hasOwnProperty.call(credentialMetadata,\"retained_original_enrollment\")){\n      return {ok:false,status:401,code:\"device_original_enrollment_retained\",\n        error:\"This credential belongs to a retained original enrollment.\",enrollment_required:true,policy_mode:policy.mode};\n    }\n    const valid = Boolean(tokenMatchesDevice && !row.revoked_at && Number.isFinite(expiresAt) && expiresAt > now.getTime());\n    const normalCommitEligible = Boolean(device?.device_active && isEligibleEmployeeDevice(device));\n    if (valid && normalCommitEligible) {\n      if (readOnly) {\n        // Confirmation/key-generation admission is not optional telemetry.\n        // Revalidation must never repair a credential, consume recovery or\n        // call touch/audit, even when ordinary authentication could do so.\n        const checkedAt = Date.now();\n        // PostgreSQL bigint reads are decimal strings. Normalize only this\n        // exact, safely representable server value; never coerce malformed\n        // epochs or round an assignment identity into another generation.\n        const rawEpoch = device.assignment_epoch;\n        const assignmentEpoch = typeof rawEpoch === 'number' ? rawEpoch\n          : typeof rawEpoch === 'string' && /^[1-9][0-9]{0,15}$/.test(rawEpoch) ? Number(rawEpoch) : NaN;\n        if (typeof row.confirmed_at !== \"string\" || !Number.isFinite(Date.parse(row.confirmed_at))\n          || !recordedSecretKeyId || !/^[0-9a-f]{64}$/.test(recordedSecretKeyId)\n          || !UUID_PATTERN.test(String(device.canonical_device_pk || \"\"))\n          || !UUID_PATTERN.test(String(device.assigned_employee_id || \"\"))\n          || !Number.isSafeInteger(assignmentEpoch) || assignmentEpoch < 1\n          || typeof device.role !== \"string\" || !device.role\n          || !Number.isFinite(checkedAt) || expiresAt <= checkedAt) {\n          return {ok:false,status:401,code:\"device_credential_required\",\n            error:\"Current confirmed device authority is required.\",enrollment_required:true,policy_mode:policy.mode};\n        }\n        return {ok:true,device:{...device,assignment_epoch:assignmentEpoch},credentialed:true,credential:row,policy_mode:policy.mode,enrollment_required:false};\n      }\n      const metadata = row?.metadata_json;\n      const operationBound = Boolean(\n        metadata\n",
+          "prior": "      && row.token_hash\n      && secretGenerationMatches\n      && safeEqual(row.token_hash, tokenHash(parts.secret, env))\n    );\n    const valid = Boolean(tokenMatchesDevice && !row.revoked_at && Number.isFinite(expiresAt) && expiresAt > now.getTime());\n    const normalCommitEligible = Boolean(device?.device_active && isEligibleEmployeeDevice(device));\n    if (valid && normalCommitEligible) {\n      if (readOnly) {\n        // Confirmation/key-generation admission is not optional telemetry.\n        // Revalidation must never repair a credential, consume recovery or\n        // call touch/audit, even when ordinary authentication could do so.\n        const checkedAt = Date.now();\n        if (typeof row.confirmed_at !== \"string\" || !Number.isFinite(Date.parse(row.confirmed_at))\n          || !recordedSecretKeyId || !/^[0-9a-f]{64}$/.test(recordedSecretKeyId)\n          || !UUID_PATTERN.test(String(device.canonical_device_pk || \"\"))\n          || !UUID_PATTERN.test(String(device.assigned_employee_id || \"\"))\n          || !Number.isSafeInteger(device.assignment_epoch) || device.assignment_epoch < 1\n          || typeof device.role !== \"string\" || !device.role\n          || !Number.isFinite(checkedAt) || expiresAt <= checkedAt) {\n          return {ok:false,status:401,code:\"device_credential_required\",\n            error:\"Current confirmed device authority is required.\",enrollment_required:true,policy_mode:policy.mode};\n        }\n        return {ok:true,device,credentialed:true,credential:row,policy_mode:policy.mode,enrollment_required:false};\n      }\n      const metadata = row?.metadata_json;\n      const operationBound = Boolean(\n        metadata\n"
+        },
+        {
+          "current": "    .order(\"device_id\");\n  if (deviceError) throw deviceError;\n  const { data: credentials, error: credentialError, count: credentialCount } = await supabase\n    .from(\"device_auth_credentials\")\n    .select(\"credential_id,device_id,device_label,created_at,confirmed_at,last_used_at,expires_at,revoked_at,revoked_reason,metadata_json\", { count: \"exact\" })\n    .is(\"revoked_at\", null)\n    .gt(\"expires_at\", now.toISOString());\n  if (credentialError) throw credentialError;\n  const complete = (rows, count) => Array.isArray(rows) && Number.isSafeInteger(count) && count === rows.length;\n",
+          "prior": "    .order(\"device_id\");\n  if (deviceError) throw deviceError;\n  const { data: credentials, error: credentialError, count: credentialCount } = await supabase\n    .from(\"device_auth_credentials\")\n    .select(\"credential_id,device_id,device_label,created_at,confirmed_at,last_used_at,expires_at,revoked_at,revoked_reason\", { count: \"exact\" })\n    .is(\"revoked_at\", null)\n    .gt(\"expires_at\", now.toISOString());\n  if (credentialError) throw credentialError;\n  const complete = (rows, count) => Array.isArray(rows) && Number.isSafeInteger(count) && count === rows.length;\n"
+        },
+        {
+          "current": "  for (const credential of credentials) {\n    if (!credential || !UUID_PATTERN.test(credential.credential_id || \"\") || !UUID_PATTERN.test(credential.device_id || \"\")) {\n      throw new Error(\"Current coverage credential registry is ambiguous.\");\n    }\n    if (credential.metadata_json&&Object.hasOwn(credential.metadata_json,\"retained_original_enrollment\"))continue;\n    if (credential.revoked_at !== null || !Number.isFinite(Date.parse(credential.expires_at))\n      || Date.parse(credential.expires_at) <= now.getTime()) continue;\n    const current = byDevicePk.get(credential.device_id) || [];\n    current.push(credential); byDevicePk.set(credential.device_id, current);\n",
+          "prior": "  for (const credential of credentials) {\n    if (!credential || !UUID_PATTERN.test(credential.credential_id || \"\") || !UUID_PATTERN.test(credential.device_id || \"\")) {\n      throw new Error(\"Current coverage credential registry is ambiguous.\");\n    }\n    if (credential.revoked_at !== null || !Number.isFinite(Date.parse(credential.expires_at))\n      || Date.parse(credential.expires_at) <= now.getTime()) continue;\n    const current = byDevicePk.get(credential.device_id) || [];\n    current.push(credential); byDevicePk.set(credential.device_id, current);\n"
+        }
+      ]
+    },
+    {
+      "path": "src/request-json-parser.js",
+      "current_sha256": "87792f3d8ea48a2f6cb5b41e2717574c8a76c640ac80ef8b324be4171bb549b8",
+      "prior_sha256": "68a38a4ec263ff9a80d69082660324d23e84f5328750f346a52a77d016fa28a4",
+      "hunks": [
+        {
+          "current": "import express from 'express';\nimport {parseNativeProviderJson} from './native-provider-json.js';\n\n// These exact POST handlers require an untouched stream and no general-parser\n// body marker. Classification grants no authentication or execution authority.\nconst originalBytePostPaths = new Set([\n  '/device-auth/private-custody',\n  '/device-auth/private-custody-current-read',\n  '/device-auth/same-original-recovery/target',\n  '/device-auth/same-original-recovery/challenge',\n  '/device-auth/same-original-recovery/challenge-status',\n  '/device-auth/same-original-recovery/manager-preparation',\n  '/device-auth/private-custody-original-completion-read',\n  '/device-auth/local-enrollment-retention',\n  '/device-auth/original-inventory-ack',\n  '/device-auth/original-inventory-ack-status',\n  '/device-auth/original-inventory-separation-approval-status',\n  '/device-auth/original-inventory-manifest-chunk',\n  '/device-auth/original-inventory-manifest-chunk-status',\n  '/admin-api/device-security/original-inventory-separation/approvals',\n  '/admin-api/device-security/original-inventory-separation/approvals/original-status',\n  '/admin-api/device-security/same-original-recovery/approvals',\n  '/admin-api/device-security/same-original-recovery/approvals/original-status',\n]);\nconst ownsOriginalRequestBody = req => req.method === 'POST' && originalBytePostPaths.has(req.path);\n\nexport function createGeneralUrlencodedMiddleware() {\n  const parser = express.urlencoded({extended: false, limit: '32kb'});\n  return (req, res, next) => ownsOriginalRequestBody(req) ? next() : parser(req, res, next);\n}\n\n// Shared production mount: scan authority and OAuth registration retain their\n// existing dedicated parser/limit/error-order contracts.\nexport function createGeneralJsonMiddleware() {\n  const parser = express.json({limit: '10mb'});\n  const dedicatedPath = /^\\/(?:scan-api\\/(?:rpc|original-completion|phone-position)|oauth\\/register)\\/?$/i;\n  // Express route parameters consume one path segment, with optional trailing\n  // slash and case-insensitive routing by default. Preserve the ORIGINAL bytes\n  // only for the two typed, fully attested native legacy POST endpoints.\n  const legacyPath = /^\\/custodial-device-auth\\/assigned-activation-operations\\/[^/]+\\/(?:legacy-lineage-binding|native-legacy-result)\\/?$/i;\n",
+          "prior": "import express from 'express';\nimport {parseNativeProviderJson} from './native-provider-json.js';\n\n// Shared production mount: scan authority and OAuth registration retain their\n// existing dedicated parser/limit/error-order contracts.\nexport function createGeneralJsonMiddleware() {\n  const parser = express.json({limit: '10mb'});\n  const dedicatedPath = /^\\/(?:scan-api\\/rpc|oauth\\/register)\\/?$/i;\n  // Express route parameters consume one path segment, with optional trailing\n  // slash and case-insensitive routing by default. Preserve the ORIGINAL bytes\n  // only for the two typed, fully attested native legacy POST endpoints.\n  const legacyPath = /^\\/custodial-device-auth\\/assigned-activation-operations\\/[^/]+\\/(?:legacy-lineage-binding|native-legacy-result)\\/?$/i;\n"
+        },
+        {
+          "current": "    if (dedicatedPath.test(req.path)) return next();\n    // This exact native custody route owns its bounded original-byte parser.\n    // Case/trailing/query aliases are refused by that owning route, never\n    // admitted as alternate signed URLs or general-parser/auth fallbacks.\n    // These literal new-purpose handlers own original bytes and bounded\n    // receive lifetimes. Classification grants no authentication or effects.\n    if (ownsOriginalRequestBody(req)) return next();\n    if(req.method==='POST'&&req.path==='/device-auth/separation-evidence'){\n      res.setHeader('Cache-Control','no-store');\n      if(!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(req.headers['content-type']||'')\n        ||(req.headers['content-encoding']&&req.headers['content-encoding']!=='identity'))\n",
+          "prior": "    if (dedicatedPath.test(req.path)) return next();\n    // This exact native custody route owns its bounded original-byte parser.\n    // Case/trailing/query aliases are refused by that owning route, never\n    // admitted as alternate signed URLs or general-parser/auth fallbacks.\n    if(req.method==='POST'&&req.path==='/device-auth/private-custody')return next();\n    if(req.method==='POST'&&req.path==='/device-auth/private-custody-current-read')return next();\n    // These literal new-purpose handlers own original bytes and bounded\n    // receive lifetimes. Classification grants no authentication or effects.\n    if(req.method==='POST'&&[\n      '/device-auth/same-original-recovery/target',\n      '/device-auth/same-original-recovery/challenge',\n      '/device-auth/same-original-recovery/challenge-status',\n      '/device-auth/same-original-recovery/manager-preparation',\n      '/device-auth/private-custody-original-completion-read',\n      '/admin-api/device-security/same-original-recovery/approvals',\n      '/admin-api/device-security/same-original-recovery/approvals/original-status',\n    ].includes(req.path))return next();\n    if(req.method==='POST'&&req.path==='/device-auth/separation-evidence'){\n      res.setHeader('Cache-Control','no-store');\n      if(!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(req.headers['content-type']||'')\n        ||(req.headers['content-encoding']&&req.headers['content-encoding']!=='identity'))\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/native-provider-credential-observation-ci-wiring.mjs",
+      "current_sha256": "05b43126da0f3ba4c28d4f9462761b171c95749c2d788f1cc3f556f8c654573c",
+      "prior_sha256": "548e593cdea20ecbc1bb8b6b47afa7b35d350e5896e82af8614f58266f1b4d2b",
+      "hunks": [
+        {
+          "current": "import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';\nimport {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport {resolve} from 'node:path';\n",
+          "prior": "import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport {resolve} from 'node:path';\n"
+        },
+        {
+          "current": " return prior;\n}\nexport function verifyCredentialObservationWiring(source,root){\n const actual=readFileSync(resolve(root,'scripts/native-provider-credential-observation-ci-tests.mjs'),'utf8');\n const files=Object.fromEntries(Object.keys(pins).map(p=>{const source=readFileSync(resolve(root,p),'utf8');return[p,['src/request-json-parser.js','scripts/native-provider-credential-observation-sql-contract-tests.mjs'].includes(p)?restoreCurrentDepartureProofSource(p,source):p==='src/auth/device-credential-auth.js'?restoreSchedulerProofSource('NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING',source):p==='scripts/native-provider-credential-observation-http-tests.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',source):source];}));\n const prior=validate(source,actual,files);let hostile=0;\n for(const replacement of ['', '// '+statement,statement+'\\n'+statement,'if(false){'+statement+'}',statement.replace('await ',''),statement.replace(');',').catch(()=>{});')]){\n  assert.throws(()=>validate(source.replace(statement,replacement),actual,files));hostile++;\n }\n",
+          "prior": " return prior;\n}\nexport function verifyCredentialObservationWiring(source,root){\n const actual=readFileSync(resolve(root,'scripts/native-provider-credential-observation-ci-tests.mjs'),'utf8');\n const files=Object.fromEntries(Object.keys(pins).map(p=>{const source=readFileSync(resolve(root,p),'utf8');return[p,p==='src/auth/device-credential-auth.js'?restoreSchedulerProofSource('NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING',source):p==='scripts/native-provider-credential-observation-http-tests.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',source):source];}));\n const prior=validate(source,actual,files);let hostile=0;\n for(const replacement of ['', '// '+statement,statement+'\\n'+statement,'if(false){'+statement+'}',statement.replace('await ',''),statement.replace(');',').catch(()=>{});')]){\n  assert.throws(()=>validate(source.replace(statement,replacement),actual,files));hostile++;\n }\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/native-provider-credential-observation-sql-contract-tests.mjs",
+      "current_sha256": "9034cc24cac36f6ae57244b74830e5e2bd463b518989a46312413161c1e25029",
+      "prior_sha256": "03709358daf16e00882be2d7a4e330633b8070296f6495bb1678ab9307cfa585",
+      "hunks": [
+        {
+          "current": "import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';\nimport {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport {createHash} from 'node:crypto';\nimport {fileURLToPath} from 'node:url';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport {createHash} from 'node:crypto';\nimport {fileURLToPath} from 'node:url';\n"
+        },
+        {
+          "current": "  '4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db','NOT EXECUTABLE RECOVERY SPECIFICATION'])assert(sql.includes(x),x);\n return true;\n}\nexport function runCredentialObservationSqlContractTests(){\n let checks=0;for(const[p,h]of Object.entries(pins)){assert.equal(sha(p==='src/request-json-parser.js'?restoreCurrentDepartureProofSource(p,read(p)):read(p)),h,p);checks++;}\n const auth=restoreSchedulerProofSource('NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING',read('src/auth/device-credential-auth.js'));\n const removed=auth.replace(/\\/\\/ BEGIN native credential observation imports[^]*?\\/\\/ END native credential observation imports\\.\\n/,'')\n  .replace(/\\/\\/ BEGIN native credential observation proof\\.[^]*?\\/\\/ END native credential observation proof\\.\\n\\n/,'');\n assert.equal(sha(removed),'6e97fd2a8ebb5f1d87f81dd93697df9e052e8a97adeac9a7c6bd62e3c2d62660','reviewed current ordinary auth exact outside the observation blocks');checks++;\n const existing=read('src/native-provider-event-decisions.js'),current=read('src/native-provider-credential-observation.js');\n",
+          "prior": "  '4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db','NOT EXECUTABLE RECOVERY SPECIFICATION'])assert(sql.includes(x),x);\n return true;\n}\nexport function runCredentialObservationSqlContractTests(){\n let checks=0;for(const[p,h]of Object.entries(pins)){assert.equal(sha(read(p)),h,p);checks++;}\n const auth=read('src/auth/device-credential-auth.js');\n const removed=auth.replace(/\\/\\/ BEGIN native credential observation imports[^]*?\\/\\/ END native credential observation imports\\.\\n/,'')\n  .replace(/\\/\\/ BEGIN native credential observation proof\\.[^]*?\\/\\/ END native credential observation proof\\.\\n\\n/,'');\n assert.equal(sha(removed),'6e97fd2a8ebb5f1d87f81dd93697df9e052e8a97adeac9a7c6bd62e3c2d62660','reviewed current ordinary auth exact outside the observation blocks');checks++;\n const existing=read('src/native-provider-event-decisions.js'),current=read('src/native-provider-credential-observation.js');\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/native-provider-credential-observation-http-tests.mjs",
+      "current_sha256": "c0ba45a75ee91dfd056fca8f64679d0bd2a628f2be4f82b0962e2c34f22d89e1",
+      "prior_sha256": "956d8d2ff09e2d38602b361f042bc6fb82c1001a41e6961b17b4c2ee9bae19c9",
+      "hunks": [
+        {
+          "current": "import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';\nimport {restoreDeviceObservationProofSource} from './fixtures/current-scheduler-source-profiles.mjs';\nimport assert from 'node:assert/strict';\nimport express from 'express';\nimport http from 'node:http';\nimport {createHash,createHmac} from 'node:crypto';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport express from 'express';\nimport http from 'node:http';\nimport {createHash,createHmac} from 'node:crypto';\n"
+        },
+        {
+          "current": "}\nexport async function runCredentialObservationHttpTests(){\n const started=Date.now(),deadline=started+25000,sockets=new Set(),requests=new Set();let checks=0,scenario=null,port=null,closed=false;\n const check=(name,value)=>{assert(value,name);checks++;console.log('PASS HTTP',name);};\n for(const[p,h]of Object.entries(pins)){assert.equal(sha(p==='src/request-json-parser.js'?restoreCurrentDepartureProofSource(p,readFileSync(new URL(p,root),'utf8')):p==='src/auth/device-credential-auth.js'?restoreDeviceObservationProofSource(readFileSync(new URL(p,root),'utf8')):readFileSync(new URL(p,root))),h,p);checks++;}\n const protectedRecords={finish:Buffer.from('SYNTHETIC_PENDING_FINISH'),events:[{bytes:'original-event',status:'PENDING'}],navigation:['original-open']};\n const protectedBefore=serialize(protectedRecords);\n const app=express();app.disable('x-powered-by');\n app.use(createGeneralJsonMiddleware());\n",
+          "prior": "}\nexport async function runCredentialObservationHttpTests(){\n const started=Date.now(),deadline=started+25000,sockets=new Set(),requests=new Set();let checks=0,scenario=null,port=null,closed=false;\n const check=(name,value)=>{assert(value,name);checks++;console.log('PASS HTTP',name);};\n for(const[p,h]of Object.entries(pins)){assert.equal(sha(readFileSync(new URL(p,root))),h,p);checks++;}\n const protectedRecords={finish:Buffer.from('SYNTHETIC_PENDING_FINISH'),events:[{bytes:'original-event',status:'PENDING'}],navigation:['original-open']};\n const protectedBefore=serialize(protectedRecords);\n const app=express();app.disable('x-powered-by');\n app.use(createGeneralJsonMiddleware());\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/employee-message-source-admission-replay-contract-tests.mjs",
+      "current_sha256": "6b9e78fa10c7c5ad628d5b02182a2f37d63bffc807e4fdb32e5bcdde466d13e7",
+      "prior_sha256": "5d4f8280363a3de31afae3d255ff7cbf39762eed7fee6b295351ec455bd94ca5",
+      "hunks": [
+        {
+          "current": "import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';\nimport assert from 'node:assert/strict';\nimport {readFileSync,mkdtempSync,mkdirSync,copyFileSync,writeFileSync,unlinkSync,rmSync,symlinkSync} from 'node:fs';\nimport {tmpdir} from 'node:os';\nimport {join,dirname} from 'node:path';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {readFileSync,mkdtempSync,mkdirSync,copyFileSync,writeFileSync,unlinkSync,rmSync,symlinkSync} from 'node:fs';\nimport {tmpdir} from 'node:os';\nimport {join,dirname} from 'node:path';\n"
+        },
+        {
+          "current": "import {assertMessageManifest,readMessageSource,assertMessageTarget,compareMessageDelta,cleanupMessageTarget,\n MESSAGE_FILE,MESSAGE_SHA,MESSAGE_MANIFEST,MESSAGE_IDENTITY,PREPARE_PRIOR,PREPARE_CURRENT,PREPARE_GRANT} from './employee-message-source-admission-replay.mjs';\n\n// Pure/fake-only. This never launches Docker or supplies engine acceptance.\nawait withHistoricalNative289SourceFixture(fileURLToPath(new URL('../',import.meta.url)),async fixtureRoot=>{\nconst hash=x=>createHash('sha256').update(x).digest('hex'),clone=x=>structuredClone(x);\nlet checks=0;\nconst equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};\nconst rejects=fn=>{assert.throws(fn);checks++;};\nconst source=readMessageSource(fixtureRoot,{profile:'CURRENT_CANONICAL_289'});\nconst frozenBytes=readFileSync(new URL('./fixtures/native-provider-event-decision-historical-source-models.json',import.meta.url));\nequal(hash(frozenBytes),'30e660c3f708e1d1ca0f64547eaffcfbbca99059630b314361ae9797dc55cb0d');\nconst frozen=JSON.parse(frozenBytes).models.CURRENT_219;\nequal(frozen.source_commit,'53848431fd55b215affeb4663f233acffb506597');equal(frozen.rows_sha256,MESSAGE_MANIFEST);equal(hash(JSON.stringify(frozen.rows)),MESSAGE_MANIFEST);\n",
+          "prior": "import {assertMessageManifest,readMessageSource,assertMessageTarget,compareMessageDelta,cleanupMessageTarget,\n MESSAGE_FILE,MESSAGE_SHA,MESSAGE_MANIFEST,MESSAGE_IDENTITY,PREPARE_PRIOR,PREPARE_CURRENT,PREPARE_GRANT} from './employee-message-source-admission-replay.mjs';\n\n// Pure/fake-only. This never launches Docker or supplies engine acceptance.\nconst hash=x=>createHash('sha256').update(x).digest('hex'),clone=x=>structuredClone(x);\nlet checks=0;\nconst equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};\nconst rejects=fn=>{assert.throws(fn);checks++;};\nconst source=readMessageSource(undefined,{profile:'CURRENT_CANONICAL_289'});\nconst frozenBytes=readFileSync(new URL('./fixtures/native-provider-event-decision-historical-source-models.json',import.meta.url));\nequal(hash(frozenBytes),'30e660c3f708e1d1ca0f64547eaffcfbbca99059630b314361ae9797dc55cb0d');\nconst frozen=JSON.parse(frozenBytes).models.CURRENT_219;\nequal(frozen.source_commit,'53848431fd55b215affeb4663f233acffb506597');equal(frozen.rows_sha256,MESSAGE_MANIFEST);equal(hash(JSON.stringify(frozen.rows)),MESSAGE_MANIFEST);\n"
+        },
+        {
+          "current": " 'set statement_timeout=30000;set lock_timeout=5000;',\"{flag:'wx',mode:0o600}\",\"finally{cleanup();\",\n \"process.once('SIGINT',stop)\",\"process.once('SIGTERM',stop)\",'verifyEmployeeMessageSourceAdmissionDatabase({sql,target:',\n '4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db']){assert.ok(text.includes(required),required);checks++;}\n// Real Node CLI preflight, explicitly SOURCE ONLY. No --execute call anywhere.\nconst cli=JSON.parse(execFileSync(process.execPath,[join(fixtureRoot,'scripts/employee-message-source-admission-replay.mjs'),'--source-check-current'],{encoding:'utf8',timeout:10000}));\nequal(cli.scope,'SOURCE_ONLY_NO_ENGINE');equal(cli.migration_profile,'CURRENT_CANONICAL_289');equal(cli.manifest_sha256,source.manifest_sha256);equal(cli.canonical_manifest_sha256,source.canonical_manifest_sha256);equal(cli.migrations,source.migrations);equal(cli.message_boundary,source.message_boundary);\nequal(source.inputs.length,23);equal(Object.fromEntries(source.inputs.slice(0,-1).map(row=>[row.file,row.sha256])),CURRENT_MESSAGE_SOURCE_PINS);\nequal(currentCanonicalMessageProfile(source.migrations).message_boundary,{file:MESSAGE_FILE,sha256:MESSAGE_SHA,predecessor_count:209,predecessor_manifest_sha256:'f070f410e8c02c35a2d37780e6c2165975e731e50bf63a5bf0bd3ca6341480a9',following_migrations:79,following_manifest_sha256:'ff36e204a9169145903e92fa948e9195f51743d9c248ca4fd2f59b386f1a5ace'});\nrejects(()=>assertMessageManifest(source.migrations));rejects(()=>currentCanonicalMessageProfile(historicalMigrations));\n",
+          "prior": " 'set statement_timeout=30000;set lock_timeout=5000;',\"{flag:'wx',mode:0o600}\",\"finally{cleanup();\",\n \"process.once('SIGINT',stop)\",\"process.once('SIGTERM',stop)\",'verifyEmployeeMessageSourceAdmissionDatabase({sql,target:',\n '4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db']){assert.ok(text.includes(required),required);checks++;}\n// Real Node CLI preflight, explicitly SOURCE ONLY. No --execute call anywhere.\nconst cli=JSON.parse(execFileSync(process.execPath,[fileURLToPath(new URL('./employee-message-source-admission-replay.mjs',import.meta.url)),'--source-check-current'],{encoding:'utf8',timeout:10000}));\nequal(cli.scope,'SOURCE_ONLY_NO_ENGINE');equal(cli.migration_profile,'CURRENT_CANONICAL_289');equal(cli.manifest_sha256,source.manifest_sha256);equal(cli.canonical_manifest_sha256,source.canonical_manifest_sha256);equal(cli.migrations,source.migrations);equal(cli.message_boundary,source.message_boundary);\nequal(source.inputs.length,23);equal(Object.fromEntries(source.inputs.slice(0,-1).map(row=>[row.file,row.sha256])),CURRENT_MESSAGE_SOURCE_PINS);\nequal(currentCanonicalMessageProfile(source.migrations).message_boundary,{file:MESSAGE_FILE,sha256:MESSAGE_SHA,predecessor_count:209,predecessor_manifest_sha256:'f070f410e8c02c35a2d37780e6c2165975e731e50bf63a5bf0bd3ca6341480a9',following_migrations:79,following_manifest_sha256:'ff36e204a9169145903e92fa948e9195f51743d9c248ca4fd2f59b386f1a5ace'});\nrejects(()=>assertMessageManifest(source.migrations));rejects(()=>currentCanonicalMessageProfile(historicalMigrations));\n"
+        },
+        {
+          "current": "assert.ok(text.includes(\"const source=readMessageSource(),git=\"));checks++;\n// Actual maintained canonical reader and all Source pins, fresh owned copies.\nconst privateSource=mkdtempSync(join(tmpdir(),'custodial-message-source-contract-'));\ntry{\n const root=fixtureRoot;\n for(const file of ['supabase/canonical/migration-replay-order.json',...source.migrations.map(row=>'supabase/migrations/'+row.file),...source.inputs.map(row=>row.file)]){\n  mkdirSync(dirname(join(privateSource,file)),{recursive:true});copyFileSync(join(root,file),join(privateSource,file));\n }\n equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);\n",
+          "prior": "assert.ok(text.includes(\"const source=readMessageSource(),git=\"));checks++;\n// Actual maintained canonical reader and all Source pins, fresh owned copies.\nconst privateSource=mkdtempSync(join(tmpdir(),'custodial-message-source-contract-'));\ntry{\n const root=fileURLToPath(new URL('../',import.meta.url));\n for(const file of ['supabase/canonical/migration-replay-order.json',...source.migrations.map(row=>'supabase/migrations/'+row.file),...source.inputs.map(row=>row.file)]){\n  mkdirSync(dirname(join(privateSource,file)),{recursive:true});copyFileSync(join(root,file),join(privateSource,file));\n }\n equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);\n"
+        },
+        {
+          "current": "  corrupt(file,(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\\n')])));\n const extra=join(privateSource,'supabase/migrations/20261022000000_unowned.sql');writeFileSync(extra,'-- test-only unowned Source\\n',{flag:'wx'});try{rejects(()=>readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{unlinkSync(extra);}\n equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);\n}finally{rmSync(privateSource,{recursive:true});}\nconsole.log(JSON.stringify({status:'PASS',checks,scope:'Retained289 fake subprocess and source/manifest/delta/cleanup contracts only; no Docker/SQL/HTTP/JVM/provider',historical_source_fixture:true,current_inventory_files:315,current_canonical_members:311,engine_executed:false}));\n\n});\n",
+          "prior": "  corrupt(file,(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\\n')])));\n const extra=join(privateSource,'supabase/migrations/20261022000000_unowned.sql');writeFileSync(extra,'-- test-only unowned Source\\n',{flag:'wx'});try{rejects(()=>readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{unlinkSync(extra);}\n equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);\n}finally{rmSync(privateSource,{recursive:true});}\nconsole.log(JSON.stringify({status:'PASS',checks,scope:'fake subprocess and source/manifest/delta/cleanup contracts only; no Docker/SQL/HTTP/JVM/provider',engine_executed:false}));\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/employee-message-source-admission-ci-tests.mjs",
+      "current_sha256": "fe393174ae800a890a83204169dc81f0777d812d3c6295f30211c1b5b6912c66",
+      "prior_sha256": "65240d3d4b68a6520da8ef35e0eeabcf6725ef61656c5ee8dadc31f2b42cffc8",
+      "hunks": [
+        {
+          "current": "import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';\nimport {pathToFileURL} from 'node:url';\nimport {join} from 'node:path';\n// Mandatory called source proof; importing an export-only test is not execution.\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport {createHash} from 'node:crypto';\n",
+          "prior": "// Mandatory called source proof; importing an export-only test is not execution.\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport {createHash} from 'node:crypto';\n"
+        },
+        {
+          "current": "  '840931765d9ae9ad3f5f6223e801ec9a34bb32043717b99c494282082f4ccefb');\nconst dispatcher=await runEmployeeMessageSourceAdmissionTests({sourcePath:predecessor});\nassert.equal(dispatcher.status,'PASS');\nassert.equal(dispatcher.checks,256);\nconst migration=await withHistoricalNative289SourceFixture(fileURLToPath(new URL('..',import.meta.url)),async fixtureRoot=>{\n const {runEmployeeMessageMigrationSourceTests}=await import(pathToFileURL(join(fixtureRoot,'scripts/employee-message-source-admission-tests.mjs')).href);\n return await runEmployeeMessageMigrationSourceTests();\n});\nassert.equal(migration.status,'PASS');\nassert.equal(migration.checks,64);\nassert.equal(migration.predecessor_checks.status,'PASS');\nassert.equal(migration.predecessor_checks.checks,67);\n",
+          "prior": "  '840931765d9ae9ad3f5f6223e801ec9a34bb32043717b99c494282082f4ccefb');\nconst dispatcher=await runEmployeeMessageSourceAdmissionTests({sourcePath:predecessor});\nassert.equal(dispatcher.status,'PASS');\nassert.equal(dispatcher.checks,256);\nconst migration=await runEmployeeMessageMigrationSourceTests();\nassert.equal(migration.status,'PASS');\nassert.equal(migration.checks,64);\nassert.equal(migration.predecessor_checks.status,'PASS');\nassert.equal(migration.predecessor_checks.checks,67);\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/fixtures/current-manager-publication-source.mjs",
+      "current_sha256": "2bea62e5724a4e550ab92cce13a7f4be600ef7e7ee462c1e35a4c860702c73de",
+      "prior_sha256": "fb8ac53c6c6925ce63385bd13b0f68cc27572c0976efa1943bd7cee32eafaad1",
+      "hunks": [
+        {
+          "current": "import {readHistoricalOwnerConfig} from './historical-owner-config-source.mjs';\nimport assert from 'node:assert/strict';\nimport {readFileSync, readdirSync} from 'node:fs';\nimport {createHash} from 'node:crypto';\nimport {loadSixPersonAbsenceSource} from './six-person-absence-source.mjs';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {readFileSync, readdirSync} from 'node:fs';\nimport {createHash} from 'node:crypto';\nimport {loadSixPersonAbsenceSource} from './six-person-absence-source.mjs';\n"
+        },
+        {
+          "current": "// Synthetic setup adapter only. This does not register a production source,\n// reinterpret the approved nine-person pattern, or optimize any assignment.\nexport function loadCurrentManagerPublicationFixture() {\n  const current=loadSixPersonAbsenceSource(),original=loadFullNineV6Source();\n  const configBytes=readHistoricalOwnerConfig();\n  assert.equal(sha(configBytes),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');\n  const config=JSON.parse(configBytes),source=current.compilerInput,week=source.serviceDate;\n  assert.equal(week,'2026-10-05');\n  assert.equal(source.version.assignments.length,323);\n",
+          "prior": "// Synthetic setup adapter only. This does not register a production source,\n// reinterpret the approved nine-person pattern, or optimize any assignment.\nexport function loadCurrentManagerPublicationFixture() {\n  const current=loadSixPersonAbsenceSource(),original=loadFullNineV6Source();\n  const configBytes=readFileSync(new URL('../../config/custodial-six-person-static-20261005.json',import.meta.url));\n  assert.equal(sha(configBytes),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');\n  const config=JSON.parse(configBytes),source=current.compilerInput,week=source.serviceDate;\n  assert.equal(week,'2026-10-05');\n  assert.equal(source.version.assignments.length,323);\n"
+        }
+      ]
+    },
+    {
+      "path": "src/static-weekly-lunch-derivation.js",
+      "current_sha256": "cee564fabe167ea0906b2a8ce3f923c7b99862c33965c7237bf32cc3472db24c",
+      "prior_sha256": "42eb82ce146867bc69215430644b841ab7aeab39baf95b8c9cda101ea41b4324",
+      "hunks": [
+        {
+          "current": " */\nimport { createHash } from 'node:crypto';\nimport { canonicalJson, normalizeWindow } from './static-weekly-schedule-model.js';\nimport { generateStaticWeeklySchedulingProgram, STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE,\n  weekdayDate,postgresJsonbContentDigest } from './static-weekly-schedule-program.js';\nimport {validateFullHourLunchPolicy,FULL_HOUR_LUNCH_POLICY_SCHEMA} from './static-weekly-lunch-policy.js';\n\nexport const LUNCH_COVERAGE_SCHEMA = 'memphis-zoo.static-weekly-lunch-candidate.v1';\nconst POLICY = 'owner-20260921-two-nearby-full-hour-v1';\nconst compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;\n",
+          "prior": " */\nimport { createHash } from 'node:crypto';\nimport { canonicalJson, normalizeWindow } from './static-weekly-schedule-model.js';\nimport { generateStaticWeeklySchedulingProgram, STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE,\n  weekdayDate } from './static-weekly-schedule-program.js';\n\nexport const LUNCH_COVERAGE_SCHEMA = 'memphis-zoo.static-weekly-lunch-candidate.v1';\nconst POLICY = 'owner-20260921-two-nearby-full-hour-v1';\nconst compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;\n"
+        },
+        {
+          "current": "  const explicitCapacityNoBreak = context.slot?.kind === 'CONTRACTOR_CAPACITY' && availability.breakChoice === 'NONE' && availability.lunch === null;\n  if (!availability.lunch && !explicitCapacityNoBreak) return false;\n  if (availability.lunch) {\n    const helperLunch=windowOf(availability.lunch);\n    if(!contains(windowOf(availability.shift),helperLunch) || overlap(helperLunch,lunch)) return false;\n  }\n  return !(availability.blockedWindows||[]).some(window=>overlap(windowOf(window),lunch));\n}\n\n",
+          "prior": "  const explicitCapacityNoBreak = context.slot?.kind === 'CONTRACTOR_CAPACITY' && availability.breakChoice === 'NONE' && availability.lunch === null;\n  if (!availability.lunch && !explicitCapacityNoBreak) return false;\n  if (availability.lunch) {\n    const helperLunch=windowOf(availability.lunch);\n    if(helperLunch.endMinute-helperLunch.startMinute!==60 || !contains(windowOf(availability.shift),helperLunch) || overlap(helperLunch,lunch)) return false;\n  }\n  return !(availability.blockedWindows||[]).some(window=>overlap(windowOf(window),lunch));\n}\n\n"
+        },
+        {
+          "current": "  }\n  return {cost,evidence};\n}\n\nfunction fullHourPartition(planned,areas,costRows,contexts,lunch){\n  const refused=reason=>({status:'REVIEW_REQUIRED',reason,helperSlotIds:[],assignments:[]});\n  if(!planned||canonicalJson(planned.window)!==canonicalJson({start:lunch.start,end:lunch.end}))\n    return refused('full_hour_lunch_current_owner_or_window_changed');\n  const families=new Set(areas.flatMap(area=>area.entries.map(entry=>entry.work.locationCodeSnapshot)));\n  if(families.size!==planned.areas.size||[...families].some(f=>!planned.areas.has(f)))\n    return refused('full_hour_lunch_original_areas_changed');\n  const assignments=[];let totalDistance=0;\n  for(const area of areas){\n    const helpers=new Set(area.entries.map(entry=>planned.areas.get(entry.work.locationCodeSnapshot)));\n    if(helpers.size!==1)return refused('full_hour_lunch_group_split');\n    const covererSlotId=[...helpers][0],row=costRows.find(row=>row.areaId===area.areaId);\n    if(!contexts.has(covererSlotId)||!Object.hasOwn(row.costs,covererSlotId))\n      return refused('full_hour_lunch_planned_helper_unavailable');\n    totalDistance+=row.costs[covererSlotId];assignments.push({areaId:area.areaId,covererSlotId,distance:row.costs[covererSlotId]});\n  }\n  if(!areas.length)return {status:'NO_AREAS',helperSlotIds:[],assignments:[],totalDistance:0};\n  const helperSlotIds=[...new Set(assignments.map(a=>a.covererSlotId))].sort(compare);\n  // An immutable full-hour policy names its complete coverer set. It can\n  // deliberately choose one qualified helper even when another is available.\n  // The legacy planner still selects its own one/two-helper partition below.\n  if(helperSlotIds.length<1||helperSlotIds.length>2)return refused('full_hour_lunch_source_helper_limit');\n  return {status:'PLANNED',helperSlotIds,assignments,totalDistance,\n    fallback:null};\n}\n\n/** Internal pure derivation. Call the verified-result wrapper at trust boundaries. */\nexport function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignments) {\n  if (!(problem?.states instanceof Map) || !(problem?.edges instanceof Map)\n    || !(problem?.incumbencyByDaySlot instanceof Map) || !Array.isArray(problem.work)\n    || !Array.isArray(weeklyAssignments)) fail('lunch_verified_problem_required');\n  const byWork=new Map(problem.work.map(work=>[work.key,work]));\n  const fullHourLoans=validateFullHourLunchPolicy(problem.version?.lunchCoveragePolicy,postgresJsonbContentDigest);\n  const currentOwners=new Set();\n  if(fullHourLoans)for(const [day,state]of problem.states)for(const [slot,availability]of state.availability){\n    const owner=problem.incumbencyByDaySlot.get(`${day}\\0${slot}`);\n    if(availability.status==='working'&&availability.breakChoice!=='NONE'&&(owner?.personId||owner?.kind==='CONTRACTOR_CAPACITY'))\n      currentOwners.add(`${day}\\0${slot}`);\n  }\n  const fullHourRosterCurrent=!fullHourLoans||(currentOwners.size===fullHourLoans.size&&[...currentOwners].every(k=>fullHourLoans.has(k)));\n  const assigned=weeklyAssignments.filter(row=>row.status==='ASSIGNED');\n  const lunches=[];\n  for(const [day,state] of [...problem.states].sort(([a],[b])=>a-b)) {\n    const dayRows=assigned.filter(row=>row.dayOfWeek===day);\n",
+          "prior": "  }\n  return {cost,evidence};\n}\n\n/** Internal pure derivation. Call the verified-result wrapper at trust boundaries. */\nexport function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignments) {\n  if (!(problem?.states instanceof Map) || !(problem?.edges instanceof Map)\n    || !(problem?.incumbencyByDaySlot instanceof Map) || !Array.isArray(problem.work)\n    || !Array.isArray(weeklyAssignments)) fail('lunch_verified_problem_required');\n  const byWork=new Map(problem.work.map(work=>[work.key,work]));\n  const assigned=weeklyAssignments.filter(row=>row.status==='ASSIGNED');\n  const lunches=[];\n  for(const [day,state] of [...problem.states].sort(([a],[b])=>a-b)) {\n    const dayRows=assigned.filter(row=>row.dayOfWeek===day);\n"
+        },
+        {
+          "current": "      const lunch=windowOf(availability.lunch);\n      const base={serviceDate,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,\n        ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),\n        window:{start:lunch.start,end:lunch.end},loanId:digest({policy:POLICY,input:problem.inputDigest,serviceDate,ownerSlotId,start:lunch.start,end:lunch.end})};\n      if(!contains(windowOf(availability.shift),lunch)) {\n        lunches.push({...base,status:'REVIEW_REQUIRED',reason:'scheduled_lunch_outside_shift',responsibilities:[]});continue;\n      }\n      const areas=lunchAreas(rowsBySlot.get(ownerSlotId)||[],byWork,lunch);\n      const contexts=new Map(),costRows=areas.map(area=>({areaId:area.areaId,costs:Object.create(null)})),evidence=new Map();\n      for(const slot of problem.slots) {\n        if(slot.id===ownerSlotId)continue;\n        const context=problem.availabilityByDaySlot.get(`${day}\\0${slot.id}`);\n        const person=problem.incumbencyByDaySlot.get(`${day}\\0${slot.id}`);\n        if((!person?.personId && person?.kind!=='CONTRACTOR_CAPACITY') || !availableForLunch(context,lunch))continue;\n        let anchors=normalAnchors(rowsBySlot.get(slot.id)||[],byWork,lunch);\n        // A full-hour policy can name an available helper without current\n        // area custody. Its accepted route anchor still supplies a real base.\n        if(!anchors.length && fullHourLoans\n          && id(context.availability.acceptedRouteAnchorLocationId)\n          && typeof context.availability.acceptedRouteProvenance==='string'\n          && context.availability.acceptedRouteProvenance.trim())\n          anchors=[context.availability.acceptedRouteAnchorLocationId];\n        if(!anchors.length)continue;\n        contexts.set(slot.id,{...context,person});\n        for(let i=0;i<areas.length;i++) {\n          const proximity=costForArea(areas[i],slot.id,context,anchors,problem.edges);\n          if(proximity){costRows[i].costs[slot.id]=proximity.cost;evidence.set(`${areas[i].areaId}\\0${slot.id}`,proximity.evidence);}\n        }\n      }\n      const partition=fullHourLoans\n        ?fullHourPartition(fullHourRosterCurrent?fullHourLoans.get(`${day}\\0${ownerSlotId}`):null,areas,costRows,contexts,lunch)\n        :partitionLunchAreas(costRows,[...contexts.keys()]);\n      const responsibilities=(partition.assignments||[]).map(item=>{\n        const area=areas.find(area=>area.areaId===item.areaId),person=contexts.get(item.covererSlotId).person;\n        return {responsibilityId:digest({loanId:base.loanId,areaId:area.areaId,covererSlotId:item.covererSlotId}),\n          areaId:area.areaId,covererSlotId:item.covererSlotId,covererPersonId:person.personId,\n",
+          "prior": "      const lunch=windowOf(availability.lunch);\n      const base={serviceDate,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,\n        ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),\n        window:{start:lunch.start,end:lunch.end},loanId:digest({policy:POLICY,input:problem.inputDigest,serviceDate,ownerSlotId,start:lunch.start,end:lunch.end})};\n      if(lunch.endMinute-lunch.startMinute!==60 || !contains(windowOf(availability.shift),lunch)) {\n        lunches.push({...base,status:'REVIEW_REQUIRED',reason:'scheduled_lunch_must_be_one_hour_within_shift',responsibilities:[]});continue;\n      }\n      const areas=lunchAreas(rowsBySlot.get(ownerSlotId)||[],byWork,lunch);\n      const contexts=new Map(),costRows=areas.map(area=>({areaId:area.areaId,costs:Object.create(null)})),evidence=new Map();\n      for(const slot of problem.slots) {\n        if(slot.id===ownerSlotId)continue;\n        const context=problem.availabilityByDaySlot.get(`${day}\\0${slot.id}`);\n        const person=problem.incumbencyByDaySlot.get(`${day}\\0${slot.id}`);\n        if((!person?.personId && person?.kind!=='CONTRACTOR_CAPACITY') || !availableForLunch(context,lunch))continue;\n        const anchors=normalAnchors(rowsBySlot.get(slot.id)||[],byWork,lunch);\n        if(!anchors.length)continue;\n        contexts.set(slot.id,{...context,person});\n        for(let i=0;i<areas.length;i++) {\n          const proximity=costForArea(areas[i],slot.id,context,anchors,problem.edges);\n          if(proximity){costRows[i].costs[slot.id]=proximity.cost;evidence.set(`${areas[i].areaId}\\0${slot.id}`,proximity.evidence);}\n        }\n      }\n      const partition=partitionLunchAreas(costRows,[...contexts.keys()]);\n      const responsibilities=(partition.assignments||[]).map(item=>{\n        const area=areas.find(area=>area.areaId===item.areaId),person=contexts.get(item.covererSlotId).person;\n        return {responsibilityId:digest({loanId:base.loanId,areaId:area.areaId,covererSlotId:item.covererSlotId}),\n          areaId:area.areaId,covererSlotId:item.covererSlotId,covererPersonId:person.personId,\n"
+        },
+        {
+          "current": "          ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),\n          coveragePurpose:'lunch_coverage',proximityEvidence:evidence.get(`${area.areaId}\\0${item.covererSlotId}`),\n          checkDeadlinePolicy:'inherit_existing_90_minute_deadline',createsDeepClean:false,\n          segments:area.entries.map(entry=>({planWorkId:entry.row.planWorkId,workId:entry.row.workId,\n            serviceMode:entry.work.serviceMode,\n            ...(fullHourLoans?{normalWindow:{start:minuteTime(entry.start),end:minuteTime(entry.end)}}:{}),\n            window:fullHourLoans?{start:lunch.start,end:lunch.end}:{start:minuteTime(entry.start),end:minuteTime(entry.end)},\n            includedLocations:clone(entry.work.includedLocations)}))};\n      });\n      lunches.push({...base,status:partition.status,reason:partition.reason||null,\n        helperSlotIds:partition.helperSlotIds,fallback:partition.fallback||null,totalDistance:partition.totalDistance??null,\n",
+          "prior": "          ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),\n          coveragePurpose:'lunch_coverage',proximityEvidence:evidence.get(`${area.areaId}\\0${item.covererSlotId}`),\n          checkDeadlinePolicy:'inherit_existing_90_minute_deadline',createsDeepClean:false,\n          segments:area.entries.map(entry=>({planWorkId:entry.row.planWorkId,workId:entry.row.workId,\n            serviceMode:entry.work.serviceMode,window:{start:minuteTime(entry.start),end:minuteTime(entry.end)},\n            includedLocations:clone(entry.work.includedLocations)}))};\n      });\n      lunches.push({...base,status:partition.status,reason:partition.reason||null,\n        helperSlotIds:partition.helperSlotIds,fallback:partition.fallback||null,totalDistance:partition.totalDistance??null,\n"
+        },
+        {
+          "current": "          startKey:digest({loanId:base.loanId,slot,event:'start'}),endKey:digest({loanId:base.loanId,slot,event:'end'}),\n          startTime:lunch.start,endTime:lunch.end,deliveryState:'NOT_ENQUEUED'}))});\n    }\n  }\n  if(fullHourLoans){\n    const byLocation=new Map(),conflicts=new Set();\n    for(const loan of lunches)for(const responsibility of loan.responsibilities||[])for(const segment of responsibility.segments)\n      for(const location of segment.includedLocations){\n        const key=`${loan.serviceDate}\\0${location.locationId}`,prior=byLocation.get(key)||[];\n        const item={loan,recipient:responsibility.covererSlotId,window:windowOf(segment.window)};\n        for(const other of prior)if(other.recipient!==item.recipient&&overlap(other.window,item.window)){\n          conflicts.add(other.loan);conflicts.add(loan);\n        }\n        prior.push(item);byLocation.set(key,prior);\n      }\n    for(const loan of conflicts)Object.assign(loan,{status:'REVIEW_REQUIRED',reason:'full_hour_lunch_conflicting_area',\n      helperSlotIds:[],responsibilities:[],notificationIntents:[]});\n  }\n  return {schema:LUNCH_COVERAGE_SCHEMA,policy:fullHourLoans?FULL_HOUR_LUNCH_POLICY_SCHEMA:POLICY,publicationAuthority:'NOT_PUBLISHED',\n    status:lunches.some(lunch=>lunch.status==='REVIEW_REQUIRED')?'REVIEW_REQUIRED':'PLANNED',\n    sourceInputDigest:problem.inputDigest,weekStart:problem.serviceDate,lunches};\n}\n\n",
+          "prior": "          startKey:digest({loanId:base.loanId,slot,event:'start'}),endKey:digest({loanId:base.loanId,slot,event:'end'}),\n          startTime:lunch.start,endTime:lunch.end,deliveryState:'NOT_ENQUEUED'}))});\n    }\n  }\n  return {schema:LUNCH_COVERAGE_SCHEMA,policy:POLICY,publicationAuthority:'NOT_PUBLISHED',\n    status:lunches.some(lunch=>lunch.status==='REVIEW_REQUIRED')?'REVIEW_REQUIRED':'PLANNED',\n    sourceInputDigest:problem.inputDigest,weekStart:problem.serviceDate,lunches};\n}\n\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/static-weekly-manager-operation-tests.mjs",
+      "current_sha256": "063c06a02969f9f73e7a4752cd1c7ae338c5e66e1a0ab86ac93bbf7c26de925e",
+      "prior_sha256": "65bc7b8d4b14ab6a026b593d0fcebbcbb2395aa83e733a22c5eae9130422f69a",
+      "hunks": [
+        {
+          "current": "import {runHistoricalManagerOperationProof} from './fixtures/historical-manager-operation-proof.mjs';\nawait runHistoricalManagerOperationProof();\nawait import('./initial-manual-activation-deadline-tests.mjs');\nawait import('./scheduling-current310-snapshot-context-tests.mjs');\n// Separately identified R007 current-source successor. Original test and historical block are preserved.\nimport assert from 'node:assert/strict';\nimport {EventEmitter} from 'node:events';\nimport {beginBoundedManagerRequest,MANAGER_OPERATION_MILLISECONDS,CLEANUP_RESERVE_MILLISECONDS} from './fixtures/static-weekly-manager-operation-before-general-owner.mjs';\nimport {beginBoundedManagerRequest as beginCurrentBoundedManagerRequest,MANAGER_OPERATION_MILLISECONDS as CURRENT_MANAGER_OPERATION_MILLISECONDS,CLEANUP_RESERVE_MILLISECONDS as CURRENT_CLEANUP_RESERVE_MILLISECONDS} from '../src/static-weekly-manager-operation.js';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {EventEmitter} from 'node:events';\nimport {beginBoundedManagerRequest,MANAGER_OPERATION_MILLISECONDS,CLEANUP_RESERVE_MILLISECONDS} from './fixtures/static-weekly-manager-operation-before-general-owner.mjs';\nimport {beginBoundedManagerRequest as beginCurrentBoundedManagerRequest,MANAGER_OPERATION_MILLISECONDS as CURRENT_MANAGER_OPERATION_MILLISECONDS,CLEANUP_RESERVE_MILLISECONDS as CURRENT_CLEANUP_RESERVE_MILLISECONDS} from '../src/static-weekly-manager-operation.js';\n"
+        },
+        {
+          "current": "// never a claim about current broad static-weekly/approved-reader admission.\nlet currentChecks=0;const currentSame=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);currentChecks++;};\nconst sourceSha=path=>createHash('sha256').update(readFileSync(new URL(path,import.meta.url))).digest('hex');\ncurrentSame(sourceSha('./fixtures/static-weekly-manager-operation-before-general-owner.mjs'),'74510b9c0f65f6ad03e523e7bd7ff5b0d4af859ec8939044781bfce58797c717','exact historical208368 Source');\ncurrentSame(sourceSha('../src/static-weekly-manager-operation.js'),'5ceffc972ea3c23ae27b47db5974e4d707923e1431ec8200a55117514ca242f6','exact current manager owner Source');\ncurrentSame(CURRENT_MANAGER_OPERATION_MILLISECONDS,60000,'same absolute owner budget');currentSame(CURRENT_CLEANUP_RESERVE_MILLISECONDS,5000,'same interior cleanup reserve');\nfor(const path of ['/static-weekly/manager-snapshot','/static-weekly/recurring-adaptation/preview//','/static-weekly/recurring-adaptation/preview-extra','/static-weekly/approved-initial/confirm','/static-weekly/staffing-commands/confirm']){\n const f=fixture(path,'POST',beginCurrentBoundedManagerRequest);currentSame(f.context.deadlineAt,60100,'all static-weekly POST starts at original ingress');currentSame(f.context.readOnly,false,'POST is not a readonly owner');currentSame(f.timer.delay,55000,'same reserve');f.finish();currentSame(f.timer,null,'normal completion clears exact timer');\n}\nfor(const path of ['/static-weekly/manager-snapshot','/static-weekly/manual-activation/roster','/static-weekly/manual-activation/outcome','/static-weekly/approved-choices','/static-weekly/APPROVED-CHOICES/','/static-weekly/APPROVED-INITIAL/selection/','/static-weekly/approved-initial/confirmations/owned-original','/static-weekly/recurring-adaptation/confirmations/owned-original','/static-weekly/staffing-commands','/static-weekly/staffing-commands/owned-original']){\n const f=fixture(path,'GET',beginCurrentBoundedManagerRequest);currentSame(f.context.deadlineAt,60100,'approved original reader shares same ingress budget');currentSame(f.context.readOnly,true,'actual approved GET owner is readonly');f.finish();currentSame(f.timer,null,'reader finish clears timer');\n}\nfor(const [path,method]of [['/static-weekly/approved-choices-extra','GET'],['/static-weekly/approved-choices/extra','GET'],['/outside/static-weekly','POST'],['/static-weekly/manager-snapshot-extra','GET'],['/static-weekly/approved-initial/selection-extra','GET'],['/static-weekly/approved-initial/confirmations/','GET']]){\n const f=fixture(path,method,beginCurrentBoundedManagerRequest);currentSame(f.context,null,'unrelated current route gets no owner');currentSame(f.timer,null,'unrelated current route gets no timer');\n}\n{\n const f=fixture('/static-weekly/approved-initial/selection','GET',beginCurrentBoundedManagerRequest);f.expire();currentSame(f.context.signal.aborted,true,'readonly wait aborts at original deadline');currentSame(f.status,503,'expired prelease readonly work unavailable');currentSame(f.body.code,'static_weekly_recurring_operation_deadline_exceeded','typed deadline unchanged');currentSame(f.timer,null,'expired response clears timer');\n",
+          "prior": "// never a claim about current broad static-weekly/approved-reader admission.\nlet currentChecks=0;const currentSame=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);currentChecks++;};\nconst sourceSha=path=>createHash('sha256').update(readFileSync(new URL(path,import.meta.url))).digest('hex');\ncurrentSame(sourceSha('./fixtures/static-weekly-manager-operation-before-general-owner.mjs'),'74510b9c0f65f6ad03e523e7bd7ff5b0d4af859ec8939044781bfce58797c717','exact historical208368 Source');\ncurrentSame(sourceSha('../src/static-weekly-manager-operation.js'),'ae546852ebde937d1b75f2cb6db35cdfcdc8aea3bc44e5da400076e995e8a32f','exact current general owner Source');\ncurrentSame(CURRENT_MANAGER_OPERATION_MILLISECONDS,60000,'same absolute owner budget');currentSame(CURRENT_CLEANUP_RESERVE_MILLISECONDS,5000,'same interior cleanup reserve');\nfor(const path of ['/static-weekly/manager-snapshot','/static-weekly/recurring-adaptation/preview//','/static-weekly/recurring-adaptation/preview-extra','/static-weekly/approved-initial/confirm','/static-weekly/staffing-commands/confirm']){\n const f=fixture(path,'POST',beginCurrentBoundedManagerRequest);currentSame(f.context.deadlineAt,60100,'all static-weekly POST starts at original ingress');currentSame(f.context.readOnly,false,'POST is not a readonly owner');currentSame(f.timer.delay,55000,'same reserve');f.finish();currentSame(f.timer,null,'normal completion clears exact timer');\n}\nfor(const path of ['/static-weekly/APPROVED-INITIAL/selection/','/static-weekly/approved-initial/confirmations/owned-original','/static-weekly/recurring-adaptation/confirmations/owned-original','/static-weekly/staffing-commands','/static-weekly/staffing-commands/owned-original']){\n const f=fixture(path,'GET',beginCurrentBoundedManagerRequest);currentSame(f.context.deadlineAt,60100,'approved original reader shares same ingress budget');currentSame(f.context.readOnly,true,'actual approved GET owner is readonly');f.finish();currentSame(f.timer,null,'reader finish clears timer');\n}\nfor(const [path,method]of [['/outside/static-weekly','POST'],['/static-weekly/manager-snapshot','GET'],['/static-weekly/approved-initial/selection-extra','GET'],['/static-weekly/approved-initial/confirmations/','GET']]){\n const f=fixture(path,method,beginCurrentBoundedManagerRequest);currentSame(f.context,null,'unrelated current route gets no owner');currentSame(f.timer,null,'unrelated current route gets no timer');\n}\n{\n const f=fixture('/static-weekly/approved-initial/selection','GET',beginCurrentBoundedManagerRequest);f.expire();currentSame(f.context.signal.aborted,true,'readonly wait aborts at original deadline');currentSame(f.status,503,'expired prelease readonly work unavailable');currentSame(f.body.code,'static_weekly_recurring_operation_deadline_exceeded','typed deadline unchanged');currentSame(f.timer,null,'expired response clears timer');\n"
+        },
+        {
+          "current": "}\n{\n const f=fixture('/static-weekly/manager-snapshot','POST',beginCurrentBoundedManagerRequest);f.res.emit('close');currentSame(f.context.signal.aborted,true,'current premature close aborts original owner');currentSame(f.timer,null,'close clears owned timer');\n}\n{ const f=fixture('/static-weekly/approved-choices','GET',beginCurrentBoundedManagerRequest);f.expire();currentSame(f.context.signal.aborted,true,'choices keeps original ingress deadline');currentSame(f.status,503,'choices timeout fails closed');currentSame(f.timer,null,'choices deadline clears timer'); }\n// CURRENT_OWNER_COVERAGE_END\nconsole.log(JSON.stringify({status:'PASS',checks,currentChecks,currentOwnerSourceSha256:sourceSha('../src/static-weekly-manager-operation.js'),historicalOwnerSourceSha256:sourceSha('./fixtures/static-weekly-manager-operation-before-general-owner.mjs'),scope:'original28 frozen208368 route cases plus actual current allPOST/approvedGET ingress/cleanup; no HTTP/SQL/solver'}));\n",
+          "prior": "}\n{\n const f=fixture('/static-weekly/manager-snapshot','POST',beginCurrentBoundedManagerRequest);f.res.emit('close');currentSame(f.context.signal.aborted,true,'current premature close aborts original owner');currentSame(f.timer,null,'close clears owned timer');\n}\n// CURRENT_OWNER_COVERAGE_END\nconsole.log(JSON.stringify({status:'PASS',checks,currentChecks,currentOwnerSourceSha256:sourceSha('../src/static-weekly-manager-operation.js'),historicalOwnerSourceSha256:sourceSha('./fixtures/static-weekly-manager-operation-before-general-owner.mjs'),scope:'original28 frozen208368 route cases plus actual current allPOST/approvedGET ingress/cleanup; no HTTP/SQL/solver'}));\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/static-weekly-manager-ingress-ci-tests.mjs",
+      "current_sha256": "590bd245ca21812c9d32b0132061af8a974234793c0253266d9a5dcfa912d6b9",
+      "prior_sha256": "fa5c30d628cc15c1543eb87d057b055df2475450fee388a1c04ebfeda43a78e1",
+      "hunks": [
+        {
+          "current": " if(typeof expected==='number'){\n  const proof=JSON.parse(result.stdout.trim().split('\\n').at(-1));\n  assert.equal(proof.status,'PASS');assert.equal(proof.checks,expected);\n  if(file==='scripts/static-weekly-manager-operation-tests.mjs'){\n   assert.equal(proof.currentChecks,78);\n   assert.equal(proof.currentOwnerSourceSha256,'5ceffc972ea3c23ae27b47db5974e4d707923e1431ec8200a55117514ca242f6');\n   assert.equal(proof.historicalOwnerSourceSha256,'74510b9c0f65f6ad03e523e7bd7ff5b0d4af859ec8939044781bfce58797c717');\n  }\n }else assert.equal(result.stdout.trim().split('\\n').filter(x=>x===expected).length,1);\n receipts.push({file,pid:result.receipt.pid,groupAbsent:result.receipt.groupAbsent,elapsedMs:result.receipt.elapsedMs});\n",
+          "prior": " if(typeof expected==='number'){\n  const proof=JSON.parse(result.stdout.trim().split('\\n').at(-1));\n  assert.equal(proof.status,'PASS');assert.equal(proof.checks,expected);\n  if(file==='scripts/static-weekly-manager-operation-tests.mjs'){\n   assert.equal(proof.currentChecks,56);\n   assert.equal(proof.currentOwnerSourceSha256,'ae546852ebde937d1b75f2cb6db35cdfcdc8aea3bc44e5da400076e995e8a32f');\n   assert.equal(proof.historicalOwnerSourceSha256,'74510b9c0f65f6ad03e523e7bd7ff5b0d4af859ec8939044781bfce58797c717');\n  }\n }else assert.equal(result.stdout.trim().split('\\n').filter(x=>x===expected).length,1);\n receipts.push({file,pid:result.receipt.pid,groupAbsent:result.receipt.groupAbsent,elapsedMs:result.receipt.elapsedMs});\n"
+        }
+      ]
+    },
+    {
+      "path": "src/static-weekly-lunch-authority-adapter.js",
+      "current_sha256": "bdaa5a628595b5fb670a127ed63cd06c9967926e3ce8ba5b7929aadde8ae7e65",
+      "prior_sha256": "b8d7461215bf0444ed4d462cb9989d6dec9d795ec156f7f31c3d73601c001999",
+      "hunks": [
+        {
+          "current": "import { postgresJsonbContentDigest } from './static-weekly-schedule-compiler.js';\nimport { canonicalJson,contentDigest } from './static-weekly-schedule-model.js';\nimport { createIndependentlyVerifiedStaticWeeklyLunchCandidate } from './static-weekly-schedule-verifier.js';\nimport {\n  createStaticWeeklyLunchCoverageCandidate,\n  verifyStaticWeeklyLunchCoverageCandidate,\n",
+          "prior": "import { postgresJsonbContentDigest } from './static-weekly-schedule-compiler.js';\nimport { canonicalJson } from './static-weekly-schedule-model.js';\nimport { createIndependentlyVerifiedStaticWeeklyLunchCandidate } from './static-weekly-schedule-verifier.js';\nimport {\n  createStaticWeeklyLunchCoverageCandidate,\n  verifyStaticWeeklyLunchCoverageCandidate,\n"
+        },
+        {
+          "current": "  if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });\n  return finishLunchAuthorityDocument(exactCandidate, result);\n}\n\n// Native DATA serialization for a candidate already derived inside the\n// isolated fixed-plan boundary. This creates no approval or persistence.\nexport function serializePreparedStaticWeeklyLunchAuthorityDocument({candidate,authorityDigest,replayDigest}){\n  if(!/^[0-9a-f]{64}$/.test(authorityDigest)||!/^[0-9a-f]{64}$/.test(replayDigest))fail('lunch_authority_identity_required');\n  return finishLunchAuthorityDocument({...candidate,candidateDigest:contentDigest(candidate)},\n    {authorityDigest,replayDigest});\n}\n\nfunction finishLunchAuthorityDocument(exactCandidate, result) {\n  if (exactCandidate.publicationAuthority !== 'NOT_PUBLISHED' || exactCandidate.status !== 'PLANNED') {\n    fail('lunch_authority_candidate_not_publishable');\n  }\n",
+          "prior": "  if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });\n  return finishLunchAuthorityDocument(exactCandidate, result);\n}\n\nfunction finishLunchAuthorityDocument(exactCandidate, result) {\n  if (exactCandidate.publicationAuthority !== 'NOT_PUBLISHED' || exactCandidate.status !== 'PLANNED') {\n    fail('lunch_authority_candidate_not_publishable');\n  }\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/static-weekly-lunch-fused-seed-construction-tests.mjs",
+      "current_sha256": "c9c3394287e7ccb06ac8fa4ef5d648da00ffa552548dc2e42a55b755c764da2a",
+      "prior_sha256": "ae5ee66ff9dee8a1cf4a38000dd33b24a87d5929dfffc5b14f96d90768096a6e",
+      "hunks": [
+        {
+          "current": "import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';\nimport {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';\nimport assert from 'node:assert/strict';\nimport {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';\nimport {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\nimport { readFileSync } from 'node:fs';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';\nimport {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\nimport { readFileSync } from 'node:fs';\n"
+        },
+        {
+          "current": "import * as currentPublication from '../src/static-weekly-lunch-publication.js';\nimport * as currentVerifier from '../src/static-weekly-schedule-verifier.js';\n\nconst sha = value => createHash('sha256').update(value).digest('hex');\nconst source = path => {const raw=readFileSync(new URL('../' + path, import.meta.url), 'utf8');return ['src/static-weekly-lunch-derivation.js','src/static-weekly-lunch-authority-adapter.js'].includes(path)?restoreCurrentDepartureProofSource(path,raw):['src/static-weekly-schedule-model.js','src/static-weekly-schedule-program.js','src/static-weekly-schedule-compiler.js'].includes(path)?restoreFullHourProofSource(path,raw):raw;};\nconst predecessor = {\n  verifier: '4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740',\n  coverage: '78cf722a4dffbfb07bc3ed08788e72bdf76ecccc08dea961e836241d832e102b',\n  adapter: '4199753acee0252fea75baa78a90a8198c6ae9897670cfdc70c4a955b60f359e',\n",
+          "prior": "import * as currentPublication from '../src/static-weekly-lunch-publication.js';\nimport * as currentVerifier from '../src/static-weekly-schedule-verifier.js';\n\nconst sha = value => createHash('sha256').update(value).digest('hex');\nconst source = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');\nconst predecessor = {\n  verifier: '4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740',\n  coverage: '78cf722a4dffbfb07bc3ed08788e72bdf76ecccc08dea961e836241d832e102b',\n  adapter: '4199753acee0252fea75baa78a90a8198c6ae9897670cfdc70c4a955b60f359e',\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/static-weekly-model-basis-digest-stream-tests.mjs",
+      "current_sha256": "37eddbe2108fc7bc7e34ecfd7cccc6ebcaaf3a7d6f808120f29e7f20c6bc84b7",
+      "prior_sha256": "fb239121cfbd216845c9c4462b50eea1f3172ebe8ddb4e1c486bc446fe6ce29e",
+      "hunks": [
+        {
+          "current": "import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';\nimport assert from 'node:assert/strict';\nimport {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\nimport {createHash} from 'node:crypto';\nimport {types,isDeepStrictEqual} from 'node:util';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\nimport {createHash} from 'node:crypto';\nimport {types,isDeepStrictEqual} from 'node:util';\n"
+        },
+        {
+          "current": " }});\n}\nasync function runCase(mode,{exoticOnly=false,primitiveOnly=false,depthOnly=false}={}){\n stage('import');let checks=0;const stats={sinks:0,writes:0,maxChunk:0,fallbacks:0};install(mode,stats);const legacy=await predecessor();checks++;\n assert.equal(sha(restoreFullHourProofSource('src/static-weekly-schedule-model.js',readFileSync(new URL('../src/static-weekly-schedule-model.js',import.meta.url),'utf8'))),modelSha);checks++;\n for(const altered of [text.replace('const modelBytes =','const modelBytesX ='),text.replace(newSite,newSite+'\\n'+newSite),text.replace(newSite,oldSite),\n  text.replace(constraintsNewSite,constraintsOldSite),text.replace(constraintsNewSite,constraintsNewSite+'\\n'+constraintsNewSite),text.replace(constraintsNewSite,'contentDigest([])')]){\n  assert.throws(()=>reverseSingleSite(altered));checks++;\n }\n",
+          "prior": " }});\n}\nasync function runCase(mode,{exoticOnly=false,primitiveOnly=false,depthOnly=false}={}){\n stage('import');let checks=0;const stats={sinks:0,writes:0,maxChunk:0,fallbacks:0};install(mode,stats);const legacy=await predecessor();checks++;\n assert.equal(sha(readFileSync(new URL('../src/static-weekly-schedule-model.js',import.meta.url))),modelSha);checks++;\n for(const altered of [text.replace('const modelBytes =','const modelBytesX ='),text.replace(newSite,newSite+'\\n'+newSite),text.replace(newSite,oldSite),\n  text.replace(constraintsNewSite,constraintsOldSite),text.replace(constraintsNewSite,constraintsNewSite+'\\n'+constraintsNewSite),text.replace(constraintsNewSite,'contentDigest([])')]){\n  assert.throws(()=>reverseSingleSite(altered));checks++;\n }\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/static-weekly-model-constraints-digest-stream-tests.mjs",
+      "current_sha256": "989be35e7422c4b61a395b8a2a63b4247a22a2b318955f98d232d04aa30d521c",
+      "prior_sha256": "70ec7d8d1971b06daeb0fff7f835e88273cd82a46888803c141dc2e56c555f4a",
+      "hunks": [
+        {
+          "current": "import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';\nimport assert from 'node:assert/strict';\nimport {createHash} from 'node:crypto';\nimport {types,isDeepStrictEqual} from 'node:util';\nimport {readFileSync,mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';\n",
+          "prior": "import assert from 'node:assert/strict';\nimport {createHash} from 'node:crypto';\nimport {types,isDeepStrictEqual} from 'node:util';\nimport {readFileSync,mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';\n"
+        },
+        {
+          "current": " }});\n}\nasync function runCase(mode,{exoticOnly=false,primitiveOnly=false,depthOnly=false}={}){\n stage('import');let checks=0;const stats={sinks:0,writes:0,maxChunk:0,fallbacks:0};install(mode,stats);const legacy=await predecessor();checks++;\n assert.equal(sha(restoreFullHourProofSource('src/static-weekly-schedule-model.js',readFileSync(new URL('../src/static-weekly-schedule-model.js',import.meta.url),'utf8'))),modelSha);checks++;\n assert.equal(sha(readFileSync(new URL('../src/static-weekly-schedule-verifier.js',import.meta.url))),verifierSha);checks++;\n for(const altered of [text.replace('const modelBytes =','const modelBytesX ='),text.replace(newSite,newSite+'\\n'+newSite),text.replace(newSite,oldSite)]){\n  assert.throws(()=>reverseSingleSite(altered));checks++;\n }\n",
+          "prior": " }});\n}\nasync function runCase(mode,{exoticOnly=false,primitiveOnly=false,depthOnly=false}={}){\n stage('import');let checks=0;const stats={sinks:0,writes:0,maxChunk:0,fallbacks:0};install(mode,stats);const legacy=await predecessor();checks++;\n assert.equal(sha(readFileSync(new URL('../src/static-weekly-schedule-model.js',import.meta.url))),modelSha);checks++;\n assert.equal(sha(readFileSync(new URL('../src/static-weekly-schedule-verifier.js',import.meta.url))),verifierSha);checks++;\n for(const altered of [text.replace('const modelBytes =','const modelBytesX ='),text.replace(newSite,newSite+'\\n'+newSite),text.replace(newSite,oldSite)]){\n  assert.throws(()=>reverseSingleSite(altered));checks++;\n }\n"
+        }
+      ]
+    }
+  ],
+  "current_owning_inputs": [
+    {
+      "path": "src/native-schedule-version.js",
+      "bytes": 1257,
+      "sha256": "896e9bae376b3d9975cb741976bb59e4d4ac8272d97bfb2d362bde93686c1286"
+    },
+    {
+      "path": "scripts/native-departure-current-ci-tests.mjs",
+      "bytes": 6627,
+      "sha256": "a82bdc0d2c14da2f69dfb254bfb3588a1ecbb4bd5fb28e5e51275f464c3f7f93"
+    },
+    {
+      "path": "scripts/native-departure-inventory-sql-wire-tests.mjs",
+      "bytes": 9928,
+      "sha256": "1768028b0fe9ee7e6e0a2451824f9868b128ae53021b883ff61ebc4b32dc2411"
+    },
+    {
+      "path": "scripts/fixtures/departure-r9-sql-wire.json",
+      "bytes": 202422,
+      "sha256": "c993754ed76e3c69ddd792a4c3114e2ec3da55c21f7bdbbe41f90a06e8276572"
+    },
+    {
+      "path": "scripts/fixtures/departure-r9-ci-evidence.json",
+      "bytes": 92794,
+      "sha256": "89b4b6b7f2c0f7730e8a4238786a2417e25cb1dd6f05929a402b15f2c3d4ac90"
+    },
+    {
+      "path": "proposals/native-departure-v2.proposed.sql",
+      "bytes": 135491,
+      "sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70"
+    },
+    {
+      "path": "scripts/fixtures/current-migration-source-fixtures.json",
+      "bytes": 137524,
+      "sha256": "4826513541026d8404482d062ab2e3192ac5a25bde9412356922de855800e94d"
+    },
+    {
+      "path": "scripts/fixtures/current-migration-source-fixtures.mjs",
+      "bytes": 5842,
+      "sha256": "3d16f855000fd56e58f9501d598f257ddbd69bb0299f748a97114914d25e2480"
+    },
+    {
+      "path": "scripts/fixtures/current-departure-source-successor-tests.mjs",
+      "bytes": 2478,
+      "sha256": "b80ede273fc4acb6396bb249df4a03dee6164a6a108a7dbc65e8a36cf63b78f2"
+    },
+    {
+      "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
+      "bytes": 5653,
+      "sha256": "b103f9bde04e6cb7596ea3c5f82eaa9ed58fb27fbeacb6661801a1b4377b3a72"
+    },
+    {
+      "path": "scripts/ci-fresh-only-source303-tests.mjs",
+      "bytes": 7314,
+      "sha256": "dfe25138b1f1305bda4b335eb2a740fa7cf5de3b54bac6ee12f42f3cf37c4b51"
+    },
+    {
+      "path": "scripts/ci-fresh-only-source304-tests.mjs",
+      "bytes": 3177,
+      "sha256": "7607ee4591960f552021d21d0f0458c8e686617567c275c0aab700cac5709950"
+    },
+    {
+      "path": "scripts/source252-production-role-order-proof.mjs",
+      "bytes": 1965,
+      "sha256": "4fba88563b8836698fb1473f9ba2e195fd19985784c2e59dba4ea5f5660c8860"
+    },
+    {
+      "path": "scripts/fixtures/current-foundation-source-successor.mjs",
+      "bytes": 4745,
+      "sha256": "5bae72c4ba761556ff06b177e64bd293affd5fbebe51d8d464e15453c59fdd66"
+    },
+    {
+      "path": "scripts/current-device-auth-ci-tests.mjs",
+      "bytes": 1299,
+      "sha256": "6a44ec621a5384a93932b1be32bcec999504835393b9d94c95f9bfe65fca5a0c"
+    },
+    {
+      "path": "scripts/employee-events-bigint-auth-tests.mjs",
+      "bytes": 4231,
+      "sha256": "8427e0d3b0e2c1885e9373189b911da8fcb8484316ec30778134d23f45506e0d"
+    },
+    {
+      "path": "scripts/local-enrollment-retention-tests.mjs",
+      "bytes": 10022,
+      "sha256": "8284719892b3594e67382ccfd47363501a7d126d9e5df25d7bb4030699564523"
+    },
+    {
+      "path": "scripts/separation-auth-admission-source-tests.mjs",
+      "bytes": 7066,
+      "sha256": "207de771b3a8776b58919faf4aa6e409aadd8cbe1c3c801b2977e24433342306"
+    },
+    {
+      "path": "scripts/request-json-parser-native-inventory-tests.mjs",
+      "bytes": 4178,
+      "sha256": "f11f352590f09adecc93cb4d7d8d511601558ef7e388ce6e687cdc6a1292ad6d"
+    },
+    {
+      "path": "scripts/request-json-parser-scan-completion-tests.mjs",
+      "bytes": 5749,
+      "sha256": "23c81360f9c6149e74d2fa5d8f8f2cf3ac38f6aa7e0833cdd0405bab725a0242"
+    },
+    {
+      "path": "scripts/request-json-parser-inventory-manager-tests.mjs",
+      "bytes": 4286,
+      "sha256": "b434f3ba61b61e77bf695692e9a1bd9a897d22fb2c3d297d816a3697aac86cae"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289-source-fixture.mjs",
+      "bytes": 3272,
+      "sha256": "d8ccf5acc7fad07cb4e4e4c33d23a4f7acce78c3625937f0c3eddbccfdd6f953"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289-source.json",
+      "bytes": 148755,
+      "sha256": "4cbc879ccd048c1e1d6db0b7b8478ba658016aec60c475ca9b4f5fa1deb78abd"
+    },
+    {
+      "path": "scripts/native-provider-event-decisions-database-contract-tests.mjs",
+      "bytes": 50439,
+      "sha256": "cd49b648fa729a173c1e306a9081af2ece08b654ceb095816795021a93daac69"
+    },
+    {
+      "path": "scripts/native-provider-event-decisions-tests.mjs",
+      "bytes": 17828,
+      "sha256": "75e1c7ac17dba90845c7f459c85411419c6d8e12a838225a7a733a3bcef95a08"
+    },
+    {
+      "path": "scripts/places-api-http-tests.mjs",
+      "bytes": 9151,
+      "sha256": "6738ff4ea99405d2579c482608b45fec78489acf7d72df56872eee663cfd859e"
+    },
+    {
+      "path": "scripts/reviewed-regression-execution-tests.mjs",
+      "bytes": 6227,
+      "sha256": "4c7024b9a72176cc1b6dca2a900e0dc655495899558606bc567193d69ad21e3e"
+    },
+    {
+      "path": "scripts/schedule-component-weight-authority-tests.mjs",
+      "bytes": 13579,
+      "sha256": "781d8d0adad1ff92fc97a3fa6279e436e5868693b80813e04b89561abfe2711f"
+    },
+    {
+      "path": "scripts/fixtures/historical-owner-config-source.mjs",
+      "bytes": 1687,
+      "sha256": "e3d20f82009af1af9ceb5988de69e31c13de872e216923d6a54b2b1344a2d10b"
+    },
+    {
+      "path": "scripts/fixtures/historical-owner-six-person-20261005.json",
+      "bytes": 23221,
+      "sha256": "40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30"
+    },
+    {
+      "path": "scripts/owner-schedule-oct28-tests.mjs",
+      "bytes": 2417,
+      "sha256": "ce7da3379a78b5053a5520fc2558578093917b4ed824b215856a421ae19cf3a6"
+    },
+    {
+      "path": "src/static-weekly-owner-eligibility.js",
+      "bytes": 9265,
+      "sha256": "c8dfd823a29aace8756989b6b130f4f67885be24b7e744623f4f66f43fde89c9"
+    },
+    {
+      "path": "config/custodial-six-person-static-20261005.json",
+      "bytes": 24591,
+      "sha256": "04a80dcc83eb11b24dfd5537b8ddda8391408fe1dd2e332479f4dc9cb6d1b964"
+    },
+    {
+      "path": "scripts/fixtures/historical-manager-operation-proof.mjs",
+      "bytes": 2490,
+      "sha256": "a454bab11ac2706abff8f798afbff7f9c4c7d2353ae2c087ca4e8a6b2a46392b"
+    },
+    {
+      "path": "scripts/fixtures/historical-manager-operation-tests.mjs",
+      "bytes": 7976,
+      "sha256": "65bc7b8d4b14ab6a026b593d0fcebbcbb2395aa83e733a22c5eae9130422f69a"
+    },
+    {
+      "path": "scripts/fixtures/historical-general-manager-operation.mjs",
+      "bytes": 2382,
+      "sha256": "ae546852ebde937d1b75f2cb6db35cdfcdc8aea3bc44e5da400076e995e8a32f"
+    },
+    {
+      "path": "scripts/initial-manual-activation-deadline-tests.mjs",
+      "bytes": 5709,
+      "sha256": "87f235de920d5378e69fdd03ce63f5e718b2eed8a2cfd307252808d11cab43a0"
+    },
+    {
+      "path": "scripts/scheduling-current310-snapshot-context-tests.mjs",
+      "bytes": 1938,
+      "sha256": "4c68ce2ba37069d956c7368e6e6692c23afe967ff979f372ebaa59233e003910"
+    },
+    {
+      "path": "src/static-weekly-manager-operation.js",
+      "bytes": 3340,
+      "sha256": "5ceffc972ea3c23ae27b47db5974e4d707923e1431ec8200a55117514ca242f6"
+    },
+    {
+      "path": "scripts/static-weekly-full-hour-lunch-tests.mjs",
+      "bytes": 7489,
+      "sha256": "57e2c9d3c37285304491d6a399509b16162782c593cad380bdea4e4b4e40203d"
+    },
+    {
+      "path": "scripts/approved-manual-week-tests.mjs",
+      "bytes": 14696,
+      "sha256": "00a88187ff53988801f2b41b1cabc192c330002cad4e6fc11f76af233718421a"
+    },
+    {
+      "path": "scripts/approved-manual-native-template-tests.mjs",
+      "bytes": 4741,
+      "sha256": "818e343dfea3f715f726c12007e68ff1b52f4a7105489f2f7e97f4abc7514fa4"
+    },
+    {
+      "path": "scripts/fixtures/full-hour-lunch-source.mjs",
+      "bytes": 3538,
+      "sha256": "7ddc2aff1faae3a0de78dc4bb7b640857cd9ebc7ec4cef5cce6234550399df6e"
+    },
+    {
+      "path": "scripts/static-weekly-current-manager-219-manifest-tests.mjs",
+      "bytes": 3948,
+      "sha256": "ca8344f50fcf4e3c933748b0190c06a522ed764b845874922089b56706689d97"
+    },
+    {
+      "path": "scripts/fixtures/current-manager-source-contract-models.mjs",
+      "bytes": 5799,
+      "sha256": "21eb30b8f93356ad1a3d64c6d8c0300ef20aff5b3bc4f97e33a96926baa2f69b"
+    },
+    {
+      "path": "scripts/static-weekly-current-manager-fixture-tests.mjs",
+      "bytes": 19192,
+      "sha256": "2765d82e4d65b882f550a4f7ca64a784c54d05f07b3ce1383649256b9ca106ca"
+    },
+    {
+      "path": "scripts/static-weekly-dual-source-sql-stage-contract-tests.mjs",
+      "bytes": 14018,
+      "sha256": "e813226bc9430c9a0204711b3aab59bba5d6032e921b4f184e45baf54bd4c9fd"
+    },
+    {
+      "path": "scripts/current-release-recovery-replay-contract-tests.mjs",
+      "bytes": 79287,
+      "sha256": "d31b48209cbddba78a8e14b0805b3f27cd07d438632b9cda2ed4306e552bf606"
+    },
+    {
+      "path": "scripts/static-weekly-recurring-morning-solver-tests.mjs",
+      "bytes": 20139,
+      "sha256": "27565bc68afef1ce5df4ffb046f9308fc72ce23ba2b4037347accf15ceeb26d4"
+    },
+    {
+      "path": "scripts/static-weekly-recurring-phase-authority-tests.mjs",
+      "bytes": 86925,
+      "sha256": "5ca762a9765b497e1bd5fe1c634b46284886a106762d6c7308cd7321b8e46533"
+    },
+    {
+      "path": "scripts/static-weekly-policy-scope-contract-tests.mjs",
+      "bytes": 20390,
+      "sha256": "02fdb3984c64744b2d9b66c8623fe53a064ce1e5c27c8a57325d46e45dd21326"
+    },
+    {
+      "path": "scripts/static-weekly-postgres-key-order-tests.mjs",
+      "bytes": 10028,
+      "sha256": "95f550e48fbe47dc572d6483495b4118fea5520717aa8f2a787f6376284812fb"
+    },
+    {
+      "path": "scripts/static-weekly-replay-digest-stream-tests.mjs",
+      "bytes": 11707,
+      "sha256": "98428970f9d87a289af941a69dbee2c7d79e429b43ddcfbdc095a77edca7ec90"
+    },
+    {
+      "path": "scripts/current-full-hour-ci-tests.mjs",
+      "bytes": 1233,
+      "sha256": "ba761de85677c945dc8bdab48f0a2e2c07de7480d0f7ed008038bd0d88d5b69f"
+    },
+    {
+      "path": "scripts/current-system-fresh-owning-wiring.mjs",
+      "bytes": 3368,
+      "sha256": "87ca9729980ddd5e3d6eb180719d5d5f5b4d21e9974c1cc08ae81c2330e0cb35"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/scripts/fixtures/current-manager-publication-source.mjs",
+      "bytes": 5871,
+      "sha256": "fb8ac53c6c6925ce63385bd13b0f68cc27572c0976efa1943bd7cee32eafaad1"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/src/auth/device-credential-auth.js",
+      "bytes": 91777,
+      "sha256": "ba20ff22b7ab815270311572838d7d9400b5cdc53f80500fe02b43555d6e5aa1"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/src/employee-notifications.js",
+      "bytes": 49587,
+      "sha256": "e2a76f19c8b7c09b1cf95ed9bb0446a7aeee3f18b8edeb23d6d649aaed553c80"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/src/native-lunch-reservation.js",
+      "bytes": 5597,
+      "sha256": "9d256fb50f7a374a7e85210afdd1fef4869a884c9c9f2a8071530a722914a3b2"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/src/request-json-parser.js",
+      "bytes": 6356,
+      "sha256": "68a38a4ec263ff9a80d69082660324d23e84f5328750f346a52a77d016fa28a4"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/supabase/canonical/migration-replay-order.json",
+      "bytes": 54903,
+      "sha256": "e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/supabase/migrations/20261002110000_event_impact_preview_and_custodial_notes.sql",
+      "bytes": 23093,
+      "sha256": "385c296e8353e493a4fa483f7cfaaff1a8106a834c25e684264dae61ff78a078"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/supabase/migrations/20261002140000_event_supersession_and_chicago_instants.sql",
+      "bytes": 18974,
+      "sha256": "e0eccd95d775c0a1e2c829ea50010cb0ca5bdf4b2eb8b3535f43508732fffdb5"
+    },
+    {
+      "path": "scripts/fixtures/historical-native289/supabase/migrations/20261003220000_current_release_authority_completion.sql",
+      "bytes": 49860,
+      "sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898"
+    }
+  ]
+}

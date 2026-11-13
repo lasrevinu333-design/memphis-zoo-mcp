@@ -1,3 +1,4 @@
+import {captureApprovedManualPeriodWorkerInput,captureApprovedManualPeriodWorkerResult} from './approved-manual-period-worker.js';
 /*
  * The canonical compiler performs substantial deterministic JavaScript work
  * around the already-isolated HiGHS child process. Running that work on the
@@ -398,6 +399,21 @@ export function createStaticWeeklyCompilerRuntime({
         }
         return;
       }
+      if(active.requestType==='approved-manual-period'){
+        if(monotonicNowMilliseconds()>=active.workDeadline){
+          failActive(candidate,runtimeError('static_weekly_compiler_worker_timeout','The manual period exceeded its original deadline.'));return;
+        }
+        try{
+          if(Object.keys(message).sort().join(',')!==(message.error?'error,id,type':'id,result,type'))throw Error('manual_response_not_closed');
+          if(message.error){
+            if(Object.keys(message.error).sort().join(',')!=='code,message'||typeof message.error.code!=='string'
+              ||!/^[A-Za-z0-9_]{1,100}$/.test(message.error.code)||typeof message.error.message!=='string'||message.error.message.length>512)
+              throw Error('manual_error_not_closed');
+            clearPending(active,active.reject,workerFailure(message.error));
+          }else clearPending(active,active.resolve,captureApprovedManualPeriodWorkerResult(message.result,active.input));
+        }catch{failActive(candidate,runtimeError('approved_manual_period_protocol_invalid','The manual response differs from its original request.'));}
+        return;
+      }
       if (message.error) clearPending(active, active.reject, workerFailure(message.error));
       else clearPending(active, active.resolve, message.result);
     });
@@ -480,7 +496,7 @@ export function createStaticWeeklyCompilerRuntime({
       record.timer.unref?.();
       try {
         candidate.send({ type: requestType, id, input, preparation,
-          ...(requestType === 'approved-pending-staffing' ? {remainingMilliseconds: Math.max(1,Math.floor(workDeadline-monotonicNowMilliseconds()))} : {}) }, (error) => {
+          ...(['approved-pending-staffing','approved-manual-period'].includes(requestType) ? {remainingMilliseconds: Math.max(1,Math.floor(workDeadline-monotonicNowMilliseconds()))} : {}) }, (error) => {
           if (!error || record.settled) return;
           const cause = runtimeError("static_weekly_compiler_worker_unavailable", error.message || "The compiler request could not be sent to its process.");
           clearPending(record, () => {}, cause);
@@ -497,7 +513,7 @@ export function createStaticWeeklyCompilerRuntime({
   function enqueue(input = {}, preparation = null, options = {}, requestType = "compile") {
     if (closed) return Promise.reject(runtimeError("static_weekly_compiler_closed", "The isolated compiler is closed."));
     if (outstanding >= maxOutstandingRequests) return Promise.reject(runtimeError("static_weekly_compiler_busy", "The isolated compiler already has its maximum bounded request queue."));
-    const fixed = requestType === 'approved-pending-staffing';
+    const fixed = ['approved-pending-staffing','approved-manual-period'].includes(requestType);
     const absoluteDeadline = fixed ? options?.deadlineAtMilliseconds : null;
     const requestedDeadline = fixed ? Math.floor(absoluteDeadline-monotonicNowMilliseconds()) : options?.deadlineMilliseconds == null ? requestMilliseconds : Number(options.deadlineMilliseconds);
     if (!Number.isSafeInteger(requestedDeadline) || requestedDeadline < 1 || requestedDeadline > requestMilliseconds) {
@@ -523,6 +539,14 @@ export function createStaticWeeklyCompilerRuntime({
   }
 
   function compileAndPrepare(input = {}, preparation = {}, options = {}) {
+    if(preparation?.kind==='approved-manual-period'){
+      try{
+        if(Object.keys(preparation).join(',')!=='kind'||typeof options?.deadlineAtMilliseconds!=='number'||!Number.isFinite(options.deadlineAtMilliseconds))
+          throw runtimeError('static_weekly_compiler_request_deadline_invalid','The original manual preparation deadline is required.');
+        const captured=captureApprovedManualPeriodWorkerInput(input);
+        return enqueue(captured,Object.freeze({kind:'approved-manual-period'}),options,'approved-manual-period');
+      }catch(error){return Promise.reject(error);}
+    }
     if (preparation?.kind === 'approved-pending-staffing') {
       try {
         if (Object.keys(preparation).join(',') !== 'kind'
@@ -602,3 +626,5 @@ export const initializeStaticWeeklyCompiler = productionRuntime.initialize;
 export const getStaticWeeklyCompilerReadiness = productionRuntime.getReadiness;
 export const shutdownStaticWeeklyCompiler = productionRuntime.shutdown;
 export const terminateStaticWeeklyCompilerForTest = productionRuntime.terminateForTest;
+
+export const prepareApprovedManualPeriodIsolated=(input,options)=>productionRuntime.compileAndPrepare(input,{kind:'approved-manual-period'},options);

@@ -1,0 +1,37 @@
+{
+  "schema": "custodial.exact-runtime-predecessor-fixture.v1",
+  "prior_source_manifest_sha256": "27d612508c19f454a953183b228e43ec993e9e9e3b9f9f84da9bb84ebdd0bfa7",
+  "files": [
+    {
+      "path": "static-weekly-lunch-policy.js",
+      "bytes": 2738,
+      "sha256": "5857a9d6dab9d5e9b299eadd4d5c448dcf88088c0f52ce5af302ccfec4484a9d"
+    },
+    {
+      "path": "static-weekly-owner-eligibility.js",
+      "bytes": 9265,
+      "sha256": "c8dfd823a29aace8756989b6b130f4f67885be24b7e744623f4f66f43fde89c9"
+    },
+    {
+      "path": "static-weekly-schedule-model.js",
+      "bytes": 36185,
+      "sha256": "6c956a2f3e7cb1a9f6366515393cf2eab03639776f64e53a38317a0010956271"
+    },
+    {
+      "path": "static-weekly-schedule-program.js",
+      "bytes": 131112,
+      "sha256": "e16f6c46139d703cbf78879587278a71ace2f1c87b913e80e9c7dc47e2e8aebe"
+    },
+    {
+      "path": "static-weekly-shift-end-coverage.js",
+      "bytes": 15897,
+      "sha256": "b9c0d099925a7b837ae9275cb1e51233d06d0816538d02dd4973c84c3bb4dac2"
+    },
+    {
+      "path": "static-weekly-shift-end-derivation.js",
+      "bytes": 56977,
+      "sha256": "c5ba42f64ab1980e3de6de5c1b15bb46d9ecee2f3fdc68fd0fbf43fd37c52cde"
+    }
+  ],
+  "role": "read-only reference implementations for exact current behavior comparisons, no publication or runtime authority"
+}

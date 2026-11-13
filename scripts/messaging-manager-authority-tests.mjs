@@ -10,6 +10,7 @@ const THREAD_ID = "00000000-0000-4000-8000-000000000704";
 const MESSAGE_ID = "00000000-0000-4000-8000-000000000708";
 const ARCHIVED_THREAD_ID = "00000000-0000-4000-8000-000000000709";
 const OVERVIEW_ONLY_THREAD_ID = "00000000-0000-4000-8000-000000000710";
+const OTHER_MANAGER_USER_ID = "00000000-0000-4000-8000-000000000711";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -19,7 +20,7 @@ async function runRpc(fn, args) {
     return { id: MANAGER_USER_ID, user_id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true, ops_manager_id: MANAGER_ID };
   }
   if (fn === "msg_get_or_create_ops_manager_thread") throw new Error("named manager identity must not depend on the retired shared room");
-  if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
+  if (fn === "msg_broadcast_operation_v1") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_mark_thread_read") return { marked: true, user_id: args.p_user_id };
@@ -29,18 +30,19 @@ async function runRpc(fn, args) {
 
 async function runReadOnlySql(sql) {
   if (/from public\.msg_users u[\s\S]*join public\.ops_manager_managers m/i.test(sql)) {
-    return [{
-      msg_user_id: MANAGER_USER_ID,
+    return [MANAGER_USER_ID,OTHER_MANAGER_USER_ID].map(msg_user_id=>({
+      msg_user_id,
       manager_id: MANAGER_ID,
       manager_display_name: "Authority Test Manager",
       job_title: "Director of Test Operations",
       department_key: "operations",
       manager_roles: ["DIRECTOR"],
-    }];
+    }));
   }
   if (/msg_list_users/i.test(sql)) {
     return [
       { id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true },
+      { id: OTHER_MANAGER_USER_ID, display_name: "Other Authority Test Manager", role: "manager", is_active: true },
       { id: FORGED_EMPLOYEE_ID, display_name: "Authority Test Employee", role: "employee", is_active: true },
     ];
   }
@@ -140,7 +142,8 @@ try {
 
   const users = await get("/messaging-api/users");
   assert.equal(users.status, 200);
-  const managerContact = users.body.data.find((row) => row.id === MANAGER_USER_ID);
+  assert.equal(users.body.data.some(row=>row.id===MANAGER_USER_ID),false,'current manager is excluded from new recipients');
+  const managerContact = users.body.data.find((row) => row.id === OTHER_MANAGER_USER_ID);
   assert.equal(managerContact.role_title, "Director of Test Operations");
   assert.equal(managerContact.job_title, "Director of Test Operations");
   const employeeContact = users.body.data.find((row) => row.id === FORGED_EMPLOYEE_ID);
@@ -209,9 +212,9 @@ try {
   });
   assert.equal(forgedBroadcast.status, 403);
 
-  const validBroadcast = await post("/messaging-api/broadcast", { title: "Operations", body: "Manager authority test" });
+  const validBroadcast = await post("/messaging-api/broadcast", { title: "Operations", body: "Manager authority test", client_broadcast_id: "authority-test-original-broadcast" });
   assert.equal(validBroadcast.status, 200);
-  const broadcastCall = calls.find((call) => call.fn === "msg_send_broadcast");
+  const broadcastCall = calls.find((call) => call.fn === "msg_broadcast_operation_v1");
   assert.equal(broadcastCall.args.p_sender_user_id, MANAGER_USER_ID);
 
   const selectedRecipients = [

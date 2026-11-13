@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {runStaticWeeklyOperationDeadlineTests} from './static-weekly-operation-deadline-tests.mjs';
+const receipt=await runStaticWeeklyOperationDeadlineTests();
+assert.equal(receipt.status,'PASS');
+assert.equal(receipt.checks,65);
+assert.equal(receipt.absoluteMilliseconds,60000);
+assert.equal(receipt.actual_solver,false);
+assert.equal(receipt.actual_private_preview,false);
+assert.equal(receipt.correctness_or_optimality_changed,false);
+console.log(JSON.stringify({suite:'static-weekly-operation-deadline',...receipt}));

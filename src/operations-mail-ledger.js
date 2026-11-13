@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {spiceworksObservation,reconcileSpiceworks,reconcileSchoolSnapshots} from './operations-mail-contract.js';
 import {withApplicationMutationLease} from './restore-mutation-gate.js';
+import {schoolOwnerCorrection} from './school-owner-corrections.js';
 
 // Existing service-only Outlook ledger. No new grant, public ingestion route,
 // mailbox credential, scheduler, ticket database or external ticket mutation.
@@ -107,14 +108,19 @@ export function projectOperationsMailRows(rows){
   return {
     spiceworks:feed('spiceworks',items=>reconcileSpiceworks(items).map(({ticket_id,title,category,assignee,status,custodial,active,provenance})=>
       ({ticket_id,title,category,assignee,status,custodial,active,source_revision:sha(canonical(provenance))}))),
+    spiceworks_activity:feed('spiceworks',items=>reconcileSpiceworks(items).flatMap(({ticket_id,title,activity})=>
+      activity.map(row=>({ticket_id,title,...row})))),
     schools:feed('school',items=>reconcileSchoolSnapshots(items).rows.map(row=>{
       const {provenance,prior_provenance,superseded_by,...display}=row;
-      return {...display,source_revision:sha(canonical({provenance,prior_provenance:prior_provenance||null,superseded_by:superseded_by||null}))};
+      const correction=schoolOwnerCorrection(row);
+      return {...display,...(correction?{arrival_at:correction.corrected_arrival_at}:{}),
+        source_revision:sha(canonical({provenance,prior_provenance:prior_provenance||null,superseded_by:superseded_by||null,
+          ...(correction?{owner_correction:correction}:{})}))};
     })),
   };
 }
 export async function readOperationsMailLedger({client,signal}={}){
-  const missing=reason=>({schools:unavailable(reason),spiceworks:unavailable(reason)});
+  const missing=reason=>({schools:unavailable(reason),spiceworks:unavailable(reason),spiceworks_activity:unavailable(reason)});
   if(!client?.from)return missing('operations_mail_service_not_configured');
   try{
     // One statement, exact count: a response cap must not silently remove a

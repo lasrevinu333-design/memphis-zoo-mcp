@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22.23.1'
+          node-version: '22.23.4'
           cache: npm
       - run: npm ci --ignore-scripts
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -94,9 +94,10 @@ jobs:
           postgres_log="${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log"
           cleanup() {
             status=$?
-            if test -n "${backend_pid:-}"; then kill "$backend_pid" >/dev/null 2>&1 || true; fi
-            if test -n "${static_pid:-}"; then kill "$static_pid" >/dev/null 2>&1 || true; fi
-            if test -n "${proxy_pid:-}"; then kill "$proxy_pid" >/dev/null 2>&1 || true; fi
+            for owned_pid in "${backend_pid:-}" "${static_pid:-}" "${proxy_pid:-}"; do
+              if test -n "$owned_pid"; then kill "$owned_pid" >/dev/null 2>&1 || true; fi
+            done
+            if test -n "${auth_dir:-}"; then rm -rf -- "$auth_dir"; fi
             if test "$status" -ne 0 && docker inspect "$container" >/dev/null 2>&1; then
               {
                 docker inspect --format 'state={{.State.Status}} oom_killed={{.State.OOMKilled}} exit_code={{.State.ExitCode}} restart_count={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container"
@@ -192,8 +193,6 @@ jobs:
             if test "$OFFICIAL_LOCAL_STORAGE_PROVIDER" != true; then node scripts/production-backup-rehearsal-scope.mjs restore-result | tee -a "$receipt"; fi
             exit 0
           fi
-          # Diagnostic target_capture stops on its NEW copy before any resolve/unpause.
-          # The historical paused restore and its discrepancies are never reused.
           if test "$REHEARSAL_SCOPE" = target_capture; then
             RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
               RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
@@ -237,21 +236,15 @@ jobs:
           target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"
           target_migration_count="$(jq -r '.target.production_ledger_count' release/production-migration-state.json)"
           target_fingerprint="$(jq -er '.target.canonical_source_schema_fingerprint | select(test("^[0-9a-f]{64}$"))' release/production-migration-state.json)"
-          echo ' target-ledger-head'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select max(version)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_head"
-          echo ' target-ledger-count'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select count(*)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_count"
-          echo ' source-target-distinct'
           test "$target_migration_head" != "$migration_head"
-          echo ' backend-authority-health'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')->>'ok';" | tail -n 1)" = 'true'
-          echo ' active-scheduler-key-count'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select count(*) from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=now() and (verify_not_after is null or verify_not_after>now());" | tail -n 1)" = '1'
-          echo ' terminal-direct-dml-denied'
           if docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'set role service_role; truncate public.sessions;' >/dev/null 2>&1; then
             echo 'service_role unexpectedly retained direct terminal DML' >&2
@@ -301,6 +294,9 @@ jobs:
           backend_log="${RUNNER_TEMP}/production-backup-rehearsal-backend.log"
           backend_dependencies_file="${RUNNER_TEMP}/production-backup-rehearsal-backend-dependencies.json"
           static_log="${RUNNER_TEMP}/production-backup-rehearsal-static-weekly.log"
+          auth_dir="$(mktemp -d)"
+          OPS_MANAGER_SESSION_SECRET="$REHEARSAL_OPS_MANAGER_SESSION_SECRET" node scripts/create-isolated-rehearsal-manager-session.mjs "$auth_dir"
+          docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$auth_dir/dependency-manager-seed.sql"
           env -u REHEARSAL_OPS_MANAGER_SESSION_SECRET \
             NODE_ENV=production PORT=31871 SUPABASE_URL='http://127.0.0.1:31870' \
             SUPABASE_SERVICE_ROLE_KEY="$service_role_jwt" \
@@ -325,7 +321,8 @@ jobs:
           bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31871/healthz' \
             '.ok == true and .process_alive == true and .probe_scope == "process_liveness"'
           bash scripts/verify-isolated-rehearsal-backend-dependencies.sh \
-            'http://127.0.0.1:31871/health/dependencies' "$backend_dependencies_file" "$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+            'http://127.0.0.1:31871/health/dependencies' "$backend_dependencies_file" "$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)" \
+            "$auth_dir/dependency-manager-authorization.header"
           bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31872/healthz' \
             '.ok == true and .data.process_ready == true'
           bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31872/ready' \

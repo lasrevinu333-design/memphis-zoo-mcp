@@ -334,9 +334,8 @@ assert.equal(startReplay.replayed, true, "exact start replay is explicitly class
 assert.equal(startReplay.submission_proof, contextA.submission_proof, "lost start response recovers the stable durable proof");
 assert.equal(await sql(`select count(*) from public.custodial_offline_submission_proofs p join public.custodial_offline_actor_contexts c on c.context_id=p.context_id where c.client_session_id=${q(sessionA)};`), "1");
 
-// An acknowledged Start that outlives its signed context must not remain blue
-// forever. Expiry materializes one same-UUID cancelled row so the phone can
-// discard local work and every operational admission gate becomes available.
+// Existing signed expiry creates an attention notice. Only Eric's explicit
+// original-operation clear may terminalize it; no automatic completion/cancel.
 const expirySession = `oa-${stamp}-expired-native-start`;
 const expiryContext = await activate({
   device: `OA-${stamp}-X`, location: codeExpiry, session: expirySession,
@@ -351,21 +350,32 @@ await sql(`begin;
 const expiryNow = await sql(`select public.custodial_canonical_utc_millis(started_at+interval '2 milliseconds')
   from public.custodial_offline_actor_contexts where context_id=${q(expiryContext.context_id)}::uuid;`);
 assert.equal(await sql(`select public.expire_stale_open_sessions(${q(expiryNow)}::timestamptz);`), "1",
-  "the hourly lifecycle writer terminalizes the one expired projected Start");
+  "the hourly lifecycle writer records one expired original needing attention");
+assert.equal(await sql(`select count(*) from public.sessions where client_session_id=${q(expirySession)};`), "0", "expiry alone cannot silently clear or fabricate a terminal session");
+assert.equal(await sql(`select context.status||'|'||proof.state from public.custodial_offline_actor_contexts context join public.custodial_offline_submission_proofs proof on proof.context_id=context.context_id where context.context_id=${q(expiryContext.context_id)}::uuid;`), "activated|issued", "the original context/proof remain unchanged before explicit clear");
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join custodial_leadership_private.unfinished_notices_v1 n on n.notice_id=o.unfinished_notice_id where n.source_id=${q(expiryContext.context_id)}::uuid and o.notification_kind='unfinished_work_timeout';`), "1", "the original timeout durably queues Eric attention once");
+const expiryClearOperation=randomUUID();
+await sql(`insert into public.ops_manager_managers(display_name,system_key,roles,active,is_system_principal)
+ select 'Synthetic explicit-clear fixture','eric_custodial_manager',array['OPS_MANAGER'],true,false
+ where not exists(select 1 from public.ops_manager_managers where system_key='eric_custodial_manager');`);
+const expiryClear=JSON.parse(await sql(`select public.custodial_named_record_operation_v1(
+ (select manager_id from public.ops_manager_managers where system_key='eric_custodial_manager'),${q(execSecret)},'clear_unfinished_work',
+ jsonb_build_object('notice_id',(select notice_id from custodial_leadership_private.unfinished_notices_v1 where kind='native_context' and source_id=${q(expiryContext.context_id)}::uuid),'operation_id',${q(expiryClearOperation)},'reason','Explicitly reviewed and cleared unfinished original native work'))::text;`));
+assert.equal(expiryClear.status,'cancelled_without_completion');assert.equal(expiryClear.history_preserved,true);assert.equal(expiryClear.phone_released,false);assert.equal(expiryClear.key_removal,false);
 assert.equal(await sql(`select session_uuid||'|'||client_session_id||'|'||status||'|'||completion_source
   from public.sessions where client_session_id=${q(expirySession)};`),
-  `${expirySession}|${expirySession}|cancelled|system_timeout_cancelled`,
-  "expiry preserves the phone's external UUID in one durable cancelled session");
+  `${expirySession}|${expirySession}|cancelled|admin`,
+  "explicit clear preserves the original external UUID in one cancelled session");
 assert.equal(await sql(`select context.status||'|'||proof.state||'|'||(proof.consumed_at is not null)::text
   from public.custodial_offline_actor_contexts context
   join public.custodial_offline_submission_proofs proof on proof.context_id=context.context_id
   where context.context_id=${q(expiryContext.context_id)}::uuid;`), "cancelled|quarantined|true");
 assert.equal(await sql(`select count(*) from public.custodial_open_work() where client_session_id=${q(expirySession)};`), "0",
-  "expired Start leaves no projected-open residue");
+  "explicitly cleared Start leaves no projected-open residue");
 assert.equal(await sql(`select count(*) from public.session_events event
   join public.sessions session on session.id=event.session_id
-  where session.client_session_id=${q(expirySession)} and event.event_type='offline_occurrence_expired';`), "1",
-  "expiry has one durable lifecycle event");
+  where session.client_session_id=${q(expirySession)} and event.event_type='unfinished_work_explicitly_reconciled';`), "1",
+  "explicit clear has one durable attributed lifecycle event");
 const expiredScanState = JSON.parse(await sql(`select public.tool_get_location_scan_state(
   ${q(codeExpiry)},${q(`OA-${stamp}-X`)})::text;`));
 assert.equal(expiredScanState.latest_session_uuid, expirySession);
@@ -377,9 +387,9 @@ await sql(`insert into public.device_sync_status(device_id,presented_identifier,
   on conflict(device_id) do update set queue_count=0,retry_count=0,last_server_ack_at=now(),updated_at=now();`);
 const expiryRollback = JSON.parse(await sql(`select public.tool_get_device_rollback_readiness(${q(`OA-${stamp}-X`)})::text;`));
 assert.equal(expiryRollback.backend_open_session_count, 0);
-assert.equal(expiryRollback.eligible, true, "expiry unblocks exact-device rollback readiness");
+assert.equal(expiryRollback.eligible, true, "explicit server-work clear unblocks the SQL-only readiness projection; this is not native removal authority");
 assert.equal(await sql(`select can_start::text||'|'||reason from public.can_employee_start_session('Offline Expiry Actor');`),
-  "true|ok", "expiry unblocks employee admission");
+  "true|ok", "explicit server-work clear unblocks employee admission");
 await sql(`select public.static_weekly_v4_assert_employee_turnover_ready('${employeeExpiry}'::uuid);`);
 assert.equal(await sql(`select public.expire_stale_open_sessions(${q(expiryNow)}::timestamptz);`), "0",
   "exact expiry replay is idempotent");
@@ -479,7 +489,7 @@ assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_in
     and oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
     and oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)')
     and oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
-    and oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
+    and oid is distinct from to_regprocedure('public.custodial_set_maintenance_ticket_outcome(uuid,text,uuid,text,text,text)')
     and oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`),
 "0", "capability/grant inventory leaves no application-callable alternate terminal writer or same-name overload");
 

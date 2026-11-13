@@ -1,0 +1,44 @@
+{
+  "schema": "custodial.source252-existing-runtime-reconstruction.v1",
+  "input_sha256": {
+    "actual_capture": "c302491d8c21f58b133cb21517660a7aaaf04293eb79ec6b5c01cea81def0662",
+    "original_noauto_raw": "37f0382ee69fb5b63096962b294c516233bb9df5d2884ae21bcb54eada6e7614",
+    "original_noauto_catalog": "56ad84f0e162aeda7ed0fbd033c623a7f20868fb83032fb916205af425e12dbd",
+    "normal_comparison_raw": "7796621a4a062d581b6556d4fbb99e2d99b5d9513ca82ba243811f9163d74893",
+    "classification": "29a8794755af6c512baf9d16d85a217ea4e3d7c7aff614ebcba8b475fffeec63"
+  },
+  "full_census": 6884,
+  "unchanged_definitions": 6091,
+  "restore_order_changes": 0,
+  "all793_preimages_independently_reconstructed": true,
+  "all559_current_function_definitions_exact_original_catalog": true,
+  "all783_owner_rights_equal_original_postgres_clauses": true,
+  "all783_nonowner_direct_acl_exact_current_renderer": true,
+  "all17_normal_payloads_preserve_existing82_rights": true,
+  "canonical_sql_sha256": "28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b",
+  "executed_sql_sha256": "4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a",
+  "profile_sha256": "a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f",
+  "counts": {
+    "stale_saved_function_exact_earlier_source_body_current_correct": 1,
+    "owner_grants_omitted_only": 764,
+    "owner_grants_omitted_and_real_service_role_privileges_added": 17,
+    "owner_grants_omitted_with_stale_saved_acl": 1,
+    "owner_grant_omitted_and_nonowner_clause_order_only": 1,
+    "view_terminal_owner_only": 9
+  },
+  "only_canonical_replacements": [
+    {
+      "old": "d9abaf120c47e789c6b3114717f14eb76d1ceacf9aea5600bccfb1005a176d27",
+      "new": "36c298d2d3152ae660bb7b6b3fee01c92f7e770f1b0e6f8aa025d12b666f6d33",
+      "occurrences": 1
+    }
+  ],
+  "canonical_remainder_byte_exact": true,
+  "new_schema_authority": false,
+  "new_grants": false,
+  "revocations": false,
+  "owner_swaps": false,
+  "business_row_writes": false,
+  "production_authorized": false,
+  "candidate_migration_admission": false
+}

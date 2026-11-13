@@ -1,0 +1,24 @@
+{
+  "schema": "custodial.native-private-custody-http-route-interface.v1",
+  "status": "MAIN_SOURCE_MOUNT_CONNECTED_NOT_DEPLOYED_OR_AUTHENTICATED_SQL_RUNTIME_QUALIFIED",
+  "export": "installNativePrivateCustodyExchangeRoute(app, {env, store, db, runReadOnlySql, now})",
+  "route": {"method": "POST", "path": "/device-auth/private-custody", "max_raw_bytes": 393216},
+  "capabilities": "env is mandatory and explicit; store, db and runReadOnlySql are mandatory injected capabilities; no process.env or default client fallback is permitted.",
+  "lifecycle": {
+    "parser": "Exact original URL and POST only; no case/trailing/query aliases. No-store. Exact application/json UTF-8 or absent/identity content-encoding; preserve raw bytes; reject invalid JSON, oversize and early stream abort before dependencies.",
+    "write": "Capture, then exactly one existing recordAuthenticatedPrivateCustodyExchange call; core performs one fixed readback and never retries an ambiguous write.",
+    "query": "Capture, then existing readAuthenticatedPrivateCustodyExchange; NO_MATCHING_ORIGINAL_WRITE_READBACK remains unresolved and is not success custody.",
+    "cleanup": "closeAuthenticatedPrivateCustodyExchangeCapture in every capture exit; request listeners and parser-owned buffers are released/zeroed and raw/parsed request body references deleted; pre-abort, request abort and response close are observed; close after complete end is not treated as abort.",
+    "response": "Success is {ok:true,data:<existing core DTO>}; failure is bounded {ok:false,error,state} with no raw body, credential, receipt, operation id or ACK fabrication."
+  },
+  "main_insertion_proposal": {
+    "index": "After makeRestoreMutationGate and before the existing route registrations, import the registrar and call it with explicit env, createSupabaseDeviceCredentialStore(supabaseAdmin), db:supabaseAdmin, the existing fixed runReadOnlySql, and optional clock.",
+    "parser": "Add only /device-auth/private-custody to the exact-path exemption in request-json-parser.js so the registrar owns the untouched request stream. Do not disable the general parser or broaden other exemptions.",
+    "not_applied_by_worker": true,
+    "main_source_registration": "src/index.js calls the registrar only with explicit configured capabilities behind the unchanged restore gate; unconfigured custody fails 503, never a default writer. This source connection is not deployment or current-auth HTTP/SQL success."
+  },
+  "scope_limits": [
+    "No SQL, auth, grants, credentials, production, browser, device, build, install, release or audit actions.",
+    "Local tests use synthetic injected capabilities and do not establish hosted SQL, native APK or runtime proof."
+  ]
+}

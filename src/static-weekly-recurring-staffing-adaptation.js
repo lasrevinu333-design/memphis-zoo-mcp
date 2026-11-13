@@ -1,3 +1,4 @@
+import {deriveFixedStaticWeeklyOwnershipWitness} from './static-weekly-fixed-ownership.js';
 import assert from "node:assert/strict";
 import {createApprovedPendingStaffingWeekInput} from './static-weekly-staffing-preview.js';
 import { createHash } from "node:crypto";
@@ -10,11 +11,11 @@ import {deriveLunchCoverageFromPreparedProblem} from './static-weekly-lunch-deri
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy,deriveApprovedMappedShiftEndCoverage,deriveApprovedDatedMappedShiftEndCoverage } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
-  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies } from "./static-weekly-owner-eligibility.js";
+  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies,isHardForbidden,mandatoryNormalOwner } from "./static-weekly-owner-eligibility.js";
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
   enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
   solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization,
-  createRecurringPhaseEvidenceInvocation} from './static-weekly-recurring-phase-authority.js';
+  createRecurringPhaseWeekInvocation,recurringIntegerLoadRange} from './static-weekly-recurring-phase-authority.js';
 import {createRecurringMorningObjectiveContract,createRecurringMorningProspectiveSource,
  solveRecurringMorningCanonicalMinimum,assertRecurringMorningCanonicalProof} from './static-weekly-recurring-morning-solver.js';
 
@@ -388,7 +389,7 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
       require(configOwner && configOwner[1].personId === actual.personId && configOwner[1].vacancy !== true,
         'static_template_current_person_config_mismatch');
       for (const row of rows) {
-        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot); }
+        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot,row.dayOfWeek,row.coveragePurpose); }
         catch { fits = false; break; }
         const roleAvailability = approved.states.get(row.dayOfWeek).availability.get(role);
         const actualContext = target.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${actual.slotId}`);
@@ -574,59 +575,9 @@ export function prepareApprovedStaticTemplateProjection(args) {
         fail('static_template_dated_week_publication_unavailable');
     }
     if(problem.error)fail('static_template_feasibility_source_invalid');
-    const model = buildStaticWeeklySchedulingModel(problem,[],
-      {name:'approved_static_fixed_feasibility',family:'approved_static_fixed_feasibility',terms:[]},args.deadline);
-    if(model.error)fail('static_template_feasibility_model_invalid');
-    if(model.general.size || model.priorBindings.length)fail('static_template_unexpected_rank_or_binding');
-    const values = new Map([...model.binary].map(name=>[name,0]));
-    const version= mapping.candidateSource.version || mapping.candidateSource.versions.find(v=>v.id===problem.version.id);
-    const rowOwners=new Map((datedClosing?problem.version.assignments:version.assignments).map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId]));
-    const assignments=[];
-    for(const item of problem.work){
-      tick();
-      const slotId=rowOwners.get(item.key) || item.originSlotId;
-      const variable=model.x.get(`${item.key}\u0000${slotId}`);
-      if(!variable){
-        // Preserve an already-authorized explicitly permitted OPEN derived
-        // vacancy row. This is not permission to drop required work, choose a
-        // new owner, or relabel ordinary best-effort work as permitted-open.
-        if(item.required!==false || item.coverageClass!=='permitted_open')fail('static_template_fixed_owner_ineligible');
-        values.set(model.uncovered.get(item.key),1);
-        assignments.push({planWorkId:item.key,workId:item.workId,dayOfWeek:item.dayOfWeek,
-          serviceDate:weekdayDate(problem.serviceDate,item.dayOfWeek),locationId:item.locationId,
-          slotId:null,personId:null,displayName:null,status:'OPEN',coverageClass:item.coverageClass,
-          window:structuredClone(item.window),serviceMode:item.serviceMode,
-          serviceEffortMinutes:item.effort.minutes,includedLocations:structuredClone(item.includedLocations)});
-        continue;
-      }
-      const person=problem.incumbencyByDaySlot.get(`${item.dayOfWeek}\u0000${slotId}`);
-      if(!person?.personId || person.kind==='CONTRACTOR_CAPACITY')fail('static_template_fixed_person_unavailable');
-      values.set(variable,1);
-      assignments.push({planWorkId:item.key,workId:item.workId,dayOfWeek:item.dayOfWeek,
-        serviceDate:weekdayDate(problem.serviceDate,item.dayOfWeek),locationId:item.locationId,
-        slotId,personId:person.personId,displayName:person.displayName,status:'ASSIGNED',
-        window:structuredClone(item.window),serviceMode:item.serviceMode,
-        serviceEffortMinutes:item.effort.minutes,includedLocations:structuredClone(item.includedLocations)});
-    }
-    for(const group of model.routeGroups){
-      tick();values.set(group.base,1);
-      const middle=group.nodes.filter(node=>!['start','end'].includes(node.kind)&&values.get(node.active)===1)
-        .sort((a,b)=>a.startMinute-b.startMinute || a.endMinute-b.endMinute || (a.id<b.id?-1:a.id>b.id?1:0));
-      const path=[group.nodes.find(n=>n.kind==='start'),...middle,group.nodes.find(n=>n.kind==='end')];
-      for(let i=1;i<path.length;i++){
-        const arcs=group.arcs.filter(a=>a.from===path[i-1]&&a.to===path[i]);
-        if(arcs.length!==1)fail('static_template_fixed_route_incompatible');
-        values.set(arcs[0].name,1);
-      }
-    }
-    for(const row of model.modelBasis.constraints.rows){
-      tick();
-      if(!Number.isSafeInteger(row.value)||row.terms.some(([n,v])=>!Number.isSafeInteger(n)||!values.has(v)))
-        fail('static_template_hard_row_not_exact');
-      const actual=row.terms.reduce((n,[coefficient,v])=>n+BigInt(coefficient)*BigInt(values.get(v)),0n),bound=BigInt(row.value);
-      if(!(row.relation==='='?actual===bound:row.relation==='<='?actual<=bound:row.relation==='>='&&actual>=bound))
-        fail('static_template_hard_constraint_violation');
-    }
+    const version=mapping.candidateSource.version||mapping.candidateSource.versions.find(v=>v.id===problem.version.id),
+      rowOwners=new Map((datedClosing?problem.version.assignments:version.assignments).map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId])),
+      {assignments,model,values}=deriveFixedStaticWeeklyOwnershipWitness(problem,{rowOwners,deadline:args.deadline??null});
     const lunch=deriveLunchCoverageFromPreparedProblem(problem,assignments);
     if(lunch.status!=='PLANNED')fail('static_template_lunch_coverage_incompatible');
     const byWork=new Map(problem.work.map(work=>[work.key,work]));
@@ -762,7 +713,7 @@ export function prepareApprovedStaticTemplateProjection(args) {
           authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest}};
       document.validation.database_document_identity=postgresJsonbContentDigest(document);
       const projection={adapter,service_date:problem.serviceDate,week_start:problem.serviceDate,
-        week_end:weekdayDate(problem.serviceDate,0),authority:staticAuthority,receipt,
+        week_end:new Date(Date.parse(problem.serviceDate+'T12:00:00Z')+6*86400000).toISOString().slice(0,10),authority:staticAuthority,receipt,
         authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest,compiler_version:adapter.version,
         objective,metrics:{hardConstraints:model.modelBasis.constraints.count,violations:0},applied_exceptions:[],
         assignments:projectionAssignments,semantic_snapshot:{schema:'custodial.approved-static-projection-snapshot.v1',
@@ -990,7 +941,7 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
     }
     const restriction=`owner:${sourceConfigSha}:hard_place_eligibility;base:${currentHandout.base}`;
     if(row.restrictionProvenance===restriction)normalized.restrictionProvenance=restriction;
-    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[]);
+    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[],row.dayOfWeek);
     assert.equal(canonicalJson(row),canonicalJson(normalized),'historical full-row/physical/workload/provenance drift');
   }
   // Target people must already be represented by the authenticated hydrated
@@ -1050,7 +1001,7 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
         serviceEffortMinutes:old.reduce((n,r)=>n+r.serviceEffortMinutes,0),window:phase==='morning'?{start:owner.shift[0],end:'09:45'}:{start:'09:45',end:owner.shift[1]},
         serviceEffortProvenance:`base:${currentHandout.base}:effort`,priorityProvenance:`base:${currentHandout.base}:priority`,
         qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,
-        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]))});
+        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]),day)});
       rows.push(row);(config.overrides[String(day)][phase][key]||=[]).push(family);
       comparisonLedger.push({day,phase,family,originalRows:structuredClone(old),originalRowsDigest:contentDigest(old),referenceSlotId:targetSlots[correctedAdminKey||originalKey].slotId,
         comparisonSourceOwnerSlotId:owner.slotId,...(mandatory?{mandatoryCurrentOwnerBinding:mandatory}:{}),
@@ -1580,9 +1531,9 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     const ownerKey = keyBySlot.get(assignment.originSlotId);
     assert.ok(ownerKey, `assignment owner outside stable positions ${assignment.workId}`);
     assertNormalOwnerEligibility({ key: ownerKey, ...patternConfig.slots[ownerKey] },
-      assignment.locationCodeSnapshot);
+      assignment.locationCodeSnapshot,assignment.dayOfWeek,assignment.coveragePurpose);
     assignment.restrictedSlotIds = hardRestrictedSlots(patternConfig, assignment.locationCodeSnapshot,
-      assignment.restrictedSlotIds || []);
+      assignment.restrictedSlotIds || [],assignment.dayOfWeek);
     assert.ok(!assignment.restrictedSlotIds.includes(assignment.ownerSlotId),
       `hard-restricted source owner ${assignment.workId}`);
     assignment.serviceEffortProvenance = `base:${baseHash}:effort`;
@@ -2055,7 +2006,9 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
             .find(b=>b.dayOfWeek===day&&b.family===family):null;
           if(mandatory&&targetSlots[owner].slotId!==mandatory.mandatoryPrimarySlotId)continue;
         }
-        if (targetSlots[owner].hardForbiddenFamilies?.includes(family)) continue;
+        if (isHardForbidden(targetSlots[owner],family,day)) continue;
+        const protectedOwner=mandatoryNormalOwner(result,family,day);
+        if(protectedOwner&&owners.some(k=>targetSlots[k].slotId===protectedOwner)&&targetSlots[owner].slotId!==protectedOwner)continue;
         if (normalGeographyRestrictionApplies({key:owner,...targetSlots[owner]})
           && !targetSlots[owner].normalAssignmentFamilies.includes(family)) continue;
         // Monday-only route packages stay with their actual handout owner.
@@ -2076,6 +2029,17 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
       for (let a = 0; a < owners.length; a += 1) for (let b = 0; b < owners.length; b += 1) if (a !== b) {
         constraints.push(` sites_${a}_${b}: ${expression([...termsFor(owners[a], false, true), ...termsFor(owners[b], false, true).map(([n,v]) => [-n,v])])} <= 1`);
         if (phase === "equalized") constraints.push(` load_${a}_${b}: ${expression([...termsFor(owners[a], true), ...termsFor(owners[b], true).map(([n,v]) => [-n,v])])} <= 3`);
+      }
+      if (phase === "equalized") {
+        // Preserve the existing <=3 pairwise integer workload rule. Its fixed
+        // sum implies tighter per-owner integer bounds; no allocation or
+        // objective is removed from the original feasible integer model.
+        const total=families.reduce((sum,family)=>sum+result.weights[family]*2,0),
+          range=recurringIntegerLoadRange({total,owners:owners.length,spread:3});
+        for(const [index,owner]of owners.entries()) {
+          constraints.push(` integer_load_floor_${index}: ${expression(termsFor(owner,true))} >= ${range.lower}`);
+          constraints.push(` integer_load_ceiling_${index}: ${expression(termsFor(owner,true))} <= ${range.upper}`);
+        }
       }
       const groups = new Map();
       if (phase === "morning") {
@@ -2247,8 +2211,17 @@ function phaseInvocationSource({source,currentConfig,dayOfWeek,phaseSourceBasis}
 }
 function freezeInvocationFact(x){if(x&&typeof x==='object'){for(const v of Object.values(x))freezeInvocationFact(v);Object.freeze(x);}return x;}
 function createScalableInvocation(){
-  const evidence=createRecurringPhaseEvidenceInvocation();let basisFact=null;
-  return Object.freeze({...evidence,sourceForDay(input){
+  const evidence=createRecurringPhaseWeekInvocation();let basisFact=null,reductionFact=null;
+  return Object.freeze({...evidence,checkedReductionContext(context){
+    // Full actual bytes are checked at every use. Only a private detached
+    // validated context is retained for this one invocation; changed/rehash
+    // inputs must pass every original context check again.
+    const key=contentDigest(context);
+    if(!reductionFact||reductionFact.key!==key){
+      reductionFact=freezeInvocationFact({key,context:structuredClone(assertReductionContext(context))});
+    }
+    return reductionFact.context;
+  },sourceForDay(input){
     if(!input.phaseSourceBasis?.reductionContext)return input.source;
     // Actual bytes, not supplied hashes or an object-identity-only cache.
     const key=contentDigest({source:input.source,currentConfig:input.currentConfig,phaseSourceBasis:input.phaseSourceBasis});
@@ -2265,7 +2238,7 @@ function createScalableInvocation(){
   }});
 }
 function reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners,evidenceInvocation=null}){
-  const context=assertReductionContext(phaseSourceBasis.reductionContext),bindings=context.currentConfig.fullNineReductionBinding
+  const context=(evidenceInvocation?.checkedReductionContext||assertReductionContext)(phaseSourceBasis.reductionContext),bindings=context.currentConfig.fullNineReductionBinding
     .mandatoryPrimaryOwnerBindings.filter(b=>b.dayOfWeek===dayOfWeek);
   for(const binding of bindings){
     const pkg=proof.descriptor.packages.find(p=>p.family===binding.family),choice=proof.descriptor.choices.find(c=>c.workId===pkg?.workId);
@@ -2361,15 +2334,14 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
     const basis=structuredClone(finalSource),v=basis.version||basis.versions[0];
     v.assignments=v.assignments.map((row,index)=>row.dayOfWeek===dayOfWeek?structuredClone(original.assignments[index]):row);
     try{
-      const prior=first[dayOfWeek],descriptor=createRecurringPhaseDescriptor({source:basis,ownerConfig:currentConfig,
-        dayOfWeek,selectedWorkIds:prior.descriptor.selectedWorkIds});
+      const prior=first[dayOfWeek],{descriptor,candidate}=evidenceInvocation.rebind({source:basis,ownerConfig:currentConfig,
+        dayOfWeek,selectedWorkIds:prior.descriptor.selectedWorkIds,selection:prior.selectedOwnership});
       const dayBasis=input=>{const out=structuredClone(input),version=out.version||out.versions[0];
         version.assignments=version.assignments.filter(row=>row.dayOfWeek===dayOfWeek);return out;};
       assert.equal(canonicalJson(dayBasis(basis)),canonicalJson(dayBasis(source)),'day relaxation source facts changed');
       const semantic=input=>{const out=structuredClone(input);delete out.sourceDigest;delete out.descriptorDigest;
         delete out.fixedSourceRowsDigest;return out;};
       assert.equal(canonicalJson(semantic(descriptor)),canonicalJson(semantic(prior.descriptor)),'day relaxation descriptor changed');
-      const candidate=createRecurringPhaseProspectiveSource({source:basis,ownerConfig:currentConfig,descriptor,selection:prior.selectedOwnership});
       assert.equal(contentDigest(candidate),finalDigest,'bound selection does not produce exact final source');
       const body={status:'PROVEN_CANONICAL_PHASE_MINIMUM',descriptor,candidateSourceDigest:finalDigest,
         minimumDoubledSpread:prior.minimumDoubledSpread,halfUnitFeasible:prior.halfUnitFeasible,

@@ -1,0 +1,27 @@
+{
+  "state": "PASS_EXACT_OWNED_FIXTURE_CLEANUP",
+  "results": [
+    {
+      "receipt": "ACTUAL_CURRENT_EIGHT_NORMAL",
+      "container": "597d6ba3118b2641bb284e31c520d45909816ff4ea69598df6faed0897f5bf30",
+      "name": "mz_schema_rebuild_8_normal_0b0354a604bd41ffb87448fbac75578b",
+      "owner": "6c007e30-43ae-4be4-8699-9c1078d5ab47",
+      "exact_absence": true,
+      "removed_by_this_call": true,
+      "functional_adoption": false,
+      "socketAndParentAbsent": true
+    },
+    {
+      "receipt": "ACTUAL_SOURCE303_NORMAL",
+      "container": "6f2d17f5c0384a51a772a1a0266c7fe5bff4c0f3b8aa725f5840767591b757c0",
+      "name": "mz_schema_rebuild_8_source303_normal_f9dc493906cf446ca62811fe9d1580a4",
+      "owner": "ece75f3d-306c-4d16-9571-75025f02e745",
+      "exact_absence": true,
+      "removed_by_this_call": true,
+      "functional_adoption": false,
+      "socketAndParentAbsent": true
+    }
+  ],
+  "sourceAndCatalogEvidencePreserved": true,
+  "productionWritten": false
+}

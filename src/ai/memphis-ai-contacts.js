@@ -9,13 +9,13 @@ function isContactQuestion(text = "") {
   if (!lower) return false;
 
   const explicitContactIntent = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(lower);
-  const namedLookup = /\b(eric|operle|mckenneys?|mckinneys?|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
+  const namedLookup = /\b(eric|operle|mckenneys?|mckinneys?|brandy|gull|haley|lejman|jennifer|sheffield|annie)\b/.test(lower);
   const titledLookup = /\b(ops manager|operations manager|custodial manager|horticulture manager|water quality manager|facilities manager)\b/.test(lower) && /\b(who is|who's|contact|phone|number)\b/.test(lower);
 
   return explicitContactIntent || namedLookup || titledLookup;
 }
 
-function contactWhereClause(text = "") {
+function contactWhereClause(text = "", { includeNotes = false } = {}) {
   const lower = normalizeLoose(text);
   const terms = [];
 
@@ -23,6 +23,7 @@ function contactWhereClause(text = "") {
   else if (/\beric\b|\boperle\b/.test(lower)) terms.push("Eric");
   if (/\bbrandy\b|\bgull\b/.test(lower)) terms.push("Brandy", "Gull");
   if (/\bhaley\b|\blejman\b/.test(lower)) terms.push("Haley", "Lejman");
+  if (/\bannie\b/.test(lower)) terms.push("Annie");
   if (/\bjennifer\b|\bsheffield\b|\bboss\b|\bdirector\b/.test(lower)) terms.push("Jennifer", "Sheffield", "Director");
   if (/\bfacilities\b/.test(lower)) terms.push("Facilities");
   if (/\bcustodial\b/.test(lower)) terms.push("Custodial");
@@ -37,7 +38,7 @@ function contactWhereClause(text = "") {
 
   const filters = terms.map((term) => {
     const like = `'%${esc(term)}%'`;
-    return `(display_name ilike ${like} or role_title ilike ${like} or coalesce(department, '') ilike ${like} or coalesce(notes, '') ilike ${like})`;
+    return `(display_name ilike ${like} or role_title ilike ${like} or coalesce(department, '') ilike ${like}${includeNotes ? ` or coalesce(notes, '') ilike ${like}` : ''})`;
   });
 
   return `(${filters.join(" or ")})`;
@@ -66,15 +67,17 @@ function summarizeAmbiguousContacts(contacts = [], firstName = "") {
 
 export async function answerInternalContactQuestion(runReadOnlySql, text = "", userRole = "") {
   if (!isContactQuestion(text)) return null;
-
-  // H4: Phone numbers are only exposed to manager role.
+  const manager = isManagerRole(userRole);
+  // Owner-approved Custodial directory numbers are internal work contacts,
+  // including a personal device used for work. This grants no public lookup.
+  if (!manager && String(userRole || '').trim().toLowerCase() !== 'employee') return null;
   const phoneRequested = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(normalizeLoose(text));
-  const includePhone = phoneRequested && isManagerRole(userRole);
-  const where = contactWhereClause(text);
+  const includePhone = phoneRequested;
+  const where = contactWhereClause(text, { includeNotes: manager });
   const rows = await runReadOnlySql(`
-    select display_name, role_title, department, phone, notes, active, sort_order
+    select display_name, role_title, department, phone, ${manager ? 'notes, ' : ''}active, sort_order
     from public.internal_ops_contacts
-    where ${where}
+    where active = true and (${where})
     order by active desc, sort_order asc, display_name asc
     limit 8
   `);
@@ -88,7 +91,5 @@ export async function answerInternalContactQuestion(runReadOnlySql, text = "", u
   }
 
   // OC24-13: internal notes are not employee-visible work-directory content.
-  // Personal/work number classification remains an unanswered owner boundary;
-  // do not widen the existing manager-only phone rule here.
-  return contacts.map((contact) => summarizeContact(contact, { includePhone, includeNotes: isManagerRole(userRole) })).join(" ");
+  return contacts.map((contact) => summarizeContact(contact, { includePhone, includeNotes: manager })).join(" ");
 }

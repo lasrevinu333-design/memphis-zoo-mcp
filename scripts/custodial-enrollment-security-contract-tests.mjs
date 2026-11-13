@@ -125,6 +125,38 @@ async function request(pathname, { body, headers = {} } = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+if (process.argv.includes('--removal-admission-only')) {
+  try {
+    const operation = '20000000-0000-4000-8000-000000000099';
+    const original = { operation_id: operation, device_id: 'KIOSK_02' };
+    const before = JSON.stringify({ operations: [...operations], rpcCalls });
+    for (const body of [original, { ...original, inventory_acknowledged: true, manager_authorized: true,
+      finalizer_allowed: true, key_removal: true }, { ...original, replayed: true }]) {
+      const result = await request('/custodial-device-auth/remove', {
+        body, headers: { authorization: `Device 30000000-0000-4000-8000-000000000001.${'x'.repeat(43)}`,
+          'idempotency-key': operation },
+      });
+      assert.equal(result.status, 409);
+      assert.equal(result.body.ok, false);
+      assert.equal(result.body.code, 'custodial_native_removal_inventory_admission_required');
+      assert.equal(JSON.stringify({ operations: [...operations], rpcCalls }), before);
+    }
+    const browser = await request('/custodial-device-auth/remove', { body: original,
+      headers: { origin: 'https://example.invalid', 'x-memphis-app-edition': 'custodial' } });
+    assert.equal(browser.status, 403);
+    const conflict = await request('/custodial-device-auth/remove', { body: original,
+      headers: { 'idempotency-key': '20000000-0000-4000-8000-000000000098' } });
+    assert.equal(conflict.status, 409); assert.equal(conflict.body.code, 'removal_operation_conflict');
+    assert.equal(JSON.stringify({ operations: [...operations], rpcCalls }), before);
+    console.log(JSON.stringify({ scope: 'Changed normal removal HTTP boundary, synthetic route fixture; no real SQL/native/manager acceptance',
+      passed: 5, failed: 0, revocation_rpcs: 0, original_records_unchanged: true,
+      whole_removal_ready: false, old_groups_replayed: 0 }));
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+  process.exit(0);
+}
+
 try {
   const operationId = "20000000-0000-4000-8000-000000000001";
   const enrollmentBody = {

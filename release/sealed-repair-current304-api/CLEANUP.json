@@ -1,0 +1,8 @@
+{
+  "apiClosed": true,
+  "proxyClosed": true,
+  "postgrestRemoved": true,
+  "poolClosed": true,
+  "ownedFixtureCleanupReturned": true,
+  "privateFixtureSessionFilesRemoved": true
+}

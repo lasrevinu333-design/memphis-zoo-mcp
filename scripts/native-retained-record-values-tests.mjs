@@ -1,0 +1,53 @@
+// Only synthetic, original-actor authenticated capture plus lossless values.
+// The oracle must be the unchanged production Java snapshot implementation.
+import assert from 'node:assert/strict';import{execFileSync}from'node:child_process';
+import{createHash,createHmac,randomUUID}from'node:crypto';
+import{captureAuthenticatedNativeEvidence,originalRetainedRecordDigestAuthority,retainedNativeIntakePath as PATH}from'../src/native-retained-wire-intake.js';
+import{deviceCredentialInternals as credentials}from'../src/auth/device-credential-auth.js';
+import{verifyOriginalNativeRecordValues as verify,isVerifiedOriginalNativeRecordValueMatch as branded,retainedNativeRecordValueLimits as limits}from'../src/native-retained-record-values.js';
+const cp=process.env.NATIVE_RECORD_VALUE_ORACLE_CLASSPATH;if(!cp)throw Error('Exact production Java oracle classpath is required, never skipped.');
+const sha=x=>createHash('sha256').update(x).digest('hex'),hex=s=>Array.from({length:s.length},(_,i)=>s.charCodeAt(i).toString(16).padStart(4,'0')).join('');
+const envelope=records=>({schema:'custodial.retained-native-record-values.v1',records});
+const bytes=records=>Buffer.from(JSON.stringify(envelope(records)),'ascii');
+const oracle=records=>JSON.parse(execFileSync('java',['-cp',cp,'org.memphiszoo.custodial.vault.NativeRecordValuesOracle'],{input:bytes(records),encoding:'utf8',timeout:10000,maxBuffer:4*1024*1024,env:{PATH:process.env.PATH,LANG:'C.UTF-8'}}));
+const id=n=>`95000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const cid=id(1),did=id(2),eid=id(3),gid=id(4),sid=id(5),secret='SYNTHETIC_record_values_secret_1234567890';
+const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'SYNTHETIC_record_values_key'},now=new Date('2026-10-09T09:00:00Z');
+const context={schema:'custodial.separation-context.v1',separation_id:sid,authority_revision:6,employee_id:eid,device_id:did,canonical_device_id:'KIOSK_08',credential_id:cid,assignment_epoch:4,cutoff_at:'2026-10-09T08:00:00.123456Z',state:'PENDING_RECONCILIATION',native_inventory_state:'UNKNOWN',server_known_open_sessions:[],new_work_allowed:false,phone_released:false,purpose:'SEPARATION_STATUS_ONLY'};
+const device={canonical_device_pk:did,canonical_device_id:'KIOSK_08',device_active:true,employee_active:false,employee_code:'EMP001',assigned_employee_id:eid,assignment_epoch:'4'};
+const principal={schema_version:'custodial-protected-principal.v1',device_id:'KIOSK_08',employee_id:eid,assignment_epoch:4,credential_id:cid,credential_operation_id:id(6),installation_seal:'SYNTHETIC_record_values_installation',enrolled_at:'2026-09-01T00:00:00Z'};
+const generation={generation_id:gid,device_id:did,device_identifier:'KIOSK_08',credential_id:cid,employee_id:eid,assignment_epoch:4,principal_digest:sha(JSON.stringify(['custodial.native-provider-principal.v1',...Object.keys(principal).sort().map(k=>[k,principal[k]])])),activated_at:'2026-10-09T07:00:00.123455Z'};
+async function capture(records){
+ const native=oracle(records),body={schema:'custodial.native-protected-work-snapshot.v1',separation_context:context,original_principal:principal,...native,record_count:native.records.length,native_semantic_inventory_state:'UNKNOWN',browser_inventory_state:'UNKNOWN',new_work_allowed:false,phone_released:false};
+ const manifest=JSON.stringify(body),digest=sha(manifest),wire=Buffer.from(JSON.stringify({attestation_version:'custodial-native-protected-snapshot.v1',manifest_body:manifest,manifest_sha256:digest,attestation:createHmac('sha256',secret).update(['custodial-native-protected-snapshot.v1',cid,digest].join('\n')).digest('hex')}));
+ const frame={schema:'custodial.original-native-evidence-intake.v1',operation_id:randomUUID(),generation_id:gid,signed_wire_base64:wire.toString('base64')},raw=Buffer.from(JSON.stringify(frame)),requestId=randomUUID();
+ const headers={authorization:'Device '+cid+'.'+secret,origin:'https://localhost','x-device-id':'KIOSK_08','x-memphis-app-edition':'custodial','x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':requestId,'x-memphis-native-request-timestamp':now.toISOString()};
+ headers['x-memphis-native-request-attestation']=createHmac('sha256',secret).update(['custodial-native-request.v1',cid,'KIOSK_08','POST',PATH,sha(raw),requestId,now.toISOString(),'custodial'].join('\n')).digest('hex');
+ const row={credential_id:cid,device_id:did,token_hash:credentials.tokenHash(secret,env),confirmed_at:'2026-01-01T00:00:00Z',expires_at:'2026-10-09T08:00:01Z',revoked_at:null,metadata_json:credentials.deviceCredentialSecretMetadata(env)};
+ const proof=await captureAuthenticatedNativeEvidence({method:'POST',originalUrl:PATH,headers,scanAuthorityRawBody:raw,body:frame},{env,now,store:{findCredential:async()=>row},runReadOnlySql:async sql=>sql.includes('with requested as')?[device]:sql.includes('custodial_v13_')?[{context}]:[{original_generation:generation}]});
+ return{proof,native};
+}
+const vector=[
+ ['a','string',hex('SYNTHETIC original opaque ciphertext')],['b','int32','-2147483648'],['c','int64','9223372036854775807'],
+ ['d','boolean',true],['e','boolean',false],['f','float32','00000000'],['g','float32','80000000'],
+ ['h','float32','7fc00001'],['i','float32','7fc00002'],['j','string-set',['',hex('a'),hex('bc')]],
+ ['k','string',hex('\ud800')],['\ud800','string',hex('synthetic corrupt retained value')]
+].map(([key,type,value])=>[hex(key),type,value]).sort((a,b)=>a[0]<b[0]?-1:1);
+const {proof,native}=await capture(vector),names=[];
+const check=(name,fn)=>{fn();names.push(name);console.log('PASS '+name);};
+const refuse=work=>assert.throws(work,e=>e.code==='native_retained_record_values_invalid'||e.code==='native_evidence_retention_pending');
+check('all six raw Java types including int64/NaN/signed-zero/malformed-UTF16 match exact original digests',()=>{const result=verify(proof,bytes(vector));assert.equal(result.record_count,12);assert.equal(result.schema,'custodial.original-native-record-values-match.v1');assert.equal(result.raw_snapshot_sha256,native.raw_snapshot_sha256);assert.equal(result.record_values_matched,true);assert.equal(branded(result),true);assert.deepEqual(result.records,vector);});
+check('value match grants no durable retention, semantic inventory, acceptance, work, key retirement or reuse',()=>{const r=verify(proof,bytes(vector));for(const k of ['record_values_retained','inventory_acknowledged','automatic_acceptance','work_accepted','new_work_allowed','phone_released'])assert.equal(r[k],false);assert.equal(r.native_semantic_inventory_state,'UNKNOWN');assert.equal(r.browser_inventory_state,'UNKNOWN');assert.equal(Object.hasOwn(r,'credential_hash'),false);assert.equal(Object.hasOwn(r,'request_base64'),false);assert.equal(Object.hasOwn(r,'attestation'),false);});
+check('JSON/clone of authenticated capture cannot acquire original digest authority',()=>{for(const p of [null,{},structuredClone(proof)])refuse(()=>verify(p,bytes(vector)));});
+check('JSON/clone of matched values is not a branded verified result',()=>{const r=verify(proof,bytes(vector));assert.equal(branded(structuredClone(r)),false);assert.equal(branded({record_values_matched:true}),false);});
+check('changed value in each original raw type refuses, including opaque unknown record',()=>{for(let n=0;n<vector.length;n++){const changed=structuredClone(vector),type=changed[n][1];changed[n][2]=type==='boolean'?!changed[n][2]:type==='string-set'?[hex('different')]:type==='float32'?'00000001':type==='int32'||type==='int64'?'3':hex('changed');refuse(()=>verify(proof,bytes(changed)));}});
+check('missing added duplicated reordered or changed original key refuses',()=>{for(const rows of [vector.slice(1),[...vector,[hex('z'),'string','']], [...vector.slice(0,-1),vector[0]], [...vector].reverse(),vector.map((r,i)=>i===0?[hex('untrusted'),r[1],r[2]]:r)])refuse(()=>verify(proof,bytes(rows)));});
+check('typed int64 not coerced through JS number, int32 overflow and noncanonical decimal refuse',()=>{for(const value of [9223372036854775807, '9223372036854775808','-9223372036854775809','+1','01','-0','1.0']){const rows=structuredClone(vector);rows[2][2]=value;refuse(()=>verify(proof,bytes(rows)));}const rows=structuredClone(vector);rows[1][2]='2147483648';refuse(()=>verify(proof,bytes(rows)));});
+check('float raw bits preserved, shorthand or numeric/unknown type refuses',()=>{for(const value of ['0','7fc0000g',0,null]){const rows=structuredClone(vector);rows[5][2]=value;refuse(()=>verify(proof,bytes(rows)));}const rows=structuredClone(vector);rows[5][1]='float64';refuse(()=>verify(proof,bytes(rows)));});
+check('string sets require exact ordered unique UTF16 members',()=>{for(const value of [[hex('bc'),hex('a')],['',''],[null]]){const rows=structuredClone(vector);rows[9][2]=value;refuse(()=>verify(proof,bytes(rows)));}});
+check('noncanonical/duplicate/escaped fields, whitespace, BOM, trailing data and nonASCII refuse',()=>{const valid=bytes(vector);for(const b of [Buffer.concat([valid,Buffer.from(' ')]),Buffer.from(valid.toString().replace('{','{"schema":"duplicate",')),Buffer.from(valid.toString().replace('"schema"','"\\u0073chema"')),Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),valid]),Buffer.concat([valid,Buffer.from('{}')]),Buffer.from(valid.toString().replace('records','récords'))])refuse(()=>verify(proof,b));});
+check('caller buffer mutation cannot change returned frozen values or authority',()=>{const input=bytes(vector),r=verify(proof,input);input.fill(0);assert.deepEqual(r.records,vector);assert.equal(Object.isFrozen(r.records[9][2]),true);assert.equal(Object.isFrozen(r),true);const authority=originalRetainedRecordDigestAuthority(proof);assert.equal(Object.isFrozen(authority.records[0]),true);});
+check('input byte/field bounds refuse without truncation or empty success',()=>{refuse(()=>verify(proof,Buffer.alloc(limits.bytes+1,32)));const rows=structuredClone(vector);rows[0][2]='0061'.repeat(limits.field_string_units+1);refuse(()=>verify(proof,bytes(rows)));refuse(()=>verify(proof,bytes([]).toString()));});
+const empty=await capture([]);
+check('zero signed records only match values, never prove semantic empty/ACK',()=>{const r=verify(empty.proof,bytes([]));assert.equal(r.record_count,0);assert.equal(r.native_semantic_inventory_state,'UNKNOWN');assert.equal(r.inventory_acknowledged,false);assert.equal(r.record_values_retained,false);});
+console.log(JSON.stringify({status:'PASS_SOURCE_AUTHENTICATED_RAW_VALUE_MATCHER',cases:names.length,names,actual_unchanged_Java_digest_oracle:true,synthetic_original_actor_and_request:true,opaque_values_only:true,native_phone_emission:false,record_values_durably_retained:false,semantic_inventory_ACK_restore_or_key_removal:false,SQL_or_HTTP_new_mount:false}));

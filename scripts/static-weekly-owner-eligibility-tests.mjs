@@ -6,11 +6,15 @@ const read=name=>JSON.parse(readFileSync(new URL('../config/'+name,import.meta.u
 const old=read('custodial-recurring-schedule-20260923.json'),config=read('custodial-recurring-schedule-20260924.json');
 validateOwnerEligibilityConfig(config);
 const normalized=structuredClone(config);normalized.schema=old.schema;
+// OC24-04 moved Gregory's fixed lunch to noon after the original v1 fixture.
+assert.deepEqual(config.slots.GREGORY.lunch,['12:00','13:00']);
+assert.deepEqual(old.slots.GREGORY.lunch,['13:00','14:00']);
+normalized.slots.GREGORY.lunch=old.slots.GREGORY.lunch;
 for(const slot of Object.values(normalized.slots)){
  if(slot.normalAssignmentFamilies){slot.normalAllowedFamilies=slot.normalAssignmentFamilies;delete slot.normalAssignmentFamilies;}
  if(slot.hardForbiddenFamilies){slot.forbiddenFamilies=slot.hardForbiddenFamilies;delete slot.hardForbiddenFamilies;}
 }
-assert.deepEqual(normalized,old,'only explicit scope/schema names changed; every owner fact retained');
+assert.deepEqual(normalized,old,'scope/schema and the separately asserted Gregory lunch are the only changes');
 assert.throws(()=>validateOwnerEligibilityConfig(old),/explicit normal vs hard/);
 for(const legacy of ['normalAllowedFamilies','forbiddenFamilies']){
  const bad=structuredClone(config);bad.slots.KAREN[legacy]=[];assert.throws(()=>validateOwnerEligibilityConfig(bad),/ambiguous/);

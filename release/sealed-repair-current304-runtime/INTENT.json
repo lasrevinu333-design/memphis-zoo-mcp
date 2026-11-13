@@ -1,0 +1,21 @@
+{
+  "schema": "custodial.main.actual-canonical304-run.v1",
+  "at": "2026-11-01T00:27:25.057384+00:00",
+  "backendHead": "3f3ce2a4d962967be5399bef75f424f1e14138a7",
+  "backendTree": "5207e5b3f88813c042b0c8d360312bdcd201fdbe",
+  "planSha256": "0c139bf3b1263cfff047a9cb2ea2b5ec4d6de0bda378c831658ae95de6183b52",
+  "command": [
+    "node",
+    "--max-old-space-size=384",
+    "scripts/sealed-repair-canonical-database-tests.mjs",
+    "--out",
+    "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/database"
+  ],
+  "tmpdir": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp",
+  "out": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/database",
+  "qualificationMemoryBytes": 536870912,
+  "scope": "isolated fresh304 and full corrected workflow tests only; no production/audit/build/deploy",
+  "priorRun": "001 immutable schema+activation+all nine regressions PASS; stale module303 gate known assertion; all owned resources actually cleaned",
+  "newRunReason": "Five exact 303 module preconditions corrected to actual304; SQL and workflow cases unchanged",
+  "cleanup": "Original runner exact fixture cleanup; uncertainty preserved, no automatic retry"
+}

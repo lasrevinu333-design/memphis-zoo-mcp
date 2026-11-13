@@ -131,8 +131,20 @@ export function stableCompare(left, right) {
 // Scheduler identities therefore use this UTF-8 byte order as their final
 // tie-breaker.  TextEncoder is available in every supported compiler runtime.
 export function bytewiseCompare(left, right) {
-  const a = UTF8_ENCODER.encode(String(left));
-  const b = UTF8_ENCODER.encode(String(right));
+  const leftText = String(left), rightText = String(right);
+  if (leftText === rightText) return 0;
+  // ASCII code units are exactly their UTF-8 bytes. Retain the original
+  // signed result, including prefix length differences, without allocating
+  // byte arrays for the common scheduler identity domain. Unicode continues
+  // through the exact original encoder (including lone-surrogate ties).
+  if (/^[\x00-\x7f]*$/.test(leftText) && /^[\x00-\x7f]*$/.test(rightText)) {
+    const length = Math.min(leftText.length,rightText.length);
+    for(let index=0;index<length;index++) if(leftText.charCodeAt(index)!==rightText.charCodeAt(index))
+      return leftText.charCodeAt(index)<rightText.charCodeAt(index)?-1:1;
+    return leftText.length-rightText.length;
+  }
+  const a = UTF8_ENCODER.encode(leftText);
+  const b = UTF8_ENCODER.encode(rightText);
   const length = Math.min(a.length, b.length);
   for (let index = 0; index < length; index += 1) {
     if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
@@ -140,18 +152,65 @@ export function bytewiseCompare(left, right) {
   return a.length - b.length;
 }
 
+// Only immutable key ordering/prefix and string-literal encoding facts survive recursive visits, and only
+// until this synchronous call returns. Input values, digests, models and proof
+// results are never cached. Reentrant calls may share harmless ordering facts.
+let ACTIVE_CANONICAL_REPRESENTATION = null;
 export function canonicalJson(value) {
   if (value === null) return "null";
-  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "string") {
+    const literals = ACTIVE_CANONICAL_REPRESENTATION?.literals;
+    if (!literals || value.length > 4096) return JSON.stringify(value);
+    let token = literals.get(value);
+    if (token === undefined) {
+      token = JSON.stringify(value);
+      if (literals.size < 1024) literals.set(value, token);
+    }
+    return token;
+  }
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") {
     assert(Number.isFinite(value), "Canonical JSON cannot contain non-finite numbers.", "invalid_canonical_value");
-    return Object.is(value, -0) ? "0" : JSON.stringify(value);
+    return Object.is(value, -0) ? "0" : String(value);
   }
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  assert(typeof value === "object", "Canonical JSON only accepts JSON values.", "invalid_canonical_value");
-  const keys = Object.keys(value).sort(stableCompare);
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  // Recursive/reentrant visits already share this synchronous call's facts.
+  // Only the outer visit owns the context lifetime; nested visits do not need
+  // to assign and restore the same reference for every coefficient pair.
+  if (ACTIVE_CANONICAL_REPRESENTATION) return canonicalContainer(value, ACTIVE_CANONICAL_REPRESENTATION);
+  const representation = { shapes: new Map(), shapeCount: 0, literals: new Map() };
+  ACTIVE_CANONICAL_REPRESENTATION = representation;
+  try {
+    return canonicalContainer(value, representation);
+  } finally { ACTIVE_CANONICAL_REPRESENTATION = null; }
+}
+
+function canonicalContainer(value, representation) {
+    const shapes = representation.shapes;
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    assert(typeof value === "object", "Canonical JSON only accepts JSON values.", "invalid_canonical_value");
+    const keys = Object.keys(value), bucket = shapes.get(keys.length);
+    let ordered;
+    if (bucket) for (let i=0;i<bucket.length;i++) {
+      const fact=bucket[i]; let same=true;
+      for(let j=0;j<keys.length;j++) if(fact.keys[j]!==keys[j]) { same=false; break; }
+      if(same) { ordered=fact.ordered; break; }
+    }
+    if (!ordered) {
+      ordered = [...keys].sort(stableCompare).map(key => [key, JSON.stringify(key) + ":"]);
+      if (representation.shapeCount < 256 && (!bucket || bucket.length < 16)
+        && keys.reduce((sum,key)=>sum+key.length,0) <= 8192) {
+        const fact = {keys,ordered};
+        if (bucket) bucket.push(fact); else shapes.set(keys.length,[fact]);
+        representation.shapeCount++;
+      }
+    }
+    let text = "{";
+    for (let index = 0; index < ordered.length; index++) {
+      const [key, prefix] = ordered[index];
+      if (index) text += ",";
+      text += prefix + canonicalJson(value[key]);
+    }
+    return text + "}";
 }
 
 // A small synchronous SHA-256 implementation keeps browser/database replay
@@ -178,13 +237,28 @@ function inertDigestGraph(value, isProxy, active = new WeakSet()) {
     || Object.getOwnPropertyDescriptor(Array.prototype,'join')?.value !== ARRAY_JOIN
     || Object.getOwnPropertyDescriptor(Array.prototype,'constructor')?.value !== Array
     || Object.getOwnPropertyDescriptor(Array,Symbol.species)?.get !== ARRAY_SPECIES_GETTER)) return false;
+  // Dense coefficient pairs dominate generated model graphs. Inspect their
+  // descriptors directly instead of allocating a descriptor object, several
+  // key arrays and an Object.entries pair for every coefficient pair. Exactly
+  // length+1 own keys plus every enumerable data index proves the same dense
+  // array shape; holes, accessors, symbols and extra properties still fall back.
+  if (array) {
+    if (Reflect.ownKeys(value).length !== value.length+1) return false;
+    active.add(value);
+    try {
+      for (let index=0;index<value.length;index++) {
+        const descriptor=Object.getOwnPropertyDescriptor(value,String(index));
+        if (!descriptor || !descriptor.enumerable || !('value' in descriptor)
+          || !inertDigestGraph(descriptor.value,isProxy,active)) return false;
+      }
+      return true;
+    } finally { active.delete(value); }
+  }
   const descriptors = Object.getOwnPropertyDescriptors(value);
   if (Reflect.ownKeys(descriptors).some(key => typeof key !== 'string')) return false;
-  if (array && (Reflect.ownKeys(descriptors).length !== value.length+1 || Object.keys(value).length !== value.length || Object.keys(value).some((key,index) => key !== String(index)))) return false;
   active.add(value);
   try {
     for (const [key, descriptor] of Object.entries(descriptors)) {
-      if (array && key === 'length') continue;
       if (!('value' in descriptor)) return false;
       if (descriptor.enumerable && !inertDigestGraph(descriptor.value,isProxy,active)) return false;
     }

@@ -1,0 +1,79 @@
+{
+  "schema": "custodial.native-manual-staffing-component-evidence.v1",
+  "scope": "ACTUAL_OWNED_SQL_AND_MANAGER_CONTROL_PLANE_COMPONENT",
+  "productionWritten": false,
+  "genuineManagerBrowser": false,
+  "physicalNfc": false,
+  "canonicalSourceStill301": true,
+  "sourceFiles": [
+    {
+      "file": "src/approved-manual-absence.js",
+      "sha256": "a424319d639b9fd3b86713fa2fca55d6d66ef00cbf7fa6d54de35b67e6d826dc"
+    },
+    {
+      "file": "src/approved-manual-period-projection.js",
+      "sha256": "445a0c35ab7b53fb2a06b1105b93ae9758aa3bde62ed8860865efb0ca05d3b25"
+    },
+    {
+      "file": "src/approved-manual-manager-view.js",
+      "sha256": "628faf608337abaca219f0f5480dde860a196b38733e3e3bad11bf37c24108f6"
+    },
+    {
+      "file": "src/approved-manual-inherited-eligibility.js",
+      "sha256": "b1d74d4b6aeb888fbd963ea11d4c21b276464f051c542bba046b819a8a13ee0d"
+    },
+    {
+      "file": "src/approved-manual-staffing-transport.js",
+      "sha256": "c769d0eeeea728e91956ab0fdc8b57c2cfe4d96c74b57b5e5255a1c775f14681"
+    },
+    {
+      "file": "src/static-weekly-control-plane.js",
+      "sha256": "3a24ed72a9a2d16f72c6c0e515b61465f5050fa5f78b30ea7e87ec399e331d68"
+    },
+    {
+      "file": "proposals/approved-manual-native-period.sql",
+      "sha256": "e17d89eacd8685a7639e78a33ae2b3c67ce358e3518d619f0baf073d2d338266"
+    }
+  ],
+  "evidence": [
+    {
+      "file": "accepted-pto-manager-and-employee-readback.json",
+      "sha256": "c029394fb23c40984d66d998d1a7228bd42c345b9549e1cf72b7b7670fa67a50"
+    },
+    {
+      "file": "actual-manager-control-plane-save.json",
+      "sha256": "1d8ba9bc2d243972cce74d6aa5282ff4a4ce641a0415dd579ca452e130a587a0"
+    },
+    {
+      "file": "original-pto-acceptance-receipt.json",
+      "sha256": "50efaa66c36573b15f074cd0a0ed4c252bc33ee7563b0f31183700e313e39aa9"
+    }
+  ],
+  "actualResults": {
+    "firstPtoRevision": 4,
+    "secondPtoRevision": 5,
+    "firstPtoRows": 332,
+    "secondPtoRows": 338,
+    "fullHourLunchesAfterSecondPto": 38,
+    "unchangedAcceptedMondayRowsRetained": 41,
+    "unchangedAcceptedMondayLunchIdsRetained": 6,
+    "physicalLocationMinuteReadComparisons": 23220,
+    "employeeDayReads": 6,
+    "ownedCompilerRuntimeIsolationAndRecovery": "PASS"
+  },
+  "remaining": [
+    "Typed source-bound CoverAll registration and third-absence companion acceptance",
+    "Actual employee pre-start admission integration",
+    "Native notification continuity through retained documents",
+    "Canonical Source302 migration/canary/restore enrollment and final source release capture",
+    "Genuine manager browser test and hosted test candidate/build release"
+  ],
+  "nativePreviewReadback": {
+    "actualPreparation": "PASS",
+    "originalCancellationOperation": "7a07d9cf-2259-45ba-981e-a2da1092c898",
+    "state": "PREPARED_NOT_ACCEPTED",
+    "currentRevision": 5,
+    "sourceDigestBasis": "envelope.authority.sourceDigest",
+    "canonicalSourceUnchanged": true
+  }
+}

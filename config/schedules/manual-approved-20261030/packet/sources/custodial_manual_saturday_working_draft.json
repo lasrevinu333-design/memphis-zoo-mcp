@@ -1,0 +1,794 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-30T00:59:58Z",
+  "title": "Custodial manual Saturday working draft",
+  "schedule_day": "Saturday",
+  "timezone": "America/Chicago",
+  "status": "APPROVED / LOCKED full Saturday working plan: bases, 6 full-hour reliefs and exact handoffs through 17:00. Open arrival/9:45 details remain separate. Not production or physical-feasibility proof.",
+  "authority": {
+    "source": "Eric's direct voice approval relayed by parent; exact previously delivered proposal preserved.",
+    "user_approval": "Eric explicitly approved BOTH displayed weekend full drafts.",
+    "proposal_chat_receipt": "Sentinel_6cec1ef548e481918bd9951f83b6fa00",
+    "delivery_status": "Previously delivered for review; now explicitly approved without changes.",
+    "latest_confirmation": {
+      "quote": "I'm happy with ... Saturday and Sunday look great. Good job.",
+      "received_at_utc": "2026-10-30T00:59:58Z",
+      "scope": "Locks exact saved bases, full-hour reliefs and departure handoffs. No alternative swaps or new assignments."
+    }
+  },
+  "employees": [
+    {
+      "name": "Alijah Collins",
+      "group_scores": [
+        {
+          "group": "Teton and restrooms",
+          "score": 10
+        },
+        {
+          "group": "Northwest Passage",
+          "score": 7
+        },
+        {
+          "group": "East End restrooms",
+          "score": 7
+        }
+      ],
+      "base_only_sum": 24,
+      "shift_baseline": {
+        "start": "07:00",
+        "end": "16:00",
+        "source": "Existing recurring reference used for proposal availability, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "11:30",
+        "end": "12:30"
+      },
+      "status": "APPROVED / LOCKED working assignment",
+      "requested_base_areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ]
+    },
+    {
+      "name": "Karen Robinson",
+      "group_scores": [
+        {
+          "group": "Zambezi and restrooms",
+          "score": 9
+        },
+        {
+          "group": "Primate Pavilion",
+          "score": 3
+        },
+        {
+          "group": "Breezeway restrooms",
+          "score": 6
+        },
+        {
+          "group": "Tropical Birds",
+          "score": 5
+        }
+      ],
+      "base_only_sum": 23,
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "source": "Existing recurring reference used for proposal availability, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "09:30",
+        "end": "10:30"
+      },
+      "status": "APPROVED / LOCKED working assignment",
+      "requested_base_areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ]
+    },
+    {
+      "name": "Kathy Phelps",
+      "group_scores": [
+        {
+          "group": "East Admin and restrooms",
+          "score": 5
+        },
+        {
+          "group": "West Admin and restrooms",
+          "score": 7
+        },
+        {
+          "group": "Courtyard restrooms",
+          "score": 7
+        },
+        {
+          "group": "Nocturnal",
+          "score": 3
+        },
+        {
+          "group": "Primate Canyon",
+          "score": 1
+        }
+      ],
+      "base_only_sum": 23,
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "source": "Existing recurring reference used for proposal availability, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "10:30",
+        "end": "11:30"
+      },
+      "status": "APPROVED / LOCKED working assignment",
+      "requested_base_areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ]
+    },
+    {
+      "name": "Jada Rawlings",
+      "group_scores": [
+        {
+          "group": "Cat House Cafe restrooms",
+          "score": 7
+        },
+        {
+          "group": "Herpetarium",
+          "score": 5
+        },
+        {
+          "group": "Event Center and restrooms",
+          "score": 5
+        },
+        {
+          "group": "Cat Country",
+          "score": 2
+        },
+        {
+          "group": "Komodos",
+          "score": 4
+        }
+      ],
+      "base_only_sum": 23,
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "source": "Existing recurring reference used for proposal availability, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "10:00",
+        "end": "11:00"
+      },
+      "status": "APPROVED / LOCKED working assignment",
+      "requested_base_areas": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos"
+      ]
+    },
+    {
+      "name": "Kiltra Horton",
+      "group_scores": [
+        {
+          "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "score": 8
+        },
+        {
+          "group": "China and restrooms",
+          "score": 7
+        },
+        {
+          "group": "Bonobos restrooms",
+          "score": 8
+        }
+      ],
+      "base_only_sum": 23,
+      "shift_baseline": {
+        "start": "07:00",
+        "end": "16:00",
+        "source": "Existing recurring reference used for proposal availability, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "12:00",
+        "end": "13:00"
+      },
+      "status": "APPROVED / LOCKED working assignment",
+      "requested_base_areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ]
+    },
+    {
+      "name": "Xavier Green",
+      "group_scores": [
+        {
+          "group": "Expo and restrooms",
+          "score": 8
+        },
+        {
+          "group": "MemMex restrooms",
+          "score": 7
+        },
+        {
+          "group": "Aquarium",
+          "score": 5
+        }
+      ],
+      "base_only_sum": 20,
+      "shift_baseline": {
+        "start": "08:00",
+        "end": "17:00",
+        "source": "Existing recurring reference used for proposal availability, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "12:30",
+        "end": "13:30"
+      },
+      "status": "APPROVED / LOCKED working assignment",
+      "requested_base_areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ]
+    }
+  ],
+  "lunch_relief_assignments": [
+    {
+      "coverer": "Alijah Collins",
+      "employee_on_lunch": "Karen Robinson",
+      "start": "09:30",
+      "end": "10:30",
+      "areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED / LOCKED full-hour relief"
+    },
+    {
+      "coverer": "Kiltra Horton",
+      "employee_on_lunch": "Jada Rawlings",
+      "start": "10:00",
+      "end": "11:00",
+      "areas": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED / LOCKED full-hour relief"
+    },
+    {
+      "coverer": "Karen Robinson",
+      "employee_on_lunch": "Kathy Phelps",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED / LOCKED full-hour relief"
+    },
+    {
+      "coverer": "Jada Rawlings",
+      "employee_on_lunch": "Alijah Collins",
+      "start": "11:30",
+      "end": "12:30",
+      "areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED / LOCKED full-hour relief"
+    },
+    {
+      "coverer": "Kathy Phelps",
+      "employee_on_lunch": "Kiltra Horton",
+      "start": "12:00",
+      "end": "13:00",
+      "areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED / LOCKED full-hour relief"
+    },
+    {
+      "coverer": "Jada Rawlings",
+      "employee_on_lunch": "Xavier Green",
+      "start": "12:30",
+      "end": "13:30",
+      "areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED / LOCKED full-hour relief"
+    }
+  ],
+  "rating_source": "/user_notes/long_form/custodial_area_group_scoring_draft_20261029.json",
+  "afternoon_handoffs": {
+    "status": "APPROVED / LOCKED",
+    "assignments": [
+      {
+        "time": "14:00",
+        "transfers": [
+          {
+            "from": "Karen Robinson",
+            "to": "Alijah Collins",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion"
+            ]
+          },
+          {
+            "from": "Karen Robinson",
+            "to": "Kathy Phelps",
+            "areas": [
+              "Breezeway restrooms"
+            ]
+          },
+          {
+            "from": "Karen Robinson",
+            "to": "Jada Rawlings",
+            "areas": [
+              "Tropical Birds"
+            ]
+          }
+        ]
+      },
+      {
+        "time": "15:00",
+        "transfers": [
+          {
+            "from": "Kathy Phelps",
+            "to": "Alijah Collins",
+            "areas": [
+              "East Admin and restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          },
+          {
+            "from": "Kathy Phelps",
+            "to": "Kiltra Horton",
+            "areas": [
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Breezeway restrooms"
+            ]
+          },
+          {
+            "from": "Jada Rawlings",
+            "to": "Kiltra Horton",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Cat Country"
+            ]
+          },
+          {
+            "from": "Jada Rawlings",
+            "to": "Xavier Green",
+            "areas": [
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Tropical Birds"
+            ]
+          }
+        ]
+      },
+      {
+        "time": "16:00",
+        "transfers": [
+          {
+            "from": "Alijah Collins",
+            "to": "Xavier Green",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "East Admin and restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          },
+          {
+            "from": "Kiltra Horton",
+            "to": "Xavier Green",
+            "areas": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Breezeway restrooms",
+              "Cat House Cafe restrooms",
+              "Cat Country"
+            ]
+          }
+        ]
+      }
+    ],
+    "ownership_snapshots": [
+      {
+        "time": "14:00",
+        "owners": {
+          "Alijah Collins": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms",
+            "Zambezi and restrooms",
+            "Primate Pavilion"
+          ],
+          "Kathy Phelps": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Breezeway restrooms"
+          ],
+          "Jada Rawlings": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos",
+            "Tropical Birds"
+          ],
+          "Kiltra Horton": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ],
+          "Xavier Green": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 5,
+          "Kathy Phelps": 6,
+          "Jada Rawlings": 6,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        },
+        "owner_points": {
+          "Alijah Collins": 36,
+          "Kathy Phelps": 29,
+          "Jada Rawlings": 28,
+          "Kiltra Horton": 23,
+          "Xavier Green": 20
+        }
+      },
+      {
+        "time": "15:00",
+        "owners": {
+          "Alijah Collins": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms",
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "East Admin and restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "Kiltra Horton": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Breezeway restrooms",
+            "Cat House Cafe restrooms",
+            "Cat Country"
+          ],
+          "Xavier Green": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Komodos",
+            "Tropical Birds"
+          ]
+        },
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 8,
+          "Kiltra Horton": 8,
+          "Xavier Green": 7
+        },
+        "owner_points": {
+          "Alijah Collins": 45,
+          "Kiltra Horton": 52,
+          "Xavier Green": 39
+        }
+      },
+      {
+        "time": "16:00",
+        "owners": {
+          "Xavier Green": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Komodos",
+            "Tropical Birds",
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms",
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "East Admin and restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Breezeway restrooms",
+            "Cat House Cafe restrooms",
+            "Cat Country"
+          ]
+        },
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Xavier Green": 23
+        },
+        "owner_points": {
+          "Xavier Green": 136
+        }
+      }
+    ],
+    "end": "17:00",
+    "meaning": "Radio/restroom alerts and issues as needed, not mandatory additional cleaning routes."
+  },
+  "validation": {
+    "status": "PASS after approval and fresh recomputation: logical inventory, arithmetic and full-hour time availability, not physical feasibility or production.",
+    "groups": 23,
+    "total_points": 136,
+    "relief_count": 6,
+    "no_own_lunch_or_relief_overlap": true,
+    "all_owners_on_shift_in_checked_intervals": true,
+    "intervals": [
+      {
+        "start": "08:00",
+        "end": "09:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "09:30",
+        "end": "10:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 7,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "10:00",
+        "end": "10:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 7,
+          "Kathy Phelps": 5,
+          "Kiltra Horton": 8,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "10:30",
+        "end": "11:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 9,
+          "Kiltra Horton": 8,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "11:00",
+        "end": "11:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 9,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "11:30",
+        "end": "12:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 8,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "12:00",
+        "end": "12:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Karen Robinson": 4,
+          "Kathy Phelps": 8,
+          "Jada Rawlings": 8,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "12:30",
+        "end": "13:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 8,
+          "Jada Rawlings": 8
+        }
+      },
+      {
+        "start": "13:00",
+        "end": "13:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 8,
+          "Kiltra Horton": 3
+        }
+      },
+      {
+        "start": "13:30",
+        "end": "14:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "14:00",
+        "end": "15:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 5,
+          "Kathy Phelps": 6,
+          "Jada Rawlings": 6,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        }
+      },
+      {
+        "start": "15:00",
+        "end": "16:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 8,
+          "Kiltra Horton": 8,
+          "Xavier Green": 7
+        }
+      },
+      {
+        "start": "16:00",
+        "end": "17:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Xavier Green": 23
+        }
+      }
+    ],
+    "phase_points": [
+      {
+        "time": "08:00",
+        "points": {
+          "Alijah Collins": 24,
+          "Karen Robinson": 23,
+          "Kathy Phelps": 23,
+          "Jada Rawlings": 23,
+          "Kiltra Horton": 23,
+          "Xavier Green": 20
+        }
+      },
+      {
+        "time": "14:00",
+        "points": {
+          "Alijah Collins": 36,
+          "Kathy Phelps": 29,
+          "Jada Rawlings": 28,
+          "Kiltra Horton": 23,
+          "Xavier Green": 20
+        }
+      },
+      {
+        "time": "15:00",
+        "points": {
+          "Alijah Collins": 45,
+          "Kiltra Horton": 52,
+          "Xavier Green": 39
+        }
+      },
+      {
+        "time": "16:00",
+        "points": {
+          "Xavier Green": 136
+        }
+      }
+    ],
+    "pre_0800": "Full-site physical coverage before 08:00 is unverified. Sunday Jada starts at 06:00, others at 07:00/08:00; no invented earlier coverage.",
+    "limits": "Not measured route/workload feasibility, GPS combined score, runtime or production acceptance.",
+    "checked_at": "2026-10-30T00:59:58Z"
+  },
+  "pending_decisions": [
+    "No Saturday 9:45 policy was specified; do not infer a changeover.",
+    "Earlier-than-08:00 full-site ownership was not established by this validation."
+  ],
+  "boundaries": "Exact approved working plan only. Accepted Monday–Friday locks unchanged. No HTML, database, program, PDF, solver or live integration changes. Whole-week planned bases/lunches/handoffs approved does not close all arrival, 9:45 or operational issues."
+}

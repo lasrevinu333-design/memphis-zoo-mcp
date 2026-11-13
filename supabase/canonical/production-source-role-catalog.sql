@@ -16,9 +16,6 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'supabase_realtime_admin') then
     create role supabase_realtime_admin;
   end if;
-  if not exists (select 1 from pg_roles where rolname = 'custodial_application_reader') then
-    create role custodial_application_reader;
-  end if;
   if not exists (select 1 from pg_roles where rolname = 'custodial_readonly_runtime_20260822') then
     create role custodial_readonly_runtime_20260822;
   end if;
@@ -28,11 +25,25 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'static_weekly_release_operator') then
     create role static_weekly_release_operator;
   end if;
+  -- Production OIDs place static_weekly_control_plane before the reader.
+  -- The existing grant renderer sorts by OID; rehearsal must expose that order.
+  if not exists (select 1 from pg_roles where rolname = 'custodial_application_reader') then
+    create role custodial_application_reader;
+  end if;
   if not exists (select 1 from pg_roles where rolname = 'static_weekly_runtime_20260823') then
     create role static_weekly_runtime_20260823;
   end if;
 end
 $$;
+
+-- Refuse an already-populated fixture with a different relative OID order.
+-- This never reorders or changes production roles.
+do $$ begin
+  if not ('service_role'::regrole::oid < 'static_weekly_control_plane'::regrole::oid
+    and 'static_weekly_control_plane'::regrole::oid < 'custodial_application_reader'::regrole::oid) then
+    raise exception 'Production grant-renderer role order not reproduced';
+  end if;
+end $$;
 
 alter role memphis_zoo_backup
   nosuperuser inherit nocreaterole nocreatedb login noreplication bypassrls

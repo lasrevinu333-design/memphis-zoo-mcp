@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import './feedback-email-relay-tests.mjs';
+import './feedback-delivery-status-tests.mjs';
+import './feedback-private-reader-tests.mjs';
+import './feedback-attachment-admission-tests.mjs';
+import './feedback-triage-tests.mjs';
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");
@@ -18,21 +23,25 @@ function assertMatches(source, pattern, message) {
   assert.match(source, pattern, message);
 }
 
-// Frontend: validate the sibling Engine fixture when it is available. The backend
-// contract suite remains independently runnable in CI; Engine owns its own complete
-// frontend regression gate.
+// Frontend: owner deferred NEW Feedback photos. Preserve read-only historical
+// attachment visibility without exposing capture or upload on either page.
+// The backend contract suite remains independently runnable in CI; Engine owns
+// its complete frontend regression gate.
 if (feedbackHtml) {
-  assertMatches(feedbackHtml, /type=["']file["'][^>]+accept=["']image\//i, "feedback form should expose an image-only file input");
-  assertMatches(feedbackHtml, /Add Image/i, "feedback form should expose the image upload action");
-  assertContains(feedbackHtml, "image_attachment", "feedback submit payload should include optional image_attachment");
-  assertContains(feedbackHtml, "readAsDataURL", "feedback image upload should encode the selected image for JSON submit");
-  assertContains(feedbackHtml, "'Content-Type': 'application/json'", "feedback should submit image metadata as JSON");
-  assert.ok(!feedbackHtml.includes("new FormData"), "feedback submit must not send unsupported multipart form data");
+  assert.doesNotMatch(feedbackHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "manager feedback must not offer new photo acquisition");
+  assertContains(feedbackHtml, "row.metadata_json?.image_attachment", "historical protected feedback images remain visible to authorized managers");
+  const employeePath = resolve(engineRoot, "employee-feedback.html");
+  if (existsSync(employeePath)) {
+    const employeeHtml = readFileSync(employeePath, "utf8");
+    assert.doesNotMatch(employeeHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "employee feedback must be text-only");
+    assertContains(employeeHtml, "historical attachments", "protected employee feedback outbox history remains retained");
+    assert.ok(!employeeHtml.includes("new FormData"), "employee feedback submit must not send unsupported multipart form data");
+  }
 }
 
-// Backend: image attachment must be validated, stored privately, referenced by
-// metadata, recoverable from a private backup, and retrievable only through the
-// authorized application route.
+// Backend: retain legacy image validation/private-storage/recovery and
+// authorized retrieval for historical records; this does not enable new UI
+// capture in the current program.
 assertContains(apiSource, "validateSystemFeedbackImageAttachment", "backend should validate optional feedback image attachments");
 assertContains(apiSource, "persistedSystemFeedbackImageMetadata", "backend should exclude internal upload state from persisted metadata");
 assertContains(apiSource, "removeUnreferencedSystemFeedbackImage", "backend should clean a newly uploaded object when database persistence fails");
@@ -41,7 +50,8 @@ assertContains(reliabilityMigration, "system_feedback_legacy_image_backups", "mi
 assertContains(reliabilityMigration, "feedback-image-migration:", "migration should enqueue an idempotent private-storage migration job");
 assertMatches(apiSource, /feedback-api\/image\/:feedbackId/, "backend should expose a feedback image retrieval endpoint");
 
-// Backend: feedback should be dashboard-only and must not DM ops managers in Messenger.
+// OC24-09 selects a fixed-recipient email relay; persistence and actual email
+// evidence are separate. The existing no-Messenger requirement is unchanged.
 assertContains(apiSource, "last_feedback_reminder_at", "schema may retain legacy reminder timestamp for compatibility");
 assertContains(apiSource, "feedback_reminder_count", "schema may retain legacy reminder count for compatibility");
 assertMatches(apiSource, /feedback-api\/acknowledge\/:feedbackId/, "backend should expose an acknowledgement endpoint");
@@ -52,7 +62,9 @@ assertMatches(
   "acknowledgement should use the canonical operational command to mark the item as acknowledged",
 );
 const feedbackSubmitBlock = apiSource.slice(apiSource.indexOf('app.post("/feedback-api/submit"'), apiSource.indexOf('app.get("/guest-api/locations'));
-assert.ok(feedbackSubmitBlock.includes("dashboard_only"), "feedback submit should report dashboard-only notification handling");
+assert.ok(feedbackSubmitBlock.includes("attachFeedbackDelivery([item]"), "feedback submit must read the exact persisted item's email evidence");
+assert.ok(feedbackSubmitBlock.includes("email_delivery: deliveryItem.email_delivery"), "mail evidence must remain separate from persistence/triage");
+assert.ok(!feedbackSubmitBlock.includes('runOperationalCommand("feedback_dashboard_only"'), "submit must not overwrite real email handling with historical dashboard-only status");
 assert.ok(!/notifySystemFeedbackRecipients\s*\(/.test(feedbackSubmitBlock), "feedback submit must not notify ops managers in Messenger");
 assert.ok(!/msg_send_message/.test(feedbackSubmitBlock), "feedback submit must not send Messenger messages");
 const feedbackReminderBlock = apiSource.slice(apiSource.indexOf("async function runSystemFeedbackReminderSweep"), apiSource.indexOf("async function runPublicDashboardSummary"));

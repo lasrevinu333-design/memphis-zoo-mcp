@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if test "$#" -ne 3; then
-  echo 'usage: verify-isolated-rehearsal-backend-dependencies.sh <loopback-url> <response-file> <target-fingerprint>' >&2
+if test "$#" -ne 4; then
+  echo 'usage: verify-isolated-rehearsal-backend-dependencies.sh <loopback-url> <response-file> <target-fingerprint> <private-authorization-header-file>' >&2
   exit 2
 fi
 
 endpoint="$1"
 response_file="$2"
 target_fingerprint="$3"
+auth_header_file="$4"
+# A real current Ops session, supplied privately by the owning isolated fixture.
+# Keep the bearer value out of argv, receipts and diagnostic output.
+test -f "$auth_header_file"
+test ! -L "$auth_header_file"
+test "$(stat -c '%u' "$auth_header_file")" = "$(id -u)"
+test "$(stat -c '%a' "$auth_header_file")" = '600'
+[[ "$(wc -l < "$auth_header_file")" -eq 1 ]]
+IFS= read -r auth_header < "$auth_header_file"
+[[ "$auth_header" =~ ^Authorization:\ Bearer\ [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]]
+unset auth_header
 max_attempts="${REHEARSAL_DEPENDENCY_MAX_ATTEMPTS:-120}"
 retry_delay_seconds="${REHEARSAL_DEPENDENCY_RETRY_DELAY_SECONDS:-1}"
 
@@ -21,6 +32,7 @@ test "$max_attempts" -le 120
 for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
   status=''
   if status="$(curl --silent --show-error --connect-timeout 2 --max-time 5 \
+      --header "@$auth_header_file" \
       --output "$response_file" --write-out '%{http_code}' "$endpoint")" \
     && test "$status" = '503' \
     && jq -e --arg target_fingerprint "$target_fingerprint" '
@@ -45,6 +57,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
       and .worker.durable_database_leases == true
       and .schema_fingerprint == $target_fingerprint
     ' "$response_file" >/dev/null; then
+    node "$(dirname "${BASH_SOURCE[0]}")/verify-isolated-rehearsal-health-boundary.mjs" "$endpoint"
     exit 0
   fi
   sleep "$retry_delay_seconds"

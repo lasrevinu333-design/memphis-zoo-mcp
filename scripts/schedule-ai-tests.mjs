@@ -165,6 +165,12 @@ assert.doesNotMatch(scanAlertReplacement, /insert into public\.msg_threads/i,
 const amyPto = context.parsePtoReportText("July 30, 2026 Thursday Smith, Amy Approved");
 assert.equal(amyPto.detected_rows.length, 1, "PTO parser must retain first names beginning with uppercase A");
 assert.equal(amyPto.import_rows[0]?.employee_name, "Smith, Amy");
+assert.throws(() => context.parsePtoReportText("February 30, 2026 Monday Smith, Amy Approved"),
+  /invalid calendar date/, "An impossible report date must not approve a different day");
+assert.throws(() => context.parsePtoReportText("April 31, 2026 Friday Smith, Amy Approved"),
+  /invalid calendar date/);
+assert.equal(context.parsePtoReportText("February 29, 2028 Tuesday Smith, Amy Approved").import_rows[0].start_date,
+  "2028-02-29", "Valid leap days remain unchanged civil dates");
 
 const mixedPto = context.parsePtoReportText([
   "July 30, 2026 Thursday Smith, Amy Approved",
@@ -176,6 +182,21 @@ assert.deepEqual(
   "one A-name row must not be silently dropped from a mixed PTO report",
 );
 
+assert.equal(mixedPto.kept_rows.length,1,"Submitted PTO must not become approved unavailability");
+assert.equal(mixedPto.import_rows.length,1);assert.equal(mixedPto.import_rows[0].approval_status,"APPROVED");
+const conflictingPto=context.parsePtoReportText([
+ "July 30, 2026 Thursday Smith, Amy Approved",
+ "July 30, 2026 Thursday Smith, Amy Cancelled",
+].join("\n"));
+assert.equal(conflictingPto.import_rows.length,0,"Conflicting status without an ordering proof must not produce an absence");
+const approvalContext={normalizePossibleDate:context.normalizePossibleDate,normalizePtoEmployeeName:x=>x,PTO_GEMINI_MODEL:'fixture'};
+vm.createContext(approvalContext);
+vm.runInContext(extractFunction("normalizeGeminiPtoRow")+"\n"+extractFunction("chooseBestPtoParse"),approvalContext);
+const unapprovedAi=approvalContext.chooseBestPtoParse({detected_rows:[],kept_rows:[],import_rows:[]},[
+ {employee_name:"Amy Smith",start_date:"2026-07-30",end_date:"2026-07-30"},
+]);
+assert.equal(unapprovedAi.import_rows.length,0,"An AI extraction cannot establish approval");
+assert.equal(unapprovedAi.review_rows[0].approval_verified,false);
 const aiFallbackContext = {
   parsePtoReportText() { throw new Error("No PTO rows were detected in the report text."); },
   shouldUseGeminiForPto() { return true; },

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import "./release-migration-workflow-tests.mjs";
+import "./exact-git-blob-batch-tests.mjs";
+import { resolveReleaseSchemaTarget } from "./production-target-schema-profile.mjs";
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -7,10 +10,12 @@ import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { releaseAttestationPayload } from "../src/release-contract.js";
+import { releaseAttestationPayload, RELEASE_ATTESTATION_TRUST_ROOT } from "../src/release-contract.js";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const checker = "scripts/integrated-backend-authority-cutover-check.mjs";
+const hasMeasuredProductionProfile = Boolean(resolveReleaseSchemaTarget(root).profile);
+const currentPlanReason = (current, historical) => hasMeasuredProductionProfile ? current : historical;
 const refresher = "scripts/refresh-integrated-backend-authority-release.mjs";
 const evidencePath = "release/integrated-backend-authority-evidence.json";
 const omittedMigration = "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql";
@@ -62,10 +67,14 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
       .update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
     const trackedPaths = copyCompleteTrackedWorktree(fixture);
     const fixtureReleaseContractPath = join(fixture, "src/release-contract.js");
-    const fixtureReleaseContract = readFileSync(fixtureReleaseContractPath, "utf8")
-      .replace('keyId: "custodial-build52-20260915-v1"', 'keyId: "test-release-key"')
-      .replace('publicKeySpkiSha256: "992a3be69b3340e65bae0b28b8d78ef568dfc30a0ed8120268794ea15e1b49a0"',
-        `publicKeySpkiSha256: "${publicKeySpkiSha256}"`);
+    const currentReleaseContract = readFileSync(fixtureReleaseContractPath, "utf8");
+    const currentKeyPin = `keyId: "${RELEASE_ATTESTATION_TRUST_ROOT.keyId}"`;
+    const currentSpkiPin = `publicKeySpkiSha256: "${RELEASE_ATTESTATION_TRUST_ROOT.publicKeySpkiSha256}"`;
+    assert.equal(currentReleaseContract.split(currentKeyPin).length - 1, 1, "fixture must replace exactly the actual current source-pinned key ID");
+    assert.equal(currentReleaseContract.split(currentSpkiPin).length - 1, 1, "fixture must replace exactly the actual current source-pinned SPKI");
+    const fixtureReleaseContract = currentReleaseContract
+      .replace(currentKeyPin, 'keyId: "test-release-key"')
+      .replace(currentSpkiPin, `publicKeySpkiSha256: "${publicKeySpkiSha256}"`);
     writeFileSync(fixtureReleaseContractPath, fixtureReleaseContract);
     const fixtureSchemaPath = join(fixture, "release/schema-alignment-input.json");
     const fixtureFrontendPath = join(fixture, "release/frontend-release-manifest.json");
@@ -255,6 +264,26 @@ try {
   disposeFixture(positive);
 }
 
+// A signed source fixture may describe only its measured rollback scope;
+// source acceptance never promotes that metadata into runtime admission.
+for (const [name, mutate] of [
+  ["wrong ancestor archive", state => { state.backup_evidence.last_verified.archive_digest = "0".repeat(64); }],
+  ["rollback falsely committed", state => { state.target.normal_source_capture.rollback_evidence.committed = true; }],
+  ["claimed runtime admission", state => { state.target.normal_source_capture.runtime_admission = true; }],
+]) {
+  const fixture = createFixture({ beforeCommit(directory) {
+    const path = join(directory, "release/production-migration-state.json");
+    const state = JSON.parse(readFileSync(path, "utf8"));
+    mutate(state);
+    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
+  } });
+  try {
+    fixture.writeAcceptance();
+    const result = runGate(fixture);
+    assert.notEqual(result.status, 0, `${name} cannot pass measured source acceptance`);
+  } finally { disposeFixture(fixture); }
+}
+
 expectRefreshRejected("refresh rejects unstaged tracked bytes", (fixture) => {
   const path = resolve(fixture.fixture, "src/index.js");
   writeFileSync(path, `${readFileSync(path, "utf8")}\n// disposable unstaged refresh mutation\n`);
@@ -430,5 +459,30 @@ try {
 } finally {
   disposeFixture(symlinkTreeFixture);
 }
+
+// Bind the selected candidate to its exact declared pending suffix. These
+// disposable, newly signed fixtures must fail before any database operation.
+const migrationPlanCases = [
+  ["omitted pending migration", (state) => state.pending_migrations.pop(), currentPlanReason(/Pending migrations must equal the complete ordered unapplied phase/, /exactly the forty-six/)],
+  ["reordered pending migrations", (state) => {
+    [state.pending_migrations[23], state.pending_migrations[24]] = [state.pending_migrations[24], state.pending_migrations[23]];
+  }, currentPlanReason(/Pending migrations must equal the complete ordered unapplied phase/, /deep-equal|deeply equal/)],
+  ["duplicate pending migration", (state) => { state.pending_migrations[24] = { ...state.pending_migrations[23], order: 25 }; }, currentPlanReason(/Pending migrations must equal the complete ordered unapplied phase/, /deep-equal|deeply equal/)],
+  ["changed pending digest", (state) => { state.pending_migrations[23].sha256 = "0".repeat(64); }, currentPlanReason(/Canonical pending source hash mismatch/, /pending migration digest mismatch/)],
+  ["broken pending order", (state) => { state.pending_migrations[23].order = 100; }, currentPlanReason(/Pending migration order must be contiguous/, /pending migration order is not contiguous/)],
+  ["invalid source version", (state) => { state.pending_migrations[23].source_migration_version = "invalid"; }, currentPlanReason(/Pending version must match its filename/, /pending source migration version is invalid/)],
+  ["changed target fingerprint", (state) => { state.target.canonical_source_schema_fingerprint = "0".repeat(64); }, /strictly equal/],
+  ["changed target ledger count", (state) => { state.target.production_ledger_count -= 1; }, /strictly equal/],
+  ["changed target function count", (state) => { state.target.public_function_count -= 1; }, /strictly equal/],
+];
+for (const [name, mutate, expected] of migrationPlanCases) {
+  expectCommittedRejected(name, (directory) => {
+    const path = join(directory, "release/production-migration-state.json");
+    const state = JSON.parse(readFileSync(path, "utf8"));
+    mutate(state);
+    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
+  }, expected);
+}
+console.log(JSON.stringify({ migration_plan_rejection_cases: migrationPlanCases.length, production_contacted: false }));
 
 console.log("INTEGRATED_BACKEND_AUTHORITY_RELEASE_PROVENANCE_PASS");

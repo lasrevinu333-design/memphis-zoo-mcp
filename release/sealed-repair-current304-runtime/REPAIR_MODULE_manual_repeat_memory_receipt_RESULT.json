@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "scope": "ACTUAL_ORIGINAL_RECURRING_CANONICAL_REQUEST_AND_SAME_TRANSACTION_RECEIPT_READBACK",
+  "witness": {
+    "ownerXid": "1410",
+    "frameStart": "2026-11-07",
+    "operationId": "690793f7-8ddd-58ef-820f-8bbd8ebede2b",
+    "receiptXmin": "1410",
+    "projectionId": "2f1360e9-ac85-4fe1-8548-583635bd1712",
+    "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+    "originalKeyExact": true,
+    "lunchIdentityExact": true,
+    "canonicalDigestExact": true,
+    "canonicalRequestExact": true,
+    "originalBasisPreserved": true,
+    "originalConfirmationExact": true,
+    "originalOwnerReceiptExact": true
+  },
+  "readOnly": true,
+  "providerCalls": 0,
+  "replayed": false,
+  "normalPatternChanged": false,
+  "memoryLimitIncreased": false,
+  "canonicalIdentityQualified": false
+}

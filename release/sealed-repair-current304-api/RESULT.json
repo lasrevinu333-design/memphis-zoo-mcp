@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "head": "74127cd2c6861d778ef86a3498ad3c878544db02",
+  "actualFresh304": true,
+  "actualPostgrest": true,
+  "actualApi": true,
+  "ordinaryOpsManagerSession": true,
+  "maximumAccessLevel": "read_only",
+  "selfAssertedLeadershipNotSubstituted": true,
+  "protectedExpected503": true,
+  "missingAndMalformed401": true,
+  "publicExactMinimal503": true,
+  "production": false,
+  "fullCandidateAdmission": false,
+  "physicalProof": false,
+  "cleanupReturned": true
+}

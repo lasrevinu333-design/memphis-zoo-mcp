@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {isNativeScheduleEvent,validateNativeProviderObservation,validateNativeProviderEventsRequest as request,validateNativeProviderEventsResponse as response} from '../src/native-provider-events.js';
+import {validateNativeProviderEventDecisionQuery,validateNativeProviderEventDecisions} from '../src/native-provider-event-decisions.js';
+const id=n=>`55000000-0000-4000-8000-${String(n).padStart(12,'0')}`,sha=x=>createHash('sha256').update(x).digest('hex');
+const observation={schema:'custodial.provider-best-effort-observation.v1',estimated_at:'2026-11-13T13:00:00.100000Z',server_observed_at:'2026-11-13T13:00:00.000000Z',clock_policy_id:'android-best-effort-test',elapsed_realtime_ms:1000,boot_count:1};
+const e={schema:'custodial.native-provider-event.v3',event_id:id(1),generation_id:id(2),receipt_job_id:id(3),notification_key:'synthetic-location-key',action:'received',receipt_credential_id:id(4),receipt_employee_id:id(5),receipt_device_id:'KIOSK_08',receipt_assignment_epoch:1,principal_digest:'a'.repeat(64),token_digest:'b'.repeat(64),content_sha256:'c'.repeat(64),admission_bounds:observation,original_observation:observation};
+e.record_id=sha(e.generation_id+'\n'+e.receipt_job_id+'\n'+e.notification_key);
+const batch={schema:'custodial.native-provider-events.v3',events:[e]};
+const receipt={...e,schema:'custodial.native-provider-event-receipt.v3',admitted_state:'ACCEPTED',server_received_at:observation.server_observed_at,replayed:false};
+const envelope=results=>({ok:true,data:{schema:'custodial.native-provider-event-receipts.v3',results}});
+let checks=0;const eq=(a,b)=>{assert.deepEqual(a,b);checks++;},bad=fn=>{assert.throws(fn);checks++;};
+eq(request(batch),batch);eq(response(envelope([receipt]),batch),envelope([receipt]));
+for(const field of Object.keys(observation)) {const o={...observation};delete o[field];bad(()=>validateNativeProviderObservation(o,true));}
+for(const patch of [{earliest_at:observation.estimated_at},{latest_at:observation.estimated_at},{boot_count:null},{boot_count:2147483648},{elapsed_realtime_ms:1.5},
+ {clock_policy_id:''},{estimated_at:'2026-11-13T12:59:59.999999Z'},{estimated_at:'2026-11-13T13:15:00.000000Z'},{estimated_at:'2026-02-30T13:00:00.000000Z'},
+ {server_observed_at:'2026-11-13T13:00:00.100001Z'}])bad(()=>validateNativeProviderObservation({...observation,...patch},true));
+bad(()=>request({...batch,schema:'custodial.native-provider-events.v2'}));
+bad(()=>request({...batch,events:[{...e,schema:'custodial.native-provider-event.v2'}]}));
+bad(()=>response(envelope([{...receipt,server_received_at:'2026-11-13T12:59:59.999999Z'}]),batch));
+for(const key of Object.keys(receipt))bad(()=>response(envelope([{...receipt,[key]:'wrong'}]),batch));
+const old={earliest_at:observation.server_observed_at,latest_at:observation.server_observed_at,clock_profile_id:'old-qualified',elapsed_realtime_ms:500,boot_count:1};
+const oldEvent={...e,event_id:id(8),schema:'custodial.native-provider-event.v2',action:'opened',admission_bounds:old,original_observation:old};
+const mixed={...batch,events:[e,oldEvent]};eq(request(mixed),mixed);
+const oldReceipt={...oldEvent,schema:'custodial.native-provider-event-receipt.v2',admitted_state:'ACCEPTED',server_received_at:observation.server_observed_at,replayed:true};
+eq(response(envelope([receipt,oldReceipt]),mixed),envelope([receipt,oldReceipt]));
+const requester={current_generation_id:e.generation_id,credential_id:e.receipt_credential_id,employee_id:e.receipt_employee_id,device_id:e.receipt_device_id,assignment_epoch:1,principal_digest:e.principal_digest,token_digest:e.token_digest};
+const query={schema:'custodial.native-provider-event-decision-query.v1',requester,events:mixed.events};
+eq(validateNativeProviderEventDecisionQuery(query),query);
+const context={credentialId:e.receipt_credential_id,credentialHash:'d'.repeat(64),nativeRequestId:id(10),attestationDigest:'e'.repeat(64),rawBodySha256:'f'.repeat(64)};
+const decisions={ok:true,data:{schema:'custodial.native-provider-event-decisions.v1',native_request_id:context.nativeRequestId,request_body_sha256:context.rawBodySha256,requester,results:[{event_id:e.event_id,decision:'ORIGINAL_ACCEPTED',receipt:{...receipt,replayed:true}},{event_id:oldEvent.event_id,decision:'UNRESOLVED'}]}};
+eq(validateNativeProviderEventDecisions(decisions,query,context),decisions);
+const wrong=structuredClone(decisions);wrong.data.results[0].receipt.schema='custodial.native-provider-event-receipt.v2';bad(()=>validateNativeProviderEventDecisions(wrong,query,context));
+bad(()=>validateNativeProviderEventDecisions(decisions,query,{...context,rawBodySha256:'0'.repeat(64)}));
+const key=`schedule-departure:2026-11-13:${e.receipt_employee_id}:15:00:projection:${id(6)}:revision:3`;
+const departure={...e,notification_key:key,record_id:sha(e.generation_id+'\n'+id(7)+'\n'+key)};
+eq(isNativeScheduleEvent(departure),true);bad(()=>request({...batch,events:[departure]}));
+const original={job_id:e.receipt_job_id,generation_id:e.generation_id,source_reservation_id:id(7),record_id:departure.record_id,notification_key:key,credential_id:e.receipt_credential_id,employee_id:e.receipt_employee_id,device_id:e.receipt_device_id,assignment_epoch:'1',principal_digest:e.principal_digest,token_digest:e.token_digest,content_sha256:e.content_sha256};
+const scheduleOriginals=new Map([[e.receipt_job_id,original]]);
+eq(request({...batch,events:[departure]},{scheduleOriginals}).events[0],departure);
+for(const k of [key.replace('15:00','25:00'),key.replace('revision:3','revision:0'),key.replace('revision:3','revision:9007199254740992'),key.replace('2026-11-13','2026-02-30'),key.replace(e.receipt_employee_id,id(9))])bad(()=>isNativeScheduleEvent({...departure,notification_key:k}));
+console.log(JSON.stringify({status:'PASS',checks,source_only:true,phone:false,production:false}));
