@@ -45,12 +45,12 @@ test('publishable provenance uses only source basenames and repo-relative retain
  }
 });
 
-const current=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const current=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.events420.active.json',import.meta.url),'utf8'));
 const currentCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.events420.candidate.json',import.meta.url),'utf8'));
-function currentInput(){
- const x=input();x.declaration=structuredClone(current);x.releaseIdentity=structuredClone(current.deployed_release);
- x.migrationLedger=current.ledger.map(r=>({version:r.version,name:r.name,statements:r.statement_sha256.map((_,i)=>{
-  const s=current.source_bindings.find(s=>s.ledger_version===r.version&&s.statement_index===i);
+function currentInput(selected=current){
+ const x=input();x.declaration=structuredClone(selected);x.releaseIdentity=structuredClone(selected.deployed_release);
+ x.migrationLedger=selected.ledger.map(r=>({version:r.version,name:r.name,statements:r.statement_sha256.map((_,i)=>{
+  const s=selected.source_bindings.find(s=>s.ledger_version===r.version&&s.statement_index===i);
   return s?source(s.source_file,s.source_location).toString('utf8'):`select '${r.version}:${i}' AS synthetic_historical_fixture;`;
  })}));
  x.declaration.ledger=x.migrationLedger.map(r=>({version:r.version,name:r.name,statement_sha256:r.statements.map(sha)}));x.declaration.ledger_sha256=ledgerMetadataDigest(x.declaration.ledger);
@@ -82,3 +82,24 @@ const currentCases=[
  ['mutation flag',x=>x.declaration.production_mutation_authorized=true],['upgrade flag',x=>x.declaration.application_upgrade_claimed=true],
 ];
 for(const [name,mutate]of currentCases)test('current 420 binding rejects '+name,()=>{const x=currentInput();mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
+
+const latest=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const latestCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.v80-424.candidate.json',import.meta.url),'utf8'));
+test('current exact 424 boundary preserves all 420 rows and 190 sources, adding only four qualified migrations',()=>{
+ assert.equal(validateBackupLedgerDeclarationV2(latest),true);assert.equal(validateBackupLedgerDeclarationV2(latestCandidate),true);assert.deepEqual({...latest,activation_status:'candidate'},latestCandidate);
+ assert.equal(latest.observed_ledger_count,424);assert.equal(latest.observed_ledger_head,'20261113225746');assert.deepEqual(latest.ledger.slice(0,420),current.ledger);assert.deepEqual(latest.source_bindings.slice(0,190),current.source_bindings);assert.deepEqual(latest.deployed_release,current.deployed_release);
+ assert.equal(latest.source_bindings.length,194);assert.equal(latest.observed_catalog_fingerprint,'5a423172d0911422cff099200ba600e0fcd5d806e836745208d368afc61fa8af');assert.equal(latest.ledger_sha256,'e316ee105ac1f8b0d82785b832e34356c785310340421fe17a763370006c2c47');
+ assert.deepEqual(latest.source_bindings.slice(190).map(s=>s.sql_sha256),['1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70','c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc','6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6','07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a']);
+ for(const s of latest.source_bindings)assert.equal(sha(source(s.source_file,s.source_location)),s.sql_sha256);
+});
+function archiveFor(x){const binding=bindBackupSchemaExtension(x);return {summary:{project_ref:x.projectRef,source_identity:{release:x.releaseIdentity,migration_head:binding.captured_migration_head,migration_ledger_count:x.migrationLedger.length}},binding,catalog:x.catalog,ledger:x.migrationLedger};}
+test('424 synthetic fixture capture and archive verification preserve both previous archive formats',()=>{
+ for(const x of [input(),currentInput(),currentInput(latest)])assert.equal(verifyArchivedSchemaExtension(archiveFor(x)),true);
+ assert.equal(bindBackupSchemaExtension(currentInput(latest)).captured_ledger_count,424);
+});
+for(const [name,mutate]of [
+ ['unreviewed 425',x=>x.declaration.observed_ledger_count=425],['intermediate 423',x=>x.declaration.observed_ledger_count=423],['old head',x=>x.declaration.observed_ledger_head=current.observed_ledger_head],
+ ['changed departure SQL',x=>x.migrationLedger[420].statements[0]+='\n'],['changed timing SQL',x=>x.migrationLedger[421].statements[0]+='\n'],['changed phone SQL',x=>x.migrationLedger[422].statements[0]+='\n'],['changed count SQL',x=>x.migrationLedger[423].statements[0]+='\n'],
+ ['missing new binding',x=>x.declaration.source_bindings.pop()],['old source pin',x=>x.declaration.source_bindings_sha256=current.source_bindings_sha256],['changed retained source',x=>x.readSource=()=>Buffer.from('changed')],['extra statement',x=>x.migrationLedger[423].statements.push('select 1;')],
+ ['catalog drift',x=>x.catalog.tables.push({schema_name:'public',table_name:'unexpected'})],['wrong release identity',x=>x.releaseIdentity.backend_commit='0'.repeat(40)],['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
+])test('424 binding rejects '+name,()=>{const x=currentInput(latest);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});

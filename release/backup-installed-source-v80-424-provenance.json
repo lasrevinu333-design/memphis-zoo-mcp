@@ -1,0 +1,63 @@
+{
+  "schema": "custodial.backup-installed-source-addition.v1",
+  "replay_authorized": false,
+  "prior_ledger_count": 420,
+  "current_ledger_count": 424,
+  "deployed_release_identity_unchanged": true,
+  "prior_source_bindings_sha256": "6ab7110f0eff144e59a52df350453e10f5776e2aaf59745d123c96412d046cbb",
+  "source_bindings_sha256": "b93f1dcbbbabae796f6d90260e03f3b57e04d1006c4b908d471a9b1516d08c18",
+  "statement_source_bindings": [
+    {
+      "ledger_version": "20261113225512",
+      "ledger_name": "custodial_native_departure_v2_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225512_custodial_native_departure_v2_qualified.sql",
+      "sql_sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70",
+      "source_filename": "native-departure-v2.proposed.sql",
+      "source_raw_sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70",
+      "installed_sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70",
+      "transformation": "none",
+      "retained_path": "release/installed-source/20261113225512_custodial_native_departure_v2_qualified.sql"
+    },
+    {
+      "ledger_version": "20261113225605",
+      "ledger_name": "custodial_native_provider_best_effort_timing_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225605_custodial_native_provider_best_effort_timing_qualified.sql",
+      "sql_sha256": "c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc",
+      "source_filename": "20261113132242_native_provider_best_effort_timing.sql",
+      "source_raw_sha256": "c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc",
+      "installed_sha256": "c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc",
+      "transformation": "none",
+      "retained_path": "release/installed-source/20261113225605_custodial_native_provider_best_effort_timing_qualified.sql"
+    },
+    {
+      "ledger_version": "20261113225713",
+      "ledger_name": "custodial_assigned_phone_location_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225713_custodial_assigned_phone_location_qualified.sql",
+      "sql_sha256": "6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6",
+      "source_filename": "20261111172325_assigned_phone_location.sql",
+      "source_raw_sha256": "6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6",
+      "installed_sha256": "6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6",
+      "transformation": "none",
+      "retained_path": "release/installed-source/20261113225713_custodial_assigned_phone_location_qualified.sql"
+    },
+    {
+      "ledger_version": "20261113225746",
+      "ledger_name": "custodial_approved_manual_exact_shift_count_compatibility_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225746_custodial_approved_manual_exact_shift_count_compatibility_qualified.sql",
+      "sql_sha256": "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a",
+      "source_filename": "20261113164433_approved_manual_exact_shift_count_compatibility.sql",
+      "source_raw_sha256": "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a",
+      "installed_sha256": "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a",
+      "transformation": "none",
+      "retained_path": "release/installed-source/20261113225746_custodial_approved_manual_exact_shift_count_compatibility_qualified.sql"
+    }
+  ]
+}

@@ -36,8 +36,9 @@ test('source selects only reviewed active v2 and preserves inactive candidate an
  assert.match(read('scripts/production-backup.mjs'),/production-backup-source-extension-v2\.active\.json/);
  const active=JSON.parse(read('release/production-backup-source-extension-v2.active.json'));
  assert.equal(active.activation_status,'active');
- assert.equal(active.observed_catalog_fingerprint,'afb1cd060e0f5a67833c5f15730010acadc6f737899ef955f6b0d2c8b6bedea5');
- assert.equal(active.observed_ledger_count,420);assert.equal(active.observed_ledger_head,'20261113221252');
+ assert.equal(active.observed_catalog_fingerprint,'5a423172d0911422cff099200ba600e0fcd5d806e836745208d368afc61fa8af');
+ assert.equal(active.observed_ledger_count,424);assert.equal(active.observed_ledger_head,'20261113225746');
+ const previous420=JSON.parse(read('release/production-backup-source-extension-v2.events420.active.json'));assert.equal(previous420.observed_ledger_count,420);assert.equal(previous420.observed_catalog_fingerprint,'afb1cd060e0f5a67833c5f15730010acadc6f737899ef955f6b0d2c8b6bedea5');
  const previous=JSON.parse(read('release/production-backup-source-extension-v2.ledger419.active.json'));
  assert.equal(previous.observed_ledger_count,419);assert.equal(previous.observed_catalog_fingerprint,'53cb0b65c062a0e1334ef19cc669f0a0731168b38c37830245b3dea4585316fc');
 });

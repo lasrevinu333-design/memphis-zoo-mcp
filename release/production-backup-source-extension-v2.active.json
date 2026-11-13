@@ -11,9 +11,9 @@
     "migration_head": "20260920010000",
     "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
   },
-  "observed_ledger_count": 420,
-  "observed_ledger_head": "20261113221252",
-  "observed_catalog_fingerprint": "afb1cd060e0f5a67833c5f15730010acadc6f737899ef955f6b0d2c8b6bedea5",
+  "observed_ledger_count": 424,
+  "observed_ledger_head": "20261113225746",
+  "observed_catalog_fingerprint": "5a423172d0911422cff099200ba600e0fcd5d806e836745208d368afc61fa8af",
   "ledger": [
     {
       "version": "20260514224806",
@@ -2954,9 +2954,37 @@
       "statement_sha256": [
         "0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab"
       ]
+    },
+    {
+      "version": "20261113225512",
+      "name": "custodial_native_departure_v2_qualified",
+      "statement_sha256": [
+        "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70"
+      ]
+    },
+    {
+      "version": "20261113225605",
+      "name": "custodial_native_provider_best_effort_timing_qualified",
+      "statement_sha256": [
+        "c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc"
+      ]
+    },
+    {
+      "version": "20261113225713",
+      "name": "custodial_assigned_phone_location_qualified",
+      "statement_sha256": [
+        "6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6"
+      ]
+    },
+    {
+      "version": "20261113225746",
+      "name": "custodial_approved_manual_exact_shift_count_compatibility_qualified",
+      "statement_sha256": [
+        "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a"
+      ]
     }
   ],
-  "ledger_sha256": "ece44ce3b2f0c4cceceef589783fae73f5ad342630765c6460ab083b0515543e",
+  "ledger_sha256": "e316ee105ac1f8b0d82785b832e34356c785310340421fe17a763370006c2c47",
   "historical_baseline": [
     {
       "version": "20260514224806",
@@ -5458,7 +5486,39 @@
       "source_location": "retained_installed",
       "source_file": "20261113221252_custodial_manual_event_cohort_intake.sql",
       "sql_sha256": "0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab"
+    },
+    {
+      "ledger_version": "20261113225512",
+      "ledger_name": "custodial_native_departure_v2_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225512_custodial_native_departure_v2_qualified.sql",
+      "sql_sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70"
+    },
+    {
+      "ledger_version": "20261113225605",
+      "ledger_name": "custodial_native_provider_best_effort_timing_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225605_custodial_native_provider_best_effort_timing_qualified.sql",
+      "sql_sha256": "c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc"
+    },
+    {
+      "ledger_version": "20261113225713",
+      "ledger_name": "custodial_assigned_phone_location_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225713_custodial_assigned_phone_location_qualified.sql",
+      "sql_sha256": "6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6"
+    },
+    {
+      "ledger_version": "20261113225746",
+      "ledger_name": "custodial_approved_manual_exact_shift_count_compatibility_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113225746_custodial_approved_manual_exact_shift_count_compatibility_qualified.sql",
+      "sql_sha256": "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a"
     }
   ],
-  "source_bindings_sha256": "6ab7110f0eff144e59a52df350453e10f5776e2aaf59745d123c96412d046cbb"
+  "source_bindings_sha256": "b93f1dcbbbabae796f6d90260e03f3b57e04d1006c4b908d471a9b1516d08c18"
 }
