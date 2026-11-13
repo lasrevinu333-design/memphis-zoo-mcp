@@ -166,7 +166,7 @@ export function prepareApprovedManualActivationPackage({week,draft,snapshot,sour
     templateId,serviceDate:at,availablePersonIds:week.referenceBindings.people.map(p=>p.employeeId)}});
  assert.equal(feasibility.solverInvoked,false);assert.equal(feasibility.mapping.unchanged,true);
  assert.equal(feasibility.initialBaseline.projection.week_start,at);assert.equal(feasibility.initialBaseline.projection.week_end,end);
- assert.equal(feasibility.projectionAssignments.length,346);assert.equal(feasibility.lunch.lunches.length,40);
+ assert.equal(feasibility.projectionAssignments.length,draft.sourceDraft.version.assignments.length,'Exact validated manual geometry retained');assert.equal(feasibility.lunch.lunches.length,40);
  const dates=[...new Set(feasibility.projectionAssignments.map(r=>r.service_date))].sort();
  assert.equal(dates.length,7);assert.equal(dates[0],at);assert.equal(dates[6],end);
  const body={schema:'custodial.approved-manual-activation-package.v1',packetId,sourceId,managerId,templateId,

@@ -25,64 +25,15 @@ const device = {
 const credentialId = "41000000-0000-4000-8000-000000000003";
 const credentialSecret = "removal_contract_credential_secret_1234567890";
 const rawCredential = `${credentialId}.${credentialSecret}`;
-const operations = new Map();
-const rpcCalls = [];
-let credentialRevoked = false;
-
-function deviceQuery() {
-  return {
-    select() { return this; },
-    eq() { return this; },
-    async maybeSingle() { return { data: structuredClone(device), error: null }; },
-  };
-}
-
+const databaseCalls = [];
 const db = {
   from(name) {
-    if (name !== "devices") throw new Error(`Unexpected table in removal contract: ${name}`);
-    return deviceQuery();
+    databaseCalls.push({ table: name });
+    throw new Error(`Protected removal must refuse before any table access: ${name}`);
   },
   async rpc(name, args = {}) {
-    if (name !== "device_auth_remove_custodial_credential") {
-      throw new Error(`Unexpected RPC in removal contract: ${name}`);
-    }
-    rpcCalls.push({ name, args: structuredClone(args) });
-    if (args.p_operation_id === "41000000-0000-4000-8000-000000000019") {
-      return { data: null, error: new Error("injected internal database detail must not cross the HTTP boundary") };
-    }
-    const existing = operations.get(args.p_operation_id);
-    if (existing) {
-      if (existing.credentialId !== args.p_credential_id
-          || existing.deviceId !== args.p_device_id
-          || existing.tokenHash !== args.p_token_hash) {
-        return { data: { ok: false, reason: "operation_conflict" }, error: null };
-      }
-      return { data: { ...existing.result, replayed: true }, error: null };
-    }
-    if (credentialRevoked) return { data: { ok: false, reason: "credential_revoked" }, error: null };
-
-    const result = {
-      ok: true,
-      removed: true,
-      replayed: false,
-      status: "removed",
-      operation_id: args.p_operation_id,
-      credential_id: args.p_credential_id,
-      device_id: device.device_id,
-      removed_at: new Date().toISOString(),
-      push_registrations_deactivated: 1,
-      event_push_instances_cancelled: 1,
-      notification_jobs_cancelled: 2,
-      claimed_notification_jobs_cancelled: 1,
-    };
-    operations.set(args.p_operation_id, {
-      credentialId: args.p_credential_id,
-      deviceId: args.p_device_id,
-      tokenHash: args.p_token_hash,
-      result,
-    });
-    credentialRevoked = true;
-    return { data: result, error: null };
+    databaseCalls.push({ name, args: structuredClone(args) });
+    throw new Error(`Protected removal must refuse before any RPC: ${name}`);
   },
 };
 
@@ -111,6 +62,17 @@ async function request({ body, headers = {} }) {
   return { status: response.status, body: await response.json() };
 }
 
+function assertPreservationRefusal(result) {
+  assert.equal(result.status, 409);
+  assert.deepEqual(result.body, {
+    ok: false,
+    code: "custodial_native_removal_inventory_admission_required",
+    error: "Enrollment removal requires protected-work preservation and manager authorization. Saved work is retained.",
+  });
+  assert.equal(databaseCalls.length, 0, "legacy native headers and credentials cannot authorize inventory access or revocation");
+  assert.equal(JSON.stringify(result.body).includes(credentialSecret), false);
+}
+
 try {
   const operationId = "41000000-0000-4000-8000-000000000010";
   const body = { operation_id: operationId, device_id: "KIOSK_02" };
@@ -119,64 +81,41 @@ try {
     body,
     headers: { authorization: `Device ${rawCredential}`, "idempotency-key": operationId },
   });
-  assert.equal(first.status, 200);
-  assert.equal(first.body.ok, true);
-  assert.deepEqual({
-    removed: first.body.data.removed,
-    replayed: first.body.data.replayed,
-    status: first.body.data.status,
-    operation_id: first.body.data.operation_id,
-    device_id: first.body.data.device_id,
-  }, {
-    removed: true,
-    replayed: false,
-    status: "removed",
-    operation_id: operationId,
-    device_id: "KIOSK_02",
-  });
-  assert.equal(first.body.data.claimed_notification_jobs_cancelled, 1);
-  const firstRpc = rpcCalls.at(-1);
-  assert.equal(firstRpc.args.p_credential_id, credentialId);
-  assert.equal(firstRpc.args.p_device_id, device.id);
-  assert.equal(firstRpc.args.p_token_hash.length, 64);
-  assert.equal(JSON.stringify(firstRpc.args).includes(credentialSecret), false, "the RPC boundary must receive only a one-way credential hash");
-  assert.equal(Object.hasOwn(firstRpc.args, "p_now"), false, "the database must own the removal timestamp");
+  assertPreservationRefusal(first);
 
-  // Treat the first HTTP response as lost. The exact operation and exact
-  // credential proof must replay after revocation without repeating effects.
+  // A repeated legacy request cannot turn a preserved refusal into revocation
+  // or a fabricated successful replay. The typed removal owner is unfinished.
   const replay = await request({
     body,
     headers: { authorization: `Device ${rawCredential}`, "idempotency-key": operationId },
   });
-  assert.equal(replay.status, 200);
-  assert.equal(replay.body.data.replayed, true);
-  assert.equal(replay.body.data.operation_id, operationId);
-  assert.equal(operations.size, 1);
+  assertPreservationRefusal(replay);
 
   const wrongCredential = `${credentialId}.wrong_credential_secret_12345678901234567890`;
-  const conflict = await request({
+  const wrongProof = await request({
     body,
     headers: { authorization: `Device ${wrongCredential}`, "idempotency-key": operationId },
   });
-  assert.equal(conflict.status, 409);
-  assert.equal(conflict.body.code, "removal_operation_conflict");
+  assertPreservationRefusal(wrongProof);
 
-  const revokedNewOperation = "41000000-0000-4000-8000-000000000011";
-  const revoked = await request({
-    body: { operation_id: revokedNewOperation, device_id: "KIOSK_02" },
-    headers: { authorization: `Device ${rawCredential}`, "idempotency-key": revokedNewOperation },
+  const newOperationId = "41000000-0000-4000-8000-000000000011";
+  const newOperation = await request({
+    body: { operation_id: newOperationId, device_id: "KIOSK_02" },
+    headers: { authorization: `Device ${rawCredential}`, "idempotency-key": newOperationId },
   });
-  assert.equal(revoked.status, 401);
-  assert.equal(revoked.body.code, "credential_revoked");
+  assertPreservationRefusal(newOperation);
 
-  const beforeMissingCredential = rpcCalls.length;
   const operationOnly = await request({
     body,
     headers: { "idempotency-key": operationId },
   });
-  assert.equal(operationOnly.status, 401);
-  assert.equal(operationOnly.body.code, "credential_required");
-  assert.equal(rpcCalls.length, beforeMissingCredential, "an operation UUID alone must never reach the removal RPC");
+  assertPreservationRefusal(operationOnly);
+
+  const callerDeclaredAdmission = await request({
+    body: { ...body, manager_authorized: true, inventory_complete: true, protected_work_preserved: true },
+    headers: { authorization: `Device ${rawCredential}`, "idempotency-key": operationId },
+  });
+  assertPreservationRefusal(callerDeclaredAdmission);
 
   const mismatchedKey = await request({
     body,
@@ -195,14 +134,12 @@ try {
   assert.equal(missingOperation.status, 400);
   assert.equal(missingOperation.body.code, "removal_operation_id_required");
 
-  const internalFailureId = "41000000-0000-4000-8000-000000000019";
-  const internalFailure = await request({
-    body: { operation_id: internalFailureId, device_id: "KIOSK_02" },
-    headers: { authorization: `Device ${rawCredential}`, "idempotency-key": internalFailureId },
+  const malformedOperation = await request({
+    body: { operation_id: "not-a-uuid", device_id: device.device_id },
+    headers: { authorization: `Device ${rawCredential}` },
   });
-  assert.equal(internalFailure.status, 503);
-  assert.equal(internalFailure.body.error, "Custodial device removal failed.");
-  assert.equal(JSON.stringify(internalFailure.body).includes("internal database detail"), false);
+  assert.equal(malformedOperation.status, 400);
+  assert.equal(malformedOperation.body.code, "removal_operation_id_required");
 
   const untrustedOriginResponse = await fetch(`${baseUrl}/custodial-device-auth/remove`, {
     method: "POST",
@@ -217,6 +154,7 @@ try {
   const untrustedOrigin = await untrustedOriginResponse.json();
   assert.equal(untrustedOriginResponse.status, 403);
   assert.equal(untrustedOrigin.code, "native_custodial_app_required");
+  assert.equal(databaseCalls.length, 0, "all refusal and operation-validation paths must leave saved work and credentials untouched");
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }
@@ -239,6 +177,8 @@ assert.match(migration, /status in \('pending', 'leased'\)/i);
 assert.match(migration, /token_hash = p_token_hash/i, "terminal replay must remain bound to the original credential hash");
 assert.doesNotMatch(migration, /device_credential\s+text/i, "removal history must not persist a plaintext credential");
 assert.match(routeSource, /\/custodial-device-auth\/remove/);
-assert.match(routeSource, /device_auth_remove_custodial_credential/);
+assert.match(routeSource, /custodial_native_removal_inventory_admission_required/);
+assert.doesNotMatch(routeSource, /device_auth_remove_custodial_credential/,
+  "the legacy HTTP route must not call around the unfinished protected-work removal protocol");
 
 console.log("CUSTODIAL_DEVICE_REMOVAL_CONTRACT_PASS");

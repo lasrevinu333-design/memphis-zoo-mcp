@@ -13,6 +13,7 @@ import {validateApprovedManualPolicyDelta} from './approved-manual-policy-delta.
 const DEFAULT_CATALOG=fileURLToPath(new URL('../config/schedules/manual-approved-20261030/catalog.json',import.meta.url));
 const SOURCE_ROOT=fileURLToPath(new URL('..',import.meta.url));
 const ISSUED_MANIFEST_SHA256='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f';
+const ISSUED_START_CORRECTION_SHA256='b7583d9e7db1373a092222e5698de28061a61726c2dae58a4b44b435cf35fdde';
 const ISSUED_POLICY_DELTA_SHA256='1e0510e468fce2bf46762b286bb6e801df1b19591ecc0825411c5250a57feee3';
 const DAYS=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 const HOLDS=['prearrival_ownership','non_monday_0945','weekly_elephant_trunk_restrooms'];
@@ -39,6 +40,16 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
   assert.equal(deltaBytes.length,catalog.policyDelta.bytes);
   assert.equal(sha(deltaBytes),catalog.policyDelta.sha256,'Later policy delta bytes changed');
   const policyDelta=JSON.parse(deltaBytes),effectivePolicies=validateApprovedManualPolicyDelta(policyDelta,catalog);
+  // Later owner-authorized data delta; never rewrite the original approved packet.
+  const correctionPath=fileURLToPath(new URL('../config/schedules/manual-approved-20261030/owner-start-correction-20261113.json',import.meta.url));
+  const correctionBytes=regularFile(correctionPath);
+  assert.equal(sha(correctionBytes),ISSUED_START_CORRECTION_SHA256,'Exact owner shift correction required');
+  const startCorrection=JSON.parse(correctionBytes),correctedDays=[];
+  assert.equal(startCorrection.schema,'custodial.approved-manual-shift-correction.v2');
+  assert.equal(startCorrection.baseManifestSha256,catalog.manifestSha256);
+  assert.deepEqual(startCorrection.days,['monday','wednesday']);
+  assert.deepEqual(startCorrection.after,{start:'08:00',end:'17:00'},'Exact later owner-confirmed hours required');
+  assert.equal(startCorrection.handoffPolicy,'RETAIN_OWNED_GROUPS_UNTIL_CONFIRMED_SHIFT_END');
   const contents=new Map();
   for(const row of catalog.files){
     assert.ok(!contents.has(row.path),'Duplicate packet file');
@@ -66,6 +77,12 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
     const employees=raw.employees.map(p=>({name:p.name,shift:windowOf(day==='monday'?p.shift:p.shift_baseline),
       lunch:windowOf(day==='monday'?p.lunch:p.own_lunch_baseline),
       baseGroups:structuredClone(day==='monday'?p.morning_owned_areas:p.requested_base_areas)}));
+    if(startCorrection.days.includes(day)){
+      const matches=employees.filter(p=>p.name===startCorrection.employeeName);
+      assert.equal(matches.length,1,'Corrected employee must exist exactly once on the approved day');
+      assert.deepEqual(matches[0].shift,startCorrection.before,'Owner correction requires its exact retained shift');
+      matches[0].shift=windowOf(startCorrection.after);correctedDays.push(day);
+    }
     const people=new Map(employees.map(p=>[p.name,p]));assert.equal(people.size,employees.length);
     assert.ok(sameSet(employees.flatMap(p=>p.baseGroups),inventory),'Approved bases must own every combined group exactly once');
     for(const p of employees){
@@ -99,6 +116,13 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
         }else for(const t of h.transfers??[h])for(const group of t.areas)rows.push({time,from:t.from,to:t.to,group});
       }
       for(const t of rows){
+        // A confirmed later end retains this employee's existing custody.
+        // Other donors and recipients retain the approved handoff unchanged.
+        if(startCorrection.days.includes(day)&&t.from===startCorrection.employeeName&&t.time===startCorrection.before.end){
+          assert.equal(before.get(t.group),t.from,'Deferred handoff must have its exact prior owner');
+          assert.equal(people.get(t.from).shift.end,staffedEnd,'Both actual closers leave together; no invented recipient');
+          continue;
+        }
         assert.ok(!moved.has(t.group)&&before.get(t.group)===t.from,'Handoff changed, duplicated or reversed an accepted owner');moved.add(t.group);
         const donor=people.get(t.from),recipient=people.get(t.to);
         assert.ok(donor&&recipient&&donor.shift.end===time&&onShift(recipient,minutes(time)),'Handoff must use static scheduled departure and a remaining employee');
@@ -128,8 +152,14 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
   assert.equal(referenceBytes.length,binding.reference.bytes,'Retained reference length changed');
   const referenceBindings=validateApprovedManualBindings({binding,reference:JSON.parse(referenceBytes),referenceSha256:sha(referenceBytes),
     manual:{manifestSha256:catalog.manifestSha256,days,ratings,educationScope:ratingSource.education_scope}});
+  assert.deepEqual(correctedDays,startCorrection.days,'Both and only the approved weekdays must be corrected');
+  const correctedIdentity=referenceBindings.people.filter(p=>p.approvedName===startCorrection.employeeName);
+  assert.equal(correctedIdentity.length,1);
+  assert.equal(correctedIdentity[0].employeeId,startCorrection.employeeId);
+  assert.equal(correctedIdentity[0].slotId,startCorrection.slotId);
   const body={schema:'custodial.approved-manual-week-data.v1',packetId:catalog.packetId,zipSha256:catalog.zipSha256,
     manifestSha256:catalog.manifestSha256,timezone:'America/Chicago',ratings,
+    ownerStartCorrection:{sha256:ISSUED_START_CORRECTION_SHA256,...structuredClone(startCorrection)},
     ratingUnit:'COMBINED_GROUP_OWNER_RATING_1_TO_10_NOT_MINUTES',
     proximityIntent:structuredClone(ratingSource.proximity_planning),absenceRequirement:structuredClone(ratingSource.absence_recalculation_requirement),
     objective:{proximityPercent,loadPercent,normalizedFormula:null,formulaApproved:false},days,

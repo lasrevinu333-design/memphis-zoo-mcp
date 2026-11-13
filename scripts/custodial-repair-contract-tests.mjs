@@ -160,12 +160,23 @@ async function proveProcessLivenessWithUnavailableDependencies() {
       release_id: "release-2026.07.19.custodial-v3.12",
       app_version: "release-2026.07.19.custodial-v3.12",
     });
-    const readinessResponse = await fetch(`http://127.0.0.1:${port}/health/dependencies`, { signal: AbortSignal.timeout(2_000) });
+    // Public readiness deliberately exposes only readiness and liveness. The
+    // detailed dependency route requires a current manager; unavailable DB
+    // authority cannot be bypassed with a synthetic signed token in this test.
+    const readinessResponse = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2_000) });
     assert.equal(readinessResponse.status, 503, "unavailable database authority must fail dependency readiness without failing process liveness");
     const readiness = await readinessResponse.json();
-    assert.equal(readiness.ok, false);
-    assert.equal(readiness.process_alive, true);
-    assert.equal(readiness.database_reachable, false);
+    assert.deepEqual(readiness, { ok: false, process_alive: true }, "public readiness must not expose private dependency diagnostics");
+    const diagnosticsResponse = await fetch(`http://127.0.0.1:${port}/health/dependencies`, { signal: AbortSignal.timeout(2_000) });
+    assert.equal(diagnosticsResponse.status, 401, "anonymous callers cannot acquire protected diagnostics when dependencies are unavailable");
+    const diagnostics = await diagnosticsResponse.json();
+    assert.equal(diagnostics.ok, false);
+    for (const field of ["database_reachable", "required_schema_present", "release_manifest", "worker"]) {
+      assert.equal(Object.hasOwn(diagnostics, field), false, `unauthenticated diagnostics cannot expose ${field}`);
+    }
+    const stillAlive = await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(250) });
+    assert.equal(stillAlive.status, 200, "readiness failure and diagnostics refusal must not fail process liveness");
+    assert.equal((await stillAlive.json()).process_alive, true);
   } finally {
     if (child.exitCode === null) child.kill("SIGTERM");
     await Promise.race([

@@ -22,7 +22,13 @@ for(const [name,current,prior]of [['roster transition',prepareApprovedManualRost
  test(name+': raw CLI remains byte-identical to complete previous implementation',()=>{assert.deepEqual(current(args),prior(args));});
  test(name+': decorated manager read equals raw authority input exactly',()=>{assert.deepEqual(current({...args,snapshot:decorated}),current(args));});
 }
-test('Exact previous raw transition from BEFORE-fix run is retained',()=>{assert.deepEqual(prepareApprovedManualRosterTransition(args),JSON.parse(readFileSync(new URL('BEFORE_FIX_RAW_TRANSITION.json',D))));});
+test('Exact historical raw transition from BEFORE-fix run is retained',()=>{
+ const bytes=readFileSync(new URL('./fixtures/approved-manual-week-before-start-correction.json',import.meta.url));
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),'837fc6f43fc2b5a506a81264bedf449be82def63e3a243a13fbe86e28eeb868b');
+ const historicalWeek=JSON.parse(bytes),historicalDraft=prepareApprovedManualSourceDraft({week:historicalWeek,
+  referenceBytes:readFileSync(new URL('../'+historicalWeek.referenceBindings.reference.path,import.meta.url))});
+ assert.deepEqual(prepareApprovedManualRosterTransition({...args,week:historicalWeek,draft:historicalDraft}),JSON.parse(readFileSync(new URL('BEFORE_FIX_RAW_TRANSITION.json',D))));
+});
 for(const [field,change]of [['schema',s=>s.schema+='-changed'],['serviceDate',s=>s.serviceDate='2026-10-30'],['authorityRevision',s=>s.authorityRevision++],['parentPublication',s=>s.parentPublication.publicationId=uid(80)],['rosterSlots',s=>s.rosterSlots[0].label+=' altered'],['employees',s=>s.employees[0].displayName+=' altered']])test(field+' remains authoritative and tamper changes canonical hash',()=>{const s=copy(raw);change(s);assert.notEqual(digest(projectApprovedManualRosterSnapshot(s)),digest(raw));});
 for(const key of ['authority_revision','unknownSource','approvedManualActivationExtra'])test('Unknown top-level '+key+' refuses',()=>assert.throws(()=>projectApprovedManualRosterSnapshot({...raw,[key]:true})));
 test('Nonenumerable/symbol unknown fields are not silently ignored',()=>{const x=copy(raw);Object.defineProperty(x,'hidden',{value:true});assert.throws(()=>projectApprovedManualRosterSnapshot(x));const y=copy(raw);y[Symbol('hidden')]=true;assert.throws(()=>projectApprovedManualRosterSnapshot(y));});

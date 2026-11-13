@@ -30,7 +30,7 @@ const run=period=>prepareApprovedManualPeriodProjection({week,source,ownerConfig
  before=digest({week,source,draft,normal,adjusted,withThird,extended});
 save('FIXTURE.json',{week,source,ownerConfig:draft.ownerConfig,normal,adjusted,withThird,extended,accepted:{normal:acceptedFor(normal),adjusted:acceptedFor(adjusted),withThird:acceptedFor(withThird),extended:acceptedFor(extended)}});
 const nativeNormal=run(normal);save('NORMAL_NATIVE.json',nativeNormal);
-assert.equal(nativeNormal.projectionAssignments.length,346);assert.equal(nativeNormal.lunchDocument.loans.length,40);
+assert.equal(nativeNormal.projectionAssignments.length,327);assert.equal(nativeNormal.lunchDocument.loans.length,40);
 for(const loan of nativeNormal.lunchDocument.loans)assert.equal(loan.status,'PLANNED');
 const nativeAbsence=run(adjusted);save('TWO_ABSENCE_NATIVE.json',nativeAbsence);
 const unchanged=rows=>rows.filter(r=>r.service_date!=='2026-11-03');
@@ -74,6 +74,6 @@ const wrong=structuredClone(source);wrong.version.assignments[0].includedLocatio
 assert.throws(()=>prepareApprovedManualPeriodProjection({week,source:wrong,ownerConfig:draft.ownerConfig,period:adjusted}));
 assert.equal(digest({week,source,draft,normal,adjusted,withThird,extended}),before);
 const result={status:'PASS',scope:'Native DATA preparation with maintained exact hard-constraint witness and native full-hour lunch derivation; no SQL, deployment or real manager claim',
- normalRows:346,normalLunches:40,adjustedLunches:38,unaffectedSixDaysExact:true,unchangedLunchAndNotificationIdentitiesRetained:true,combinedGroupDayBudgetsConserved:true,
+ normalRows:327,normalLunches:40,adjustedLunches:38,unaffectedSixDaysExact:true,unchangedLunchAndNotificationIdentitiesRetained:true,combinedGroupDayBudgetsConserved:true,
  typedFixtureCapacityHasNoEmployeeIdentity:true,all23GroupsThroughConfirmed18:true,baselineAndAcceptedPlansUnchanged:true,
  productionWritten:false};save('RESULT.json',result);console.log(JSON.stringify(result));

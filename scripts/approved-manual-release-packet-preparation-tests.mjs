@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import {readFileSync,mkdirSync,lstatSync,symlinkSync} from 'node:fs';
+import {readFileSync,mkdtempSync,lstatSync,symlinkSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {parsePreparationArgs,validatePreparationTarget,validatePacketPreparationProfile,createPacketPreparationIds,createPrivatePacketIntent,
  buildApprovedManualReleasePacket,packetPreparationLocalSourceClosure,PREPARATION_SQL} from './prepare-approved-manual-release-packet.mjs';
 import {readApprovedManualWeek} from '../src/approved-manual-week.js';
@@ -14,7 +15,8 @@ import {PRODUCTION_DATABASE_IDENTITY,validateProductionDatabaseUrl} from './prod
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 const checks=[],test=(n,f)=>{f();checks.push(n);},copy=structuredClone,uid=n=>`79000000-0000-4000-8000-${String(n).padStart(12,'0')}`,
  source=fileURLToPath(new URL('./prepare-approved-manual-release-packet.mjs',import.meta.url)),root=resolve(fileURLToPath(new URL('..',import.meta.url))),
- parent=resolve(root,'release/worker1-release-packet-preparation-20261030/actual-pure-private-'+randomUUID());mkdirSync(parent,{mode:0o700});
+ parent=mkdtempSync(resolve(tmpdir(),'custodial-approved-manual-release-packet-tests-'));
+try{
 const argv=['--expected-project',PRODUCTION_DATABASE_IDENTITY.project_ref,'--ca-file','/public/fixture-ca.pem','--out',resolve(parent,'future-packet'),'--expected-date','2026-10-29','--expected-revision','42'];
 let options=parsePreparationArgs(argv);
 test('Ordinary CLI defaults to dry run; explicit apply is a separate future operator decision',()=>{assert.equal(options.apply,false);assert.equal(parsePreparationArgs([...argv,'--apply']).apply,true);assert.equal(options.revision,42);});
@@ -39,7 +41,7 @@ test('All eight capacity UUIDs and source/packet identities are saved before pac
 test('Existing intent refuses overwrite/retry; existing output artifact also refuses',()=>{assert.throws(()=>createPrivatePacketIntent(out,intent));write('DATA.json',{fixture:true});assert.throws(()=>write('DATA.json',{fixture:false}));assert.throws(()=>write('../ESCAPE.json',{}));});
 test('Output symlink is never adopted',()=>{const link=resolve(parent,'linked');symlinkSync(out,link);assert.throws(()=>createPrivatePacketIntent(link,intent));});
 const packet=buildApprovedManualReleasePacket({week,draft,snapshot,target,ids,expectedDate:snapshot.serviceDate,expectedRevision:42});
-test('Real fixed-pattern adapter builds exact346/40 DATA with eight new nonemployees and22 preserved histories',()=>{assert.equal(packet.feasibility.projectionAssignments.length,346);assert.equal(packet.feasibility.lunchDocument.loans.length,40);assert.equal(packet.feasibility.solverInvoked,false);assert.equal(packet.newEmployees,0);assert.equal(packet.prospectivePositions,30);assert.equal(packet.capacityTransition.preservedLiveHistoryDigests.length,22);for(const s of packet.source.slots.filter(s=>s.kind==='CONTRACTOR_CAPACITY')){assert.deepEqual(s.incumbencies,[]);assert.ok(!snapshot.rosterSlots.some(old=>old.slotId===s.id));}assert.equal(packet.managerId,target.managerId);assert.equal(packet.registered,false);assert.equal(packet.published,false);});
+test('Real fixed-pattern adapter builds exact327/40 DATA with eight new nonemployees and22 preserved histories',()=>{assert.equal(packet.feasibility.projectionAssignments.length,327);assert.equal(packet.feasibility.lunchDocument.loans.length,40);assert.equal(packet.feasibility.solverInvoked,false);assert.equal(packet.newEmployees,0);assert.equal(packet.prospectivePositions,30);assert.equal(packet.capacityTransition.preservedLiveHistoryDigests.length,22);for(const s of packet.source.slots.filter(s=>s.kind==='CONTRACTOR_CAPACITY')){assert.deepEqual(s.incumbencies,[]);assert.ok(!snapshot.rosterSlots.some(old=>old.slotId===s.id));}assert.equal(packet.managerId,target.managerId);assert.equal(packet.registered,false);assert.equal(packet.published,false);});
 for(const [name,delta]of [['stale date',{expectedDate:'2026-10-30'}],['stale revision',{expectedRevision:41}]])test(name+' refuses before adapter preparation',()=>assert.throws(()=>buildApprovedManualReleasePacket({week,draft,snapshot,target,ids,expectedDate:snapshot.serviceDate,expectedRevision:42,...delta})));
 test('Reused employee/capacity UUID refuses before preparing source',()=>{const bad=copy(ids);bad.selection[0].new_capacity_id=snapshot.employees[0].employeeId;assert.throws(()=>buildApprovedManualReleasePacket({week,draft,snapshot,target,ids:bad,expectedDate:snapshot.serviceDate,expectedRevision:42}));});
 test('No source/week/history mutation from real packet building',()=>assert.equal(digest({week,draft,snapshot}),before));
@@ -52,5 +54,6 @@ test('Operational script reads exactly one credential environment key and never 
 test('Operational source pins include the complete literal local-import closure',()=>{const paths=packetPreparationLocalSourceClosure([source]);assert.ok(paths.includes(resolve(root,'src/approved-manual-source-draft.js')));assert.ok(paths.includes(resolve(root,'src/static-weekly-recurring-staffing-adaptation.js')));assert.ok(paths.includes(resolve(root,'scripts/production-database-identity.mjs')));assert.ok(paths.includes(resolve(root,'scripts/schema-catalog-readonly-client.mjs')));assert.equal(new Set(paths).size,paths.length);});
 test('Source freeze uses held no-follow descriptors and intent root is durable before writes',()=>{assert.match(script,/fstatSync\(fd/);assert.match(script,/constants.O_RDONLY\|constants.O_NOFOLLOW/);assert.match(script,/fsyncSync\(parentFd\)/);});
 test('All database write choices are exact source-controlled SQL, no caller SQL, PIN or credential reads',()=>{assert.equal(PREPARATION_SQL.prepare,'select public.static_weekly_prepare_coverall_activation($1::jsonb) as receipt');assert.doesNotMatch(Object.values(PREPARATION_SQL).join('\n'),/pin_versions|pin_hash|secret|password|security_scopes|request_contexts|chosen_name/i);assert.ok(!script.includes('error.message'));});
-console.log(JSON.stringify({status:'PASS',groups:checks.length,checks,realFixedPatternDataRows:346,lunches:40,solverInvoked:false,syntheticHistoricalSnapshotOnly:true,
- actualSQL:false,device:false,production:false,packetInserted:false,normalPublication:false,activation:false,privateFixtureOutput:parent}));
+console.log(JSON.stringify({status:'PASS',groups:checks.length,checks,realFixedPatternDataRows:327,lunches:40,solverInvoked:false,syntheticHistoricalSnapshotOnly:true,
+ actualSQL:false,device:false,production:false,packetInserted:false,normalPublication:false,activation:false,privateFixtureOutput:parent,privateFixtureCleanedOnExit:true}));
+}finally{rmSync(parent,{recursive:true,force:true});}

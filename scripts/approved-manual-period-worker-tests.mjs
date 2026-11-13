@@ -30,7 +30,7 @@ try{
  Object.defineProperty(getter,'ownerConfig',{enumerable:true,get(){getterCalls++;throw Error('must not run');}});
  await assert.rejects(()=>runtime.compileAndPrepare(getter,{kind:'approved-manual-period'},{deadlineAtMilliseconds:performance.now()+60000}));assert.equal(getterCalls,0);
  const normal=await runtime.compileAndPrepare(base,{kind:'approved-manual-period'},{deadlineAtMilliseconds:performance.now()+60000});
- assert.equal(normal.period.solverInvoked,false);assert.equal(normal.nativeProjection.projectionAssignments.length,346);
+ assert.equal(normal.period.solverInvoked,false);assert.equal(normal.nativeProjection.projectionAssignments.length,327);
  const changed=structuredClone(base),absent=['Jada','Derrick'].map(name=>week.referenceBindings.people.find(p=>p.approvedName.startsWith(name+' ')));
  changed.changes=[{serviceDate:'2026-11-03',absentPersonIds:absent.map(p=>p.employeeId)}];
  changed.acceptedExceptions=absent.map((p,i)=>({id:`local-pto-fixture-${i}`,type:'pto',status:'accepted',serviceDate:'2026-11-03',
@@ -57,7 +57,7 @@ try{
  assert.ok(pulses>20);assert.ok(maxGap<2000,`Parent event loop stalled ${maxGap}ms`);
  save('NORMAL.json',normal);save('ADJUSTED.json',prepared);
  result={status:'PASS',startedAt,scope:'Real existing isolated compiler process, bounded IPC, native hard constraints and lunch DATA; no database/publication claim',
- normalSolverBypassed:true,oneDatedTwoAbsenceSolve:true,normalAssignments:346,adjustedLunches:38,
+ normalSolverBypassed:true,oneDatedTwoAbsenceSolve:true,normalAssignments:327,adjustedLunches:38,
  parentPulses:pulses,maxParentGapMilliseconds:Math.round(maxGap),originalInputDetachedBeforeAwait:true,
  gettersNotExecuted:true,tamperedResultRefused:true,unchangedAcceptedDayReusedWithoutSolver:true,all38LunchIdentitiesRetained:true,productionWritten:false};
 }finally{clearInterval(timer);await runtime.shutdown();}

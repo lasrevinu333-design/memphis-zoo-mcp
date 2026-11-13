@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {resolve,dirname,relative,sep} from 'node:path';
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const bytes=readFileSync(new URL('./reminder-timing-source-successor.json',import.meta.url));
-assert.equal(sha(bytes),'b3b30c8d9c96a85e08cf617f40e8bd15bd537d82f592b017c9d788d614508b62');
+assert.equal(sha(bytes),'7c472e29628c8985770739c19166630656e3fe025f6d55fa7bca4858d996aaf9');
 const document=JSON.parse(bytes);
 assert.equal(document.schema,'custodial.reminder-timing-source-successor.v1');
 assert.equal(document.historical_pins_rewritten,false);assert.equal(document.production_admission,false);

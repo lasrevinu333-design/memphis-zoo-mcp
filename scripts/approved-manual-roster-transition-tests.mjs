@@ -79,10 +79,10 @@ assert.equal(activation.serviceDate,'2026-10-30');assert.equal(activation.window
 assert.equal(activation.feasibility.initialBaseline.projection.week_end,'2026-11-05');
 assert.deepEqual([...new Set(activation.feasibility.projectionAssignments.map(r=>r.service_date))].sort(),
  ['2026-10-30','2026-10-31','2026-11-01','2026-11-02','2026-11-03','2026-11-04','2026-11-05']);
-assert.equal(activation.feasibility.projectionAssignments.length,346);assert.equal(activation.feasibility.lunch.lunches.length,40);
+assert.equal(activation.feasibility.projectionAssignments.length,327);assert.equal(activation.feasibility.lunch.lunches.length,40);
 assert.equal(activation.transition.transfers.length,4);assert.equal(activation.historyRewrite,false);assert.equal(activation.productionWritten,false);
 assert.equal(activation.feasibility.solverInvoked,false);assert.equal(activation.feasibility.mapping.unchanged,true);
 assert.equal(JSON.stringify({snapshot,draft}),before,'Friday preparation must preserve the historical source and roster');
 console.log(JSON.stringify({status:'PASS',scope:'Recorded live roster DATA reconciliation and refusal behavior only; not atomic command, publication, SQL qualification or production activation',
  recordedOperationalDate:snapshot.serviceDate,livePositionsPreserved:22,projectedClosures:3,existingEmployeesAssigned:4,unchangedEmployees:4,
- unrelatedPositionsPreserved:5,hostileRefusals:refusals,currentDateFixedAdapter:{start:activation.serviceDate,end:activation.windowEnd,assignments:346,fullHourLunches:40,solverInvoked:false},productionWritten:false}));
+ unrelatedPositionsPreserved:5,hostileRefusals:refusals,currentDateFixedAdapter:{start:activation.serviceDate,end:activation.windowEnd,assignments:327,fullHourLunches:40,solverInvoked:false},productionWritten:false}));

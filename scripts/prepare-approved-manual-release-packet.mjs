@@ -89,7 +89,7 @@ export function buildApprovedManualReleasePacket({week,draft,snapshot,target,ids
  assert.ok(ids.selection.every(x=>!snapshot.rosterSlots.some(s=>s.slotId===x.new_capacity_id)&&!snapshot.employees.some(e=>e.employeeId===x.new_capacity_id)));
  const data=prepareApprovedManualCoverAllActivation({week,draft,snapshot,selection:ids.selection,sourceId:ids.sourceId,versionId:ids.versionId,
   templatePublicationId:ids.templatePublicationId,templateId:ids.templateId,packetId:ids.packetId,managerId:target.managerId});
- assert.equal(data.feasibility.solverInvoked,false);assert.equal(data.feasibility.projectionAssignments.length,346);assert.equal(data.feasibility.lunchDocument.loans.length,40);
+ assert.equal(data.feasibility.solverInvoked,false);assert.equal(data.feasibility.projectionAssignments.length,draft.sourceDraft.version.assignments.length,'Exact validated manual geometry retained');assert.equal(data.feasibility.lunchDocument.loans.length,40);
  assert.equal(data.newEmployees,0);assert.equal(data.registered,false);assert.equal(data.published,false);return data;
 }
 export function validatePacketPreparationProfile(profile,client){
