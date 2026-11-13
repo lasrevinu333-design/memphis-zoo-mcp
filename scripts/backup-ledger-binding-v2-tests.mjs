@@ -28,7 +28,7 @@ for(const [name,mutate] of cases)test('binding rejects '+name,()=>{const x=input
 const archiveCases=[['old bytes',x=>x.ledger[0].statements[0]+='\n'],['old name',x=>x.ledger[0].name+='x'],['extra row',x=>x.ledger.push({...x.ledger.at(-1),version:'20261111161431'})],['missing row',x=>x.ledger.pop()],['reorder',x=>x.ledger.reverse()],['duplicate',x=>x.ledger[1].version=x.ledger[0].version],['malformed array',x=>x.ledger[0].statements=[1]],['wrong project',x=>x.summary.project_ref='a'.repeat(20)],['wrong release',x=>x.summary.source_identity.release.release_id='other'],['wrong manifest',x=>x.summary.source_identity.release.migration_manifest_sha256='0'.repeat(64)],['catalog',x=>x.binding.catalog_fingerprint='0'.repeat(64)],['upgrade flag',x=>x.binding.application_upgrade_claimed=true],['mutation flag',x=>x.binding.production_mutation_authorized=true],['unknown version',x=>x.binding.schema='custodial.backup-schema-extension.v3'],['source path',x=>x.binding.ledger_contract.source_bindings[0].source_file='../x'],['digest',x=>x.binding.ledger_sha256='0'.repeat(64)],['candidate contract',x=>x.binding.ledger_contract.activation_status='candidate']];
 for(const[name,mutate]of archiveCases)test('archive rejects '+name,()=>{const x=archive();mutate(x);assert.throws(()=>verifyArchivedSchemaExtension(x));});
 test('reviewed active declaration differs from inactive candidate only in activation status',()=>{
- const active=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+ const active=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.ledger419.active.json',import.meta.url),'utf8'));
  assert.equal(validateBackupLedgerDeclarationV2(active),true);assert.equal(active.activation_status,'active');
  assert.equal(active.observed_catalog_fingerprint,'53cb0b65c062a0e1334ef19cc669f0a0731168b38c37830245b3dea4585316fc');
  assert.deepEqual({...active,activation_status:'candidate'},candidate);
@@ -44,3 +44,41 @@ test('publishable provenance uses only source basenames and repo-relative retain
   else {assert.equal(r.transformation,'none');assert.equal(sha(bytes),r.source_raw_sha256);}
  }
 });
+
+const current=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const currentCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.events420.candidate.json',import.meta.url),'utf8'));
+function currentInput(){
+ const x=input();x.declaration=structuredClone(current);x.releaseIdentity=structuredClone(current.deployed_release);
+ x.migrationLedger=current.ledger.map(r=>({version:r.version,name:r.name,statements:r.statement_sha256.map((_,i)=>{
+  const s=current.source_bindings.find(s=>s.ledger_version===r.version&&s.statement_index===i);
+  return s?source(s.source_file,s.source_location).toString('utf8'):`select '${r.version}:${i}' AS synthetic_historical_fixture;`;
+ })}));
+ x.declaration.ledger=x.migrationLedger.map(r=>({version:r.version,name:r.name,statement_sha256:r.statements.map(sha)}));x.declaration.ledger_sha256=ledgerMetadataDigest(x.declaration.ledger);
+ x.declaration.observed_catalog_fingerprint=fingerprintSchemaCatalog(x.catalog).fingerprint;return x;
+}
+test('current exact 420 declaration adds only the applied Events statement and keeps historical identity',()=>{
+ assert.equal(validateBackupLedgerDeclarationV2(current),true);assert.equal(validateBackupLedgerDeclarationV2(currentCandidate),true);
+ assert.deepEqual({...current,activation_status:'candidate'},currentCandidate);assert.equal(current.observed_ledger_count,420);assert.equal(current.observed_ledger_head,'20261113221252');
+ assert.deepEqual(current.deployed_release,candidate.deployed_release);assert.deepEqual(current.ledger.slice(0,419),candidate.ledger);assert.deepEqual(current.source_bindings.slice(0,189),candidate.source_bindings);
+ assert.equal(current.observed_catalog_fingerprint,'afb1cd060e0f5a67833c5f15730010acadc6f737899ef955f6b0d2c8b6bedea5');
+ assert.equal(current.ledger_sha256,'ece44ce3b2f0c4cceceef589783fae73f5ad342630765c6460ab083b0515543e');
+ for(const s of current.source_bindings)assert.equal(sha(source(s.source_file,s.source_location)),s.sql_sha256);
+ assert.equal(current.source_bindings.at(-1).sql_sha256,'0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab');
+});
+test('current 420 synthetic fixture binds and verifies archives without invalidating the old 419 archive',()=>{
+ const x=currentInput(),binding=bindBackupSchemaExtension(x);
+ assert.equal(binding.captured_ledger_count,420);assert.equal(binding.application_upgrade_claimed,false);
+ assert.equal(verifyArchivedSchemaExtension({summary:{project_ref:x.projectRef,source_identity:{release:x.releaseIdentity,migration_head:binding.captured_migration_head,migration_ledger_count:420}},binding,catalog:x.catalog,ledger:x.migrationLedger}),true);
+ assert.equal(verifyArchivedSchemaExtension(archive()),true);
+});
+const currentCases=[
+ ['unreviewed 421',x=>{x.declaration.observed_ledger_count=421;x.migrationLedger.push({...x.migrationLedger.at(-1),version:'20261113221253'});}],
+ ['419 count with 420 source',x=>x.declaration.observed_ledger_count=419],['unreviewed head',x=>x.declaration.observed_ledger_head='20261113221253'],
+ ['changed Events SQL',x=>x.migrationLedger.at(-1).statements[0]+='\n'],['missing Events source',x=>x.declaration.source_bindings.pop()],
+ ['419 source pin on 420',x=>x.declaration.source_bindings_sha256=candidate.source_bindings_sha256],
+ ['retained source mutation',x=>{const read=x.readSource;x.readSource=(file,where)=>file.startsWith('20261113221252')?Buffer.from('select 1;'):read(file,where);}],
+ ['missing previous migration',x=>x.migrationLedger.splice(300,1)],['wrong runtime release',x=>x.releaseIdentity.backend_commit='0'.repeat(40)],
+ ['catalog drift',x=>x.catalog.functions.push({schema_name:'public',function_name:'undeclared'})],['inactive candidate',x=>x.declaration.activation_status='candidate'],
+ ['mutation flag',x=>x.declaration.production_mutation_authorized=true],['upgrade flag',x=>x.declaration.application_upgrade_claimed=true],
+];
+for(const [name,mutate]of currentCases)test('current 420 binding rejects '+name,()=>{const x=currentInput();mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});

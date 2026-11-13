@@ -5,14 +5,20 @@ const HASH=/^[a-f0-9]{64}$/;
 const VERSION=/^[0-9]{14}$/;
 const FILE=/^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/;
 const RELEASE_KEYS=['release_id','backend_commit','frontend_commit','migration_head','migration_manifest_sha256'];
+// Finite, source-pinned observations. The earlier contract remains available to
+// verify existing archives; capture still selects exactly one active declaration.
+const REVIEWED_BOUNDARIES=Object.freeze({
+ '419':Object.freeze({head:'20261111161430',added:184,sources:'b60e5202381672db119525d19f623e56f89074f08bb61dc7b7a9f9733d120db6'}),
+ '420':Object.freeze({head:'20261113221252',added:185,sources:'6ab7110f0eff144e59a52df350453e10f5776e2aaf59745d123c96412d046cbb'}),
+});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 // Canonical encoding is UTF-8 JSON of arrays, never locale sorting or object-key order.
 export function ledgerMetadataDigest(rows){return sha(JSON.stringify(rows.map(r=>[r.version,r.name,r.statement_sha256])));}
 export function sourceBindingsDigest(rows){return sha(JSON.stringify(rows.map(r=>[r.ledger_version,r.ledger_name,r.statement_index,r.source_location,r.source_file,r.sql_sha256])));}
 export function baselineMembershipDigest(rows){return sha(JSON.stringify(rows.map(r=>[r.version,r.name])));}
 function exactKeys(object,keys,label){assert.ok(object&&typeof object==='object'&&!Array.isArray(object),label);assert.deepEqual(Object.keys(object).sort(),[...keys].sort(),label);}
-function validateRows(rows,{hashed}){
- assert.ok(Array.isArray(rows)&&rows.length===419,'Exact reviewed 419-row boundary required');
+function validateRows(rows,{hashed,expectedCount}){
+ assert.ok(Array.isArray(rows)&&Object.hasOwn(REVIEWED_BOUNDARIES,rows.length)&&rows.length===expectedCount,'Exact reviewed ledger boundary required');
  let previous='';
  for(const row of rows){
   assert.ok(row&&typeof row==='object');assert.equal(typeof row.version,'string');assert.match(row.version,VERSION);assert.ok(row.version>previous,'Ledger order or duplicate version');previous=row.version;
@@ -28,12 +34,14 @@ function validateContract(d){
  assert.equal(d.schema,'custodial.backup-schema-extension-declaration.v2');
  assert.equal(d.application_upgrade_claimed,false);assert.equal(d.production_mutation_authorized,false);
  assert.ok(['candidate','active'].includes(d.activation_status),'Unknown activation state');
- assert.equal(d.observed_ledger_count,419);assert.equal(d.observed_ledger_head,'20261111161430');
+ const boundary=REVIEWED_BOUNDARIES[d.observed_ledger_count];
+ assert.ok(Number.isSafeInteger(d.observed_ledger_count)&&boundary,'Unreviewed ledger boundary');
+ assert.equal(d.observed_ledger_head,boundary.head);
  assert.match(d.project_ref,/^[a-z]{20}$/);exactKeys(d.deployed_release,RELEASE_KEYS,'Complete deployed release tuple required');
  assert.ok(typeof d.deployed_release.release_id==='string'&&d.deployed_release.release_id.length>0);
  for(const key of ['backend_commit','frontend_commit'])assert.match(d.deployed_release[key],/^[a-f0-9]{40}$/);
  assert.match(d.deployed_release.migration_head,VERSION);assert.match(d.deployed_release.migration_manifest_sha256,HASH);
- const rows=validateRows(d.ledger,{hashed:true});assert.equal(rows.at(-1).version,d.observed_ledger_head);
+ const rows=validateRows(d.ledger,{hashed:true,expectedCount:d.observed_ledger_count});assert.equal(rows.at(-1).version,d.observed_ledger_head);
  assert.match(d.ledger_sha256,HASH);assert.equal(ledgerMetadataDigest(rows),d.ledger_sha256,'Declared ledger digest changed');
  assert.ok(Array.isArray(d.historical_baseline)&&d.historical_baseline.length===235,'Historical membership must contain exactly 235 rows');
  let previous='';const historical=new Set();const byVersion=new Map(rows.map(r=>[r.version,r]));
@@ -43,8 +51,8 @@ function validateContract(d){
  assert.equal(d.historical_baseline_basis,'observed_statement_hashes_not_source_approval');
  assert.match(d.observed_catalog_fingerprint,HASH);
  assert.ok(Array.isArray(d.source_bindings));assert.match(d.source_bindings_sha256,HASH);assert.equal(sourceBindingsDigest(d.source_bindings),d.source_bindings_sha256,'Source binding digest changed');
- assert.equal(d.source_bindings_sha256,'b60e5202381672db119525d19f623e56f89074f08bb61dc7b7a9f9733d120db6','Exact reviewed source bindings required');
- const required=new Set(rows.filter(r=>!historical.has(r.version)).map(r=>r.version));assert.equal(required.size,184);
+ assert.equal(d.source_bindings_sha256,boundary.sources,'Exact reviewed source bindings required');
+ const required=new Set(rows.filter(r=>!historical.has(r.version)).map(r=>r.version));assert.equal(required.size,boundary.added);
  assert.ok(Array.isArray(d.original_v1_extensions)&&d.original_v1_extensions.length===5);
  for(const s of d.original_v1_extensions){assert.ok(historical.has(s.ledger_version));required.add(s.ledger_version);}
  const covered=new Set();let last='';
@@ -63,7 +71,7 @@ export function validateBackupLedgerDeclarationV2(declaration){validateContract(
 export function bindBackupLedgerV2({projectRef,releaseIdentity,migrationLedger,catalog,declaration:d,readSource}){
  const expected=validateContract(d);assert.equal(d.activation_status,'active','Candidate declaration is not active');
  assert.equal(projectRef,d.project_ref);for(const key of RELEASE_KEYS)assert.equal(releaseIdentity?.[key],d.deployed_release[key],`Unexpected deployed identity: ${key}`);
- const actual=validateRows(migrationLedger,{hashed:false});assert.deepEqual(actual,expected,'Full ledger differs from reviewed exact boundary');
+ const actual=validateRows(migrationLedger,{hashed:false,expectedCount:d.observed_ledger_count});assert.deepEqual(actual,expected,'Full ledger differs from reviewed exact boundary');
  assert.equal(ledgerMetadataDigest(actual),d.ledger_sha256);
  for(const s of d.source_bindings)assert.equal(sha(readSource(s.source_file,s.source_location)),s.sql_sha256,'Retained source bytes changed');
  assert.equal(fingerprintSchemaCatalog(catalog).fingerprint,d.observed_catalog_fingerprint,'Undeclared database schema or privilege drift');
@@ -82,6 +90,6 @@ export function verifyArchivedLedgerV2({summary,binding:b,catalog,ledger}){
  assert.equal(b.captured_migration_head,d.observed_ledger_head);assert.equal(b.captured_migration_head,summary.source_identity.migration_head);
  assert.equal(b.captured_ledger_count,d.observed_ledger_count);assert.equal(b.captured_ledger_count,summary.source_identity.migration_ledger_count);
  assert.equal(b.catalog_fingerprint,d.observed_catalog_fingerprint);assert.equal(fingerprintSchemaCatalog(catalog).fingerprint,b.catalog_fingerprint);
- const actual=validateRows(ledger,{hashed:false});assert.deepEqual(actual,expected,'Archived ledger statement hashes differ');assert.equal(b.ledger_sha256,d.ledger_sha256);assert.equal(ledgerMetadataDigest(actual),b.ledger_sha256);
+ const actual=validateRows(ledger,{hashed:false,expectedCount:d.observed_ledger_count});assert.deepEqual(actual,expected,'Archived ledger statement hashes differ');assert.equal(b.ledger_sha256,d.ledger_sha256);assert.equal(ledgerMetadataDigest(actual),b.ledger_sha256);
  return true;
 }

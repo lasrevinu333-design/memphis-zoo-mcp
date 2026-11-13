@@ -11,9 +11,9 @@
     "migration_head": "20260920010000",
     "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
   },
-  "observed_ledger_count": 419,
-  "observed_ledger_head": "20261111161430",
-  "observed_catalog_fingerprint": "53cb0b65c062a0e1334ef19cc669f0a0731168b38c37830245b3dea4585316fc",
+  "observed_ledger_count": 420,
+  "observed_ledger_head": "20261113221252",
+  "observed_catalog_fingerprint": "afb1cd060e0f5a67833c5f15730010acadc6f737899ef955f6b0d2c8b6bedea5",
   "ledger": [
     {
       "version": "20260514224806",
@@ -2947,9 +2947,16 @@
       "statement_sha256": [
         "6bc39e329941413b3487834e2a88f08d5d0cbbca77750983e4da71b5cdf48360"
       ]
+    },
+    {
+      "version": "20261113221252",
+      "name": "custodial_manual_event_cohort_intake",
+      "statement_sha256": [
+        "0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab"
+      ]
     }
   ],
-  "ledger_sha256": "a7737fec14656694c4daa2e94bb980dcc57b7da7a5c5fb74725123a76ea611d5",
+  "ledger_sha256": "ece44ce3b2f0c4cceceef589783fae73f5ad342630765c6460ab083b0515543e",
   "historical_baseline": [
     {
       "version": "20260514224806",
@@ -5443,7 +5450,15 @@
       "source_location": "retained_installed",
       "source_file": "20261111161430_active_work_gps_reader_policy.sql",
       "sql_sha256": "6bc39e329941413b3487834e2a88f08d5d0cbbca77750983e4da71b5cdf48360"
+    },
+    {
+      "ledger_version": "20261113221252",
+      "ledger_name": "custodial_manual_event_cohort_intake",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113221252_custodial_manual_event_cohort_intake.sql",
+      "sql_sha256": "0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab"
     }
   ],
-  "source_bindings_sha256": "b60e5202381672db119525d19f623e56f89074f08bb61dc7b7a9f9733d120db6"
+  "source_bindings_sha256": "6ab7110f0eff144e59a52df350453e10f5776e2aaf59745d123c96412d046cbb"
 }

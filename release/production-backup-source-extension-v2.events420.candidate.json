@@ -1,0 +1,5464 @@
+{
+  "schema": "custodial.backup-schema-extension-declaration.v2",
+  "activation_status": "candidate",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "production_mutation_authorized": false,
+  "application_upgrade_claimed": false,
+  "deployed_release": {
+    "release_id": "release-2026.07.19.custodial-v3.12",
+    "backend_commit": "fc2b989d19246ffd447c4c7cfb2590ac19bbcd27",
+    "frontend_commit": "6fae503111ef21c40a309913965c3b963043aa01",
+    "migration_head": "20260920010000",
+    "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
+  },
+  "observed_ledger_count": 420,
+  "observed_ledger_head": "20261113221252",
+  "observed_catalog_fingerprint": "afb1cd060e0f5a67833c5f15730010acadc6f737899ef955f6b0d2c8b6bedea5",
+  "ledger": [
+    {
+      "version": "20260514224806",
+      "name": "install_demo_scan_mock_engine_v2",
+      "statement_sha256": [
+        "9ff524a7f296cbaee27d47a7442f4ff6657ce07748370cb79007a600f8995cf3"
+      ]
+    },
+    {
+      "version": "20260514224945",
+      "name": "patch_demo_scan_mock_make_interval_int_casts",
+      "statement_sha256": [
+        "73d3010497619fe8bc1922a273d1febd59cb45a61c71105604dfaf6f1857bae6"
+      ]
+    },
+    {
+      "version": "20260514225332",
+      "name": "patch_demo_scan_mock_advance_transition",
+      "statement_sha256": [
+        "790950d7c197ba060a7540232bd04cc8ea84ac77a5d6f0477f743d084cc7291a"
+      ]
+    },
+    {
+      "version": "20260514225800",
+      "name": "enable_demo_scan_mock_cron_20m",
+      "statement_sha256": [
+        "cb147fded0607a7364ae3d3d525c9e45f7da68244e4a57dcec8e57626cf1dc8b"
+      ]
+    },
+    {
+      "version": "20260514225919",
+      "name": "patch_demo_scan_mock_stop_cancel_open",
+      "statement_sha256": [
+        "e09d096f4b4b7940154171996c0315b7be0c0c4cdeb9bc22d7fc1aac122ca4e6"
+      ]
+    },
+    {
+      "version": "20260514225955",
+      "name": "add_safe_demo_scan_mock_cron_wrapper",
+      "statement_sha256": [
+        "40244e37349aff520f30b2ddbbd0d8884057c92c59e129ff407c285ceeeaa22e"
+      ]
+    },
+    {
+      "version": "20260515023051",
+      "name": "demo_scan_mock_shift_schedule_mode",
+      "statement_sha256": [
+        "e3ca918de8e4532a2cd9b22ab6365d873fc128db3bc498f615967a774689d44b"
+      ]
+    },
+    {
+      "version": "20260515023123",
+      "name": "switch_demo_cron_to_shift_schedule",
+      "statement_sha256": [
+        "6060c3b459713d4793190eeeb1667e102234e3f96198c47b0ccadf855368fd3a"
+      ]
+    },
+    {
+      "version": "20260515145134",
+      "name": "demo_mock_v4_complete_dynamic_helper",
+      "statement_sha256": [
+        "4874a1c0e2cdeeedf2412c643b50fef5792df6c8f1fcf9ca078bd2c05b5ce868"
+      ]
+    },
+    {
+      "version": "20260515145151",
+      "name": "demo_mock_v4_assigned_locations_view",
+      "statement_sha256": [
+        "e4b81dfad4c476e63cebe1f885b09f3ef70492abd0fe00356231d84374774990"
+      ]
+    },
+    {
+      "version": "20260515145238",
+      "name": "demo_mock_v4_assigned_area_tick",
+      "statement_sha256": [
+        "4d465cb1e3dc8fe967955ffad89171fc1713e5a5bb40c1502263da6337cb5f70"
+      ]
+    },
+    {
+      "version": "20260515150336",
+      "name": "demo_mock_v4_wire_cron_to_assigned_area",
+      "statement_sha256": [
+        "c44301b8e938f9abe1578af06ce32528e3d21e5ef6aa325da0c3cf4516c167ec"
+      ]
+    },
+    {
+      "version": "20260517031749",
+      "name": "demo_mock_v4_start_515_triple_sessions",
+      "statement_sha256": [
+        "72980190c99890e4895a8af48e91139cdbf59473c268ad3ed3c8db0bc6763934"
+      ]
+    },
+    {
+      "version": "20260517111535",
+      "name": "demo_mock_v4_view_515_simple",
+      "statement_sha256": [
+        "6502f124248da9847cf07285cc9645c2162b9260c8d0695e4c3f00adbbe999e4"
+      ]
+    },
+    {
+      "version": "20260517111943",
+      "name": "demo_mock_v4_distinct_employee_wave_fix",
+      "statement_sha256": [
+        "6e652aa0811c6ee3a2136d1ca26216a6987566cdb4270444a79ea1f20b893ef5"
+      ]
+    },
+    {
+      "version": "20260714115918",
+      "name": "security_and_stale_session_foundation_20260714",
+      "statement_sha256": [
+        "eaab17b447896548b6b53b341351b3cb3248e53a39badd3fd509858122f0c7e8"
+      ]
+    },
+    {
+      "version": "20260714120020",
+      "name": "expand_session_completion_source_contract_20260714",
+      "statement_sha256": [
+        "45017af341c71d441c7379d52e486d0f8ae633ce293fbbd5ea6f5aab89a2a31e"
+      ]
+    },
+    {
+      "version": "20260714121817",
+      "name": "atomic_scan_and_messaging_foundation_20260714",
+      "statement_sha256": [
+        "6f2c1a04808bb38a28f160f78f7008a44c845d5d0651476bcaf676a12b28b215"
+      ]
+    },
+    {
+      "version": "20260714123412",
+      "name": "scan_state_v2_recovery_20260714",
+      "statement_sha256": [
+        "ae4b5b1c98e807d037a580332e6c5fe259efa63f8894a220339ac923915c75ee"
+      ]
+    },
+    {
+      "version": "20260714130037",
+      "name": "custodial_api_boundary_20260714",
+      "statement_sha256": [
+        "c0ebf8f2dde3b3cd545285d537a2f8f72e220d6f3bfeb200cb0011fd08c963f3"
+      ]
+    },
+    {
+      "version": "20260714130742",
+      "name": "custodial_foundation_v2_20260714",
+      "statement_sha256": [
+        "0b715fd4acf9e25cc18eb6f9456e5e0c623f4da5788f2cf92ce9d95c2c35dfa1"
+      ]
+    },
+    {
+      "version": "20260714131105",
+      "name": "custodial_scan_atomic_v2_20260714",
+      "statement_sha256": [
+        "38f4698a6250668e6f22479aed85da7f0613f4df42495d7dd148195e368962cc"
+      ]
+    },
+    {
+      "version": "20260714131222",
+      "name": "custodial_data_write_and_stale_v2_20260714",
+      "statement_sha256": [
+        "40e560d7cde29e4bcc0f4260ba3af98070f3e6e1c31162dfe5f4654a619159d3"
+      ]
+    },
+    {
+      "version": "20260714131352",
+      "name": "custodial_messenger_lifecycle_v2_20260714",
+      "statement_sha256": [
+        "8890b53c0050b9e9e6090ef5cdfed588a2a991482c90f9f6dd0da315d262a08b"
+      ]
+    },
+    {
+      "version": "20260714134046",
+      "name": "custodial_legacy_scan_compatibility_v2_20260714",
+      "statement_sha256": [
+        "b94c1b6facaa238d0771a255e554172dc76b0b38888b7754b27a4cf51eae70f0"
+      ]
+    },
+    {
+      "version": "20260714135144",
+      "name": "custodial_public_rpc_lockdown_v2_20260714",
+      "statement_sha256": [
+        "82f18881e91399b4bed673dd4b736492f7ae049d401d03e6b0bb143592949061"
+      ]
+    },
+    {
+      "version": "20260714141721",
+      "name": "custodial_archive_runtime_migration_log_20260714",
+      "statement_sha256": [
+        "7863884c291ae98d75d125c8f5057728230958109c46083e8a306a120d8d5cc4"
+      ]
+    },
+    {
+      "version": "20260714141837",
+      "name": "custodial_remove_obsolete_scan_overloads_20260714",
+      "statement_sha256": [
+        "73b0886236d554d58e6fc40f983cd66671f2400df6f5a64875a71c6c108fa70c"
+      ]
+    },
+    {
+      "version": "20260714164028",
+      "name": "scheduler_foundation_application_write_20260714",
+      "statement_sha256": [
+        "24294e16e59f39faf36ef1b68f1ca2e7cc819868e39a17f4cce43035ebd89139"
+      ]
+    },
+    {
+      "version": "20260714164308",
+      "name": "scheduler_foundation_durable_reminders_20260714",
+      "statement_sha256": [
+        "3722615fe512bd9b22a35cfd643fec15c6560ebd8d2966f1f4e01c20d9cec904"
+      ]
+    },
+    {
+      "version": "20260714164417",
+      "name": "scheduler_foundation_static_readiness_20260714",
+      "statement_sha256": [
+        "a71b9148b78742f6b7e58d7f86fa8314c54e4d14f4a105099b29b28091e81179"
+      ]
+    },
+    {
+      "version": "20260714164746",
+      "name": "scheduler_foundation_authoritative_gps_20260714",
+      "statement_sha256": [
+        "4c31d201f933cea4f231fd93e0f1a223641dfb44dbc82d3f8bde1cd5d998b470"
+      ]
+    },
+    {
+      "version": "20260714174214",
+      "name": "scheduler_foundation_notification_ack_canonical_20260714",
+      "statement_sha256": [
+        "f4a5f9199fe38240ae9b23d38e426580465d34419a9f77a5fe1f03c7a1fbda69"
+      ]
+    },
+    {
+      "version": "20260714201504",
+      "name": "update_markiesha_shift_8_to_5_20260714",
+      "statement_sha256": [
+        "a9ad4fb4eb58ab963eed416127e0a7fbd8df84016755315ff644641c5f0d4bb3"
+      ]
+    },
+    {
+      "version": "20260714202221",
+      "name": "temporary_source_repair_payloads_20260714",
+      "statement_sha256": [
+        "1a6d09c6fce2df47fdcdc11cb150f15d110e8afc16c70a6d2d51fede27fed4fb"
+      ]
+    },
+    {
+      "version": "20260714210209",
+      "name": "temporary_repair_payload_upload_rpc_20260714",
+      "statement_sha256": [
+        "b2c101b043b55284851b6c6645080dee7e23d19cad05c6fdccb19d1262232800"
+      ]
+    },
+    {
+      "version": "20260714213818",
+      "name": "temporary_repair_payload_staging_20260714",
+      "statement_sha256": [
+        "ffca5f93cf14a2cc7f1413a0c83e90f4a749d7b0a072e6f254bde3f0b420ddd2"
+      ]
+    },
+    {
+      "version": "20260714214652",
+      "name": "remove_temporary_repair_payload_channel_20260714",
+      "statement_sha256": [
+        "9460cbc92fa1cb53390326cd9c4da9e1ea72929193707011518c4868a8cf8f9e"
+      ]
+    },
+    {
+      "version": "20260714220206",
+      "name": "markiesha_shift_0800_1700_20260714",
+      "statement_sha256": [
+        "b19fa47e008a54d50881d13ea20221e19fa30cf12809bea9f1588a9c55b355e3"
+      ]
+    },
+    {
+      "version": "20260714223858",
+      "name": "temporary_repair_payload_chunks_20260714",
+      "statement_sha256": [
+        "3c28655538f3c6bbd46ffe15ef1d1153f927b37f8d1e3e40943dd1de84f09264"
+      ]
+    },
+    {
+      "version": "20260714224744",
+      "name": "scheduler_full_day_my_schedule_contract_20260714",
+      "statement_sha256": [
+        "24822dc955d5f22b64211f9cc014977001e834c59a0c82087a38528efd95ecfe"
+      ]
+    },
+    {
+      "version": "20260714224811",
+      "name": "messenger_notification_instance_deduplication_20260714",
+      "statement_sha256": [
+        "27f64bad6bbe4673d1fa08a3b168bd7004aeaca33c29ab39e791e2315cd9ab2f"
+      ]
+    },
+    {
+      "version": "20260714224925",
+      "name": "device_notification_acknowledgement_list_20260714",
+      "statement_sha256": [
+        "244707ad12d9c95b01a3876be3d9f4addf24e9e59005f81fc9e85deea8378d8a"
+      ]
+    },
+    {
+      "version": "20260714225409",
+      "name": "release_validation_ledger_20260714",
+      "statement_sha256": [
+        "6ed14957388cbcd37b234cd9966951eb31f63815e3ab77d64f071d66490c2332"
+      ]
+    },
+    {
+      "version": "20260714231421",
+      "name": "internal_http_health_monitor_pg_net_20260714",
+      "statement_sha256": [
+        "f28c46fb5a711d1d03610a2f2d2843d425731c3b6732a9601ee45828315963c9"
+      ]
+    },
+    {
+      "version": "20260714232148",
+      "name": "my_schedule_current_and_full_day_contract_20260714",
+      "statement_sha256": [
+        "89303be29da8e118ec373648d527090fdf2a9dc70539b5ddec80a508b94e68bb"
+      ]
+    },
+    {
+      "version": "20260714232459",
+      "name": "backfill_event_read_acknowledgements_20260714",
+      "statement_sha256": [
+        "cdea1cca990c2ca6859e364551819add13402d6fcc840209f9d2f95b1b220c39"
+      ]
+    },
+    {
+      "version": "20260714235212",
+      "name": "scheduler_full_window_absence_coverage_20260714",
+      "statement_sha256": [
+        "6f19d75172f36288a08f2999d7a023c97e9690d704af38cebff9a9ba9a685b19"
+      ]
+    },
+    {
+      "version": "20260715004418",
+      "name": "terminal_cancelled_queue_reconciliation_20260715",
+      "statement_sha256": [
+        "12e10a75212c6ba207ba2fac75ff7803b36b5a657655ab3019dbb2c8cbb55f7d"
+      ]
+    },
+    {
+      "version": "20260715012451",
+      "name": "messenger_thread_foundation_20260715",
+      "statement_sha256": [
+        "704c7f222fb61fe006418ab65b90b1046a3d17eb0f8d8b04176a1f50ffdbfc50"
+      ]
+    },
+    {
+      "version": "20260715013305",
+      "name": "schedule_assignment_exact_duplicate_guard_20260715_v2",
+      "statement_sha256": [
+        "f58ed4fad199636227c77c924cfe19fc29169749afde4fcd633b836fb7d74e80"
+      ]
+    },
+    {
+      "version": "20260715013329",
+      "name": "messenger_orphan_reply_recovery_and_smoke_cleanup_20260715",
+      "statement_sha256": [
+        "ee3007fcb5cb4757d0dfec1c06199706dc2b753fdd4122f2f1e7dfe47d1ff874"
+      ]
+    },
+    {
+      "version": "20260715013904",
+      "name": "temporary_fleet_acceptance_rpc_20260715",
+      "statement_sha256": [
+        "eba50820b16efca01bc234dfef6838df917cc417614c6e4354221d03329531ea"
+      ]
+    },
+    {
+      "version": "20260715014014",
+      "name": "remove_temporary_fleet_acceptance_rpc_20260715",
+      "statement_sha256": [
+        "8656b611468607aeb95e78a5ca2319f5ea46fc5d69dce207c737bf0d2e9fff13"
+      ]
+    },
+    {
+      "version": "20260715021137",
+      "name": "dedupe_schedule_display_rows_20260715",
+      "statement_sha256": [
+        "57828f01f1cb085738b761740af473ea9fa8132ea326530f44a47fe29b07ef3b"
+      ]
+    },
+    {
+      "version": "20260715021411",
+      "name": "event_notification_one_instance_guarantee_v2_20260715",
+      "statement_sha256": [
+        "a2035db54c3dcb54dbd980f41eaf366320b7e09af2d8e07312ff108db1cd7162"
+      ]
+    },
+    {
+      "version": "20260715035139",
+      "name": "archive_automated_acceptance_cleaning_sessions_20260715",
+      "statement_sha256": [
+        "aa9dba20e5c729766bf51af52079af4e9e0994ac1adcadfb8ec7bb982097f3ac"
+      ]
+    },
+    {
+      "version": "20260715035227",
+      "name": "archive_all_message_state_before_clear_20260715",
+      "statement_sha256": [
+        "176e1d8fa7c0428a3faa70daf701a8dc6757bcb956bbb9286f796a9c99d1eaa5"
+      ]
+    },
+    {
+      "version": "20260715035431",
+      "name": "isolate_moxie_private_data_from_memphis_clients_20260715",
+      "statement_sha256": [
+        "d7560e13ea0ff15433898dd18cc831bb615e0c21874f64133205d011a951abdc"
+      ]
+    },
+    {
+      "version": "20260715040708",
+      "name": "foundational_runtime_schema_preprovision_20260715",
+      "statement_sha256": [
+        "8a406c9faaee3cb56a9d545ffaecd30870240e6d4bcc8f057d74c9ff000a4dbf"
+      ]
+    },
+    {
+      "version": "20260715041327",
+      "name": "lock_moxie_private_tables_20260715",
+      "statement_sha256": [
+        "1767bf10bfdae8dddc0ab96e91f0782e555aa23c1bb1d05ea1b50c84afc2c1c1"
+      ]
+    },
+    {
+      "version": "20260715042105",
+      "name": "secure_moxie_private_data_boundary_20260715",
+      "statement_sha256": [
+        "99a45f10b7a9937062d1bae8e2a2157ccd6dfd7bfffaee763fab382a47296ce5"
+      ]
+    },
+    {
+      "version": "20260715042229",
+      "name": "remove_foundation_concurrency_locations_20260715",
+      "statement_sha256": [
+        "2f8c8bfb1e5f4699cc8155d343606d078f8cd116f16bd9f78f5cce44049747d8"
+      ]
+    },
+    {
+      "version": "20260715043004",
+      "name": "disable_destructive_retention_jobs_20260715",
+      "statement_sha256": [
+        "90fcb006c84a5428c199e6548068018079510d65493dc42d151b039da0023015"
+      ]
+    },
+    {
+      "version": "20260715043255",
+      "name": "retired_identity_archive_20260715",
+      "statement_sha256": [
+        "14f2686fe94a4a0ce91f80e3c9979aaab261726d7cd4f3d60e1d0e312d791093"
+      ]
+    },
+    {
+      "version": "20260715043425",
+      "name": "event_notification_superseded_state_20260715",
+      "statement_sha256": [
+        "f0f25ec42d67bf58901d00b8629e7755a4b7271cc5aa86a0bbca0f56cfdc4f96"
+      ]
+    },
+    {
+      "version": "20260715043547",
+      "name": "revoke_trigger_function_public_execute_20260715",
+      "statement_sha256": [
+        "63c97f9d8df79f360c6c2a4bc4ea7203db7e8a4d31ebca28d0e11ec2f134d553"
+      ]
+    },
+    {
+      "version": "20260715044458",
+      "name": "isolate_moxie_private_data_20260715",
+      "statement_sha256": [
+        "ee6153415be5670789a561135cdd20b6404eb0b6af0d992bdda7d85c5e5e8e22"
+      ]
+    },
+    {
+      "version": "20260715112141",
+      "name": "fix_schedule_source_type_contract_20260715",
+      "statement_sha256": [
+        "f60d2ed24a2afd38dc1a6cdd1f3b26c23c26df48cd66c1a569903a85ecbac2f2"
+      ]
+    },
+    {
+      "version": "20260715121049",
+      "name": "remove_demo_people_and_harden_messenger_identity_20260715",
+      "statement_sha256": [
+        "4ae3845b443363cd32ff3953aa9b15fc6ce953a1d8a271e2752dfc4c8f1cd3fd"
+      ]
+    },
+    {
+      "version": "20260715130556",
+      "name": "messenger_runtime_membership_and_thread_visibility_20260715",
+      "statement_sha256": [
+        "16892eac32ab44ba2486d561da2650c54d2bd019a76129e673f6308aee8e3dfb"
+      ]
+    },
+    {
+      "version": "20260715130800",
+      "name": "messenger_thread_delete_server_authority_20260715",
+      "statement_sha256": [
+        "ae36dcd28f7a68497271a094bd4c100610f8735f0015c52aae54aadc902b41a0"
+      ]
+    },
+    {
+      "version": "20260715200108",
+      "name": "ops_manager_trusted_device_auth",
+      "statement_sha256": [
+        "c512f42342d14dac8b4b8566bda1fb0485bc56b9774c17dca5e82bdc4b39e144"
+      ]
+    },
+    {
+      "version": "20260715233040",
+      "name": "device_credential_foundation",
+      "statement_sha256": [
+        "275ed25fd13543c0c0e3beb99a9d5b7106490a997490770158ca40d88273ca15"
+      ]
+    },
+    {
+      "version": "20260716000250",
+      "name": "device_credential_foundation",
+      "statement_sha256": [
+        "727e6777374f8d2a060c895631ced6de887e7203667943bf59b7194bb7e8545c"
+      ]
+    },
+    {
+      "version": "20260716001029",
+      "name": "add_missing_foreign_key_indexes",
+      "statement_sha256": [
+        "e78169b5d7e9d41c17b556ebdb3ee7f11437e989871c330f19bbb30b70ddef6f"
+      ]
+    },
+    {
+      "version": "20260716001048",
+      "name": "retire_abandoned_repair_payload_tables",
+      "statement_sha256": [
+        "e2ea2d306b596c228e91133372070f143d89794724c64856a4161761f0f20345"
+      ]
+    },
+    {
+      "version": "20260716001441",
+      "name": "moxie_persistent_password_credentials",
+      "statement_sha256": [
+        "adefe29a02023377ac3eecfdc81be415870ea56d0eab8255bf60c1b962c500a6"
+      ]
+    },
+    {
+      "version": "20260716001701",
+      "name": "release_deployment_manifest",
+      "statement_sha256": [
+        "b9039f98891502cc7010ead4e3cffcb05707fa7e79ed3a314cd327c042eb472c"
+      ]
+    },
+    {
+      "version": "20260716001853",
+      "name": "ai_provider_data_boundary",
+      "statement_sha256": [
+        "22f16932e217568649102c08024d04541c9b732de4ba36609af3f1b53050bb68"
+      ]
+    },
+    {
+      "version": "20260716001958",
+      "name": "retire_legacy_backup_tables",
+      "statement_sha256": [
+        "46f20d284db73a28965147689eb16fb01da893bed98b8a0e6742f3ac48174b68"
+      ]
+    },
+    {
+      "version": "20260716002449",
+      "name": "harden_dynamic_sql_functions",
+      "statement_sha256": [
+        "fc47bb252b89667f8b403e23f3b22e809365877c56fb927e6cba8e23a14ff560"
+      ]
+    },
+    {
+      "version": "20260716002500",
+      "name": "migration_log_governance",
+      "statement_sha256": [
+        "315bc66918af953340b2ddc3ec86647ac62b6d9ef2f2b1d2313125bbef15eb6e"
+      ]
+    },
+    {
+      "version": "20260716002543",
+      "name": "harden_security_definer_search_paths",
+      "statement_sha256": [
+        "bea580ba0a1892de0ac31c7b64acc6dfe22e4f58dc82936e9cd52c644056c1c1"
+      ]
+    },
+    {
+      "version": "20260716003127",
+      "name": "force_rls_public_tables",
+      "statement_sha256": [
+        "0d9ecbf5f3a0c7436ee7f89696395692e5046cf4340ef1041f82f056656ecc5b"
+      ]
+    },
+    {
+      "version": "20260716003629",
+      "name": "auto_enforce_device_credentials_v2",
+      "statement_sha256": [
+        "a00ae0b2e130f0e1033140abe1b47d6cab1ae59e0747535a46ce6817f683311c"
+      ]
+    },
+    {
+      "version": "20260716004053",
+      "name": "retire_mcp_write_test_table",
+      "statement_sha256": [
+        "aa42b72cde8d28ddec7866d94ca314225c3fbf0e5f470cd753f84f74b7f5a70a"
+      ]
+    },
+    {
+      "version": "20260716010600",
+      "name": "residual_database_hygiene",
+      "statement_sha256": [
+        "535bbaa3e19265505ccb005074df0de3f9b152f6523223acbbba499843320cfd"
+      ]
+    },
+    {
+      "version": "20260716010648",
+      "name": "rls_and_function_hardening",
+      "statement_sha256": [
+        "cb04a5921bdd9af91ba1b7af8f8f6eb10fe31202698b0c76c4330c0808f3eb2a"
+      ]
+    },
+    {
+      "version": "20260716121245",
+      "name": "operational_recovery_20260716",
+      "statement_sha256": [
+        "167822616587563b0af06b1da79bb71929dfa4f79cb21f1d2dc6346f82b8db13"
+      ]
+    },
+    {
+      "version": "20260716193526",
+      "name": "foundation_repair_archive_cleanup",
+      "statement_sha256": [
+        "2035c8146bd52e3cbc9e00d0e24ec6fe6a9b83e53dfcf541c3220a34a3e3dc83"
+      ]
+    },
+    {
+      "version": "20260716193547",
+      "name": "foundation_repair_schedule_audit",
+      "statement_sha256": [
+        "533a6f39efdb54f2a2ede1b3f83bf873ad7142a252a568e553573cdac3fb2398"
+      ]
+    },
+    {
+      "version": "20260716193606",
+      "name": "foundation_repair_schedule_window",
+      "statement_sha256": [
+        "bd8fe3c6321e5a8f87eba444bb919770988f4267cac27e54b54d8c9b969b7220"
+      ]
+    },
+    {
+      "version": "20260716193627",
+      "name": "foundation_repair_schedule_cron",
+      "statement_sha256": [
+        "c74b1c5c8b8792c70f93e1257443d88548db208e3806c867b9fad58d9be91fc7"
+      ]
+    },
+    {
+      "version": "20260716193644",
+      "name": "foundation_repair_migration_log_compaction",
+      "statement_sha256": [
+        "1f416055d89155f34e66979df72e9d4e6b6cc9100d66c6db57db0ef3caef026c"
+      ]
+    },
+    {
+      "version": "20260716193725",
+      "name": "foundation_repair_migration_runner_governance",
+      "statement_sha256": [
+        "eff37a9ca64b20a5b8b2e5ececcc062f6eae38897d614d96d0f99199bdbf8a42"
+      ]
+    },
+    {
+      "version": "20260716194539",
+      "name": "foundation_repair_legacy_ledger_rollup",
+      "statement_sha256": [
+        "c360ae3dc2d2a29d0ea0c1f7df9302c4c315987f8df30d22a5f2e38f350cd645"
+      ]
+    },
+    {
+      "version": "20260717170035",
+      "name": "custodial_foundation_repair_delta",
+      "statement_sha256": [
+        "79e24a59a5bc3d77142bc8a49325e7f67ef0017002b69eeacad3cc284939df7d"
+      ]
+    },
+    {
+      "version": "20260717170136",
+      "name": "custodial_foundation_repair_device_eval_fix",
+      "statement_sha256": [
+        "90730df56598173c513246d585b5640962e529fdaad06dc05afa41a0a7973a64"
+      ]
+    },
+    {
+      "version": "20260717175320",
+      "name": "ops_manager_pairing_links",
+      "statement_sha256": [
+        "ca83f04cfd91be31cac1b6aaf7b9b1130b85010e40d54c456c1187753db3e9a8"
+      ]
+    },
+    {
+      "version": "20260717203456",
+      "name": "manager_passwordless_onboarding_security_app",
+      "statement_sha256": [
+        "3a3cb7939fc40f94b1759b9c6236ce1c65611dbff18bd5abe856ad784a9f6f79"
+      ]
+    },
+    {
+      "version": "20260717211212",
+      "name": "device_security_code_rpc_qualification",
+      "statement_sha256": [
+        "387782b34c8adb2cd83fcf15d6155e715152d106d127b5ef77f207c0de888645"
+      ]
+    },
+    {
+      "version": "20260718002000",
+      "name": "ops_manager_one_time_codes",
+      "statement_sha256": [
+        "b19b7ccf257fcda1ad172e4a92e2db386ad13bb61820bb4b962508b61c23a14e"
+      ]
+    },
+    {
+      "version": "20260718021910",
+      "name": "event_input_console_scope_venue_taxonomy",
+      "statement_sha256": [
+        "7b98ce9001fa4618cdf83cc089a55ca4f48b5792297f13152032d6279a44a8f6"
+      ]
+    },
+    {
+      "version": "20260718022648",
+      "name": "event_input_console_verified_venue_backfill_20260718",
+      "statement_sha256": [
+        "e7f75a0d0afe2732e59d879b8c96aa58f98155249e309a9345cdf23227b4c70e"
+      ]
+    },
+    {
+      "version": "20260718070417",
+      "name": "ops_manager_shared_48_hour_enrollment",
+      "statement_sha256": [
+        "5e1a6383e61632934d86ea68dbc7206c8579e99abc20c08e97cba47e31396783"
+      ]
+    },
+    {
+      "version": "20260718072634",
+      "name": "ops_manager_shared_enrollment_fk_indexes",
+      "statement_sha256": [
+        "d3c178d34f7bc042e88f86e47dd9b97e0de4638807fa10e833289d509de25372"
+      ]
+    },
+    {
+      "version": "20260718081916",
+      "name": "gemini_console_professional_foundation",
+      "statement_sha256": [
+        "69d246862facff02a8a798215a1f541cf00def7311515c40573d2bf5a0aa7dea"
+      ]
+    },
+    {
+      "version": "20260718083335",
+      "name": "reconstruct_public_grant_hardening",
+      "statement_sha256": [
+        "ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3"
+      ]
+    },
+    {
+      "version": "20260718084607",
+      "name": "schema_authority_cron_jobs",
+      "statement_sha256": [
+        "9f9539445178cee7a1b8d551d2cfeb6ec0ec76234a675123780d957c7c003e73"
+      ]
+    },
+    {
+      "version": "20260718085603",
+      "name": "schema_authority_comments",
+      "statement_sha256": [
+        "0cf5e24ebee7118310d403231e12b69b87bb8fbd82aa4d3c95fa0777503bf3b6"
+      ]
+    },
+    {
+      "version": "20260718124426",
+      "name": "custodial_v3_reliability_and_retention",
+      "statement_sha256": [
+        "bc96269db052387256979c61ba5dadf001a753f4be1ce00cc2cbec5bcdffd22e"
+      ]
+    },
+    {
+      "version": "20260718124433",
+      "name": "restore_members_night_retention_recovery",
+      "statement_sha256": [
+        "ef8f382688922a6b6a30ac138a45d8049479ae6f43c0afe98897f5f4f5cd2429"
+      ]
+    },
+    {
+      "version": "20260718131734",
+      "name": "prevent_cleaning_notes_false_maintenance_tickets",
+      "statement_sha256": [
+        "00b1736fa1a8f3ce4de836a58da232d0dfa56d264d0f60b42be79a8e674eba06"
+      ]
+    },
+    {
+      "version": "20260718143726",
+      "name": "moxie_password_rotation",
+      "statement_sha256": [
+        "e3664f4830a6c53cf70e678d6b8ce5a2dd0d7b72e8c1a7beece36a0f7cc328e5"
+      ]
+    },
+    {
+      "version": "20260718160914",
+      "name": "ops_manager_shared_messenger",
+      "statement_sha256": [
+        "ad8b4620b6003e75478ceb6e1f42a318ab70ffe29133d821623fc2965eb8eba9"
+      ]
+    },
+    {
+      "version": "20260718181345",
+      "name": "professional_employee_messenger",
+      "statement_sha256": [
+        "a6da82b63fba61e7ec81288afaa675d6db88a9ac6986824ef3d405447f9f9139"
+      ]
+    },
+    {
+      "version": "20260718194840",
+      "name": "messenger_delete_retention_shared_identity",
+      "statement_sha256": [
+        "c6d9f2e1eb9beb1b48d12b35c3160c7d6fb570b795328e33f76775c5a05234e3"
+      ]
+    },
+    {
+      "version": "20260718195342",
+      "name": "messenger_delete_actor_fk_indexes",
+      "statement_sha256": [
+        "6419d1f4794234b18b2a3a24f6091309db585d4d3c080b81498bc49bce4f4bde"
+      ]
+    },
+    {
+      "version": "20260719235243",
+      "name": "gps_proximity_motion_hardening_20260719",
+      "statement_sha256": [
+        "ce9cdcd8d6c3a0d96640fa665b77096da277c92858c59b3367eba8d6fe16c7c1"
+      ]
+    },
+    {
+      "version": "20260721212246",
+      "name": "operations_leadership_mobile_foundation_schema",
+      "statement_sha256": [
+        "b00986636e29ecda3aeaafe70e1489bf94128a9b5880442ae8e659265e8a69b4"
+      ]
+    },
+    {
+      "version": "20260721212339",
+      "name": "operations_leadership_mobile_foundation_data",
+      "statement_sha256": [
+        "b014ec7eb1357dd5cb0e05b2e4daa23a366038010137d0a0554d4784235e42e0"
+      ]
+    },
+    {
+      "version": "20260721212406",
+      "name": "operations_leadership_mobile_foundation_finalize",
+      "statement_sha256": [
+        "c498110f6123783f609bae3aa48d3d18ed201c8195d22029ec6a2a0fbab6c6f8"
+      ]
+    },
+    {
+      "version": "20260721212552",
+      "name": "manager_mobile_notifications_schema",
+      "statement_sha256": [
+        "2f91644dc56d34ae181cdf56e6a37ffae446bd464b70ab2a3c2765cde9c998ec"
+      ]
+    },
+    {
+      "version": "20260721214714",
+      "name": "manager_mobile_notifications_runtime",
+      "statement_sha256": [
+        "0a2d68acf9bbd3be9d290a23c668dccf90811cd6b5a137d2ffb640c4a079eb9d"
+      ]
+    },
+    {
+      "version": "20260722210339",
+      "name": "custodial_employee_phone_foundation",
+      "statement_sha256": [
+        "f1d2f360b5135cddeb88bc1e4950d3945f6874d321911f86b2c63670252223c0"
+      ]
+    },
+    {
+      "version": "20260722210533",
+      "name": "custodial_employee_phone_assignment",
+      "statement_sha256": [
+        "f725343fe8b4e9f3d6525746e9b91a4943fe2b7e8f2393004ff108c07088ea67"
+      ]
+    },
+    {
+      "version": "20260722210620",
+      "name": "custodial_employee_status_management",
+      "statement_sha256": [
+        "b16c28ea9ff28a3bf5b1fd0ec8967a42c5cc01c3c1f52237e7154d3c7f388c72"
+      ]
+    },
+    {
+      "version": "20260722210658",
+      "name": "retire_forced_operations_leadership_thread",
+      "statement_sha256": [
+        "78e6636775a82cd04a821fe80683edea15f0e36600b69c041bbda64c76af9acd"
+      ]
+    },
+    {
+      "version": "20260722230915",
+      "name": "event_notification_retention_integrity",
+      "statement_sha256": [
+        "62d9ebeb691721ea45a0fb6cbcbe1361a9157e786669dedf616b48149dff673e"
+      ]
+    },
+    {
+      "version": "20260723004728",
+      "name": "operational_retention_and_analytics",
+      "statement_sha256": [
+        "5994c7e805fd0fb9fa3c8a898f69419c4b35e44035cd2571058e3a00bd5032a1"
+      ]
+    },
+    {
+      "version": "20260723004749",
+      "name": "event_retention_history_guard",
+      "statement_sha256": [
+        "a6eca8b9c4f5248bcc3d67771d584dcca0d3ac5579d81f0b34edad78dc4df711"
+      ]
+    },
+    {
+      "version": "20260723111542",
+      "name": "v17_trigger_privilege_hardening",
+      "statement_sha256": [
+        "8593176ec87629d0ca15b3b32aa814d6dddb80e7651e870bf6e8abffb7198fd3"
+      ]
+    },
+    {
+      "version": "20260724015534",
+      "name": "event_messenger_cutover_deletion_semantics",
+      "statement_sha256": [
+        "796855768336a80a6d97bb790c05608c30d64786b95cbebf1dbf8a5c321a5ea3"
+      ]
+    },
+    {
+      "version": "20260724020041",
+      "name": "msg_thread_deletion_operations_user_index",
+      "statement_sha256": [
+        "f01533a9afcc1fcdab06ba2eb508164de8a78cf51d60151782ea274aac54a778"
+      ]
+    },
+    {
+      "version": "20260729205327",
+      "name": "third_audit_recovery_gemini_gps",
+      "statement_sha256": [
+        "1a1bf9596e8dc813451475a3727b365b01199f7dce6ffb4c61ef48fedaf8b4b8"
+      ]
+    },
+    {
+      "version": "20260729222013",
+      "name": "audit4_attendance_inspection_integrity",
+      "statement_sha256": [
+        "d56b21de71a1709b12ff6f482e6dae96f17ad2ccbd34c014d7a8dd8378098023"
+      ]
+    },
+    {
+      "version": "20260730013936",
+      "name": "audit5_feedback_guest_approval_lifecycle",
+      "statement_sha256": [
+        "5e5c11f38b449bc988f64875acf534406b01d4dda6332c29c1f43c19a0ce916a"
+      ]
+    },
+    {
+      "version": "20260730143817",
+      "name": "audit6_coverall_assignment_link_security",
+      "statement_sha256": [
+        "8e3c51cec409ec3f629bab7cb6e386bdb574294bd213866e64c69424234ff869"
+      ]
+    },
+    {
+      "version": "20260730143914",
+      "name": "audit6_coverall_assignment_link_service_policy",
+      "statement_sha256": [
+        "2842209a168ba9eb328d5a16279fc4d01679dadd168954a011c1b6b929aac8ab"
+      ]
+    },
+    {
+      "version": "20260730183936",
+      "name": "disaster_recovery_backup_reader",
+      "statement_sha256": [
+        "0db2e35ec76e12115e5c24de4b9d11a7147fa2547089d9fe9bba6b6010812910"
+      ]
+    },
+    {
+      "version": "20260730221607",
+      "name": "production_availability_warm_bridge",
+      "statement_sha256": [
+        "e6c5455239b8169c40a60b4b9a87c352399e5e6fc35673542143a6d19d40b472"
+      ]
+    },
+    {
+      "version": "20260730222357",
+      "name": "index_remaining_foreign_keys",
+      "statement_sha256": [
+        "a38e5a226b60159fc89f3a106ca7753b3a943339f376875ff66de789f990740d"
+      ]
+    },
+    {
+      "version": "20260731142827",
+      "name": "deactivate_render_free_tier_warm_bridge",
+      "statement_sha256": [
+        "c91ba6840d2029ba833d9e36117c537a5f933aea4850eeb5776f741c7046b27c"
+      ]
+    },
+    {
+      "version": "20260731142828",
+      "name": "inspection_spot_check_policy",
+      "statement_sha256": [
+        "ef1e5b777a7b29d8556ba3c7c6bb68bc901c652e0051311d9aede05e431ebfd4"
+      ]
+    },
+    {
+      "version": "20260801131340",
+      "name": "custodial_atomic_offline_completion_identity",
+      "statement_sha256": [
+        "bf2ad44580c1859e7b7d5a88f9ab6093077f8ee83a0b246eaf2f0e7c5068751a"
+      ]
+    },
+    {
+      "version": "20260801134430",
+      "name": "reconcile_canonical_schema_security_metadata",
+      "statement_sha256": [
+        "d20ebb49c76ddd801ed7b8ee381fe79fcaf902f935e39f4b1408d36e19945e38"
+      ]
+    },
+    {
+      "version": "20260801173321",
+      "name": "custodial_enrollment_resume_and_push_revocation",
+      "statement_sha256": [
+        "daa058a907a69f3f6ca866e9029671079ac1e62ecb6aade9a2ad305dcee830c1"
+      ]
+    },
+    {
+      "version": "20260801195620",
+      "name": "custodial_device_removal_operation",
+      "statement_sha256": [
+        "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166"
+      ]
+    },
+    {
+      "version": "20260809125735",
+      "name": "cleaning_inspection_24_hour_freshness",
+      "statement_sha256": [
+        "5629870fc9bfece9cec6f8a8182cca579c4070a8e9552039d4a1bb3035ae2052"
+      ]
+    },
+    {
+      "version": "20260810120000",
+      "name": "retire_named_manager_shared_room_authority",
+      "statement_sha256": [
+        "7d1c2e952ebe09a5350c72d0e396db5bd611f1a077971e6fc40ed0fdb3b54d3a"
+      ]
+    },
+    {
+      "version": "20260810130000",
+      "name": "harden_named_manager_retired_archive_and_concurrency",
+      "statement_sha256": [
+        "0b78e7a84fcb03bc1b58e0c4f07ac4ff0de826cd192256cb7bd214ea2598ebc0"
+      ]
+    },
+    {
+      "version": "20260810140000",
+      "name": "finalize_named_manager_messenger_retirement_integrity",
+      "statement_sha256": [
+        "5bc2f12e1ebb0de1a4ab43df82f03d52e8dd6f8f3a432e78622b09b4bbc0a860"
+      ]
+    },
+    {
+      "version": "20260810143000",
+      "name": "offline_actor_occurrence_reconciliation",
+      "statement_sha256": [
+        "6419d791845b257271c880f768dc8c9e8d6b6bc89b7296509d24650b313a7988"
+      ]
+    },
+    {
+      "version": "20260810150000",
+      "name": "enforce_integrated_backend_authority",
+      "statement_sha256": [
+        "ed21f67236622e924979be1bacc3578c932af3284cd1dd86fd2b6a091d89cf1f"
+      ]
+    },
+    {
+      "version": "20260810160000",
+      "name": "close_offline_authority_integrity_gaps",
+      "statement_sha256": [
+        "9f735a259cc103735e41aaab40339a57f135714205e4055fa0f1a650516d9a8e"
+      ]
+    },
+    {
+      "version": "20260810170000",
+      "name": "finish_offline_authority_operational_closure",
+      "statement_sha256": [
+        "a860643a26c27319635ccb258de1f79a28e9fec9575d41226baf9799a9ea0275"
+      ]
+    },
+    {
+      "version": "20260810190000",
+      "name": "final_integrated_backend_operational_correction",
+      "statement_sha256": [
+        "b7db33e260ccb34b478a406cf31a86aec1fcc5f4cbe59a7666bfe93607bb214c"
+      ]
+    },
+    {
+      "version": "20260810200000",
+      "name": "static_weekly_scheduler_authority_integrated",
+      "statement_sha256": [
+        "22936a91bfd7cf0c2a87a7c7fed6b287b53b7b61674a6adf62b41d3986a034a9"
+      ]
+    },
+    {
+      "version": "20260810210000",
+      "name": "static_weekly_scheduler_three_high_foundation_correction",
+      "statement_sha256": [
+        "b1c5f73ae49f29eaf3fe1f4c5608c8fc755ea74472479b7c7d80cd9668c9a37e"
+      ]
+    },
+    {
+      "version": "20260810220000",
+      "name": "static_weekly_scheduler_complete_authority_correction",
+      "statement_sha256": [
+        "76aa63cc7169d7d622870c7a70f479e88bc326f1358a118db317130ac3b54392"
+      ]
+    },
+    {
+      "version": "20260810230000",
+      "name": "static_weekly_scheduler_authority_closure_correction",
+      "statement_sha256": [
+        "b82af008a1e45646c945b684417d112d1c11ae72569457736d6c63c94ce32b74"
+      ]
+    },
+    {
+      "version": "20260812032055",
+      "name": "static_weekly_manager_snapshot",
+      "statement_sha256": [
+        "dff09dc30f34206d66f888bc8db2680fc34ec452d2421923b9eb2b84a17831d7"
+      ]
+    },
+    {
+      "version": "20260812130000",
+      "name": "static_weekly_employee_turnover",
+      "statement_sha256": [
+        "a02b7af05b89489f4887a0655be79231321ee88234c87ff93c2e8293f3d6f7e8"
+      ]
+    },
+    {
+      "version": "20260813035530",
+      "name": "offline_scan_authority_snapshot",
+      "statement_sha256": [
+        "48d3272976876e418696fb7cc3294dce7ecb2fa6911b4468a56652ee6eb11cf9"
+      ]
+    },
+    {
+      "version": "20260813050000",
+      "name": "offline_snapshot_operational_truth_closure",
+      "statement_sha256": [
+        "1afd5feef8ba060989d79aa40770a18ebf2a2470d4f2136df8b920bc3ffce159"
+      ]
+    },
+    {
+      "version": "20260813060000",
+      "name": "release_canary_operational_recovery",
+      "statement_sha256": [
+        "215aff4e59fb80713a13e14212ab1949af6a22513568d59eec61c5debfeb1ced"
+      ]
+    },
+    {
+      "version": "20260813070000",
+      "name": "operational_service_date_foundation",
+      "statement_sha256": [
+        "ee84f1d9ef3eb31746f3b61050bef4a9629331c3f72a1fde82db8b2e8123c5c6"
+      ]
+    },
+    {
+      "version": "20260813141806",
+      "name": "custodial_operational_boundary_closure",
+      "statement_sha256": [
+        "6c4c0d7e0f386d9307b9c08e10cbd3269c35cbe8a7902c1eb68b8d8ba90fe16a"
+      ]
+    },
+    {
+      "version": "20260813173000",
+      "name": "device_sync_actor_groups",
+      "statement_sha256": [
+        "9bef89e40a690c30c7dd6cf07ffc682fa9a560f1859f3ad6e3e49535ee1d8de1"
+      ]
+    },
+    {
+      "version": "20260813190000",
+      "name": "release_phone_transport_and_offline_activation_closure",
+      "statement_sha256": [
+        "98f40bc9bdf6a848ba1f07567b9b5ed8aff32441bb2dd89d7ac5b34c91026ab6"
+      ]
+    },
+    {
+      "version": "20260813210000",
+      "name": "custodial_u4_ops_closure",
+      "statement_sha256": [
+        "3fc7573beac21cf090fbf059c33ef59b472e88770382f7ff28d9f556a1e29f0b"
+      ]
+    },
+    {
+      "version": "20260814224034",
+      "name": "reconcile_static_weekly_day_change_receipts",
+      "statement_sha256": [
+        "bb2acc717fab50bf1c255038a2b1d2706dcd7be98c4751b8dd9b2f8446dafe48"
+      ]
+    },
+    {
+      "version": "20260815160613",
+      "name": "normalize_managed_production_schema_security",
+      "statement_sha256": [
+        "fcc15cab9a3c492f9958d91643e5c88f88f0917b31a3507d340c6fab67cb011a"
+      ]
+    },
+    {
+      "version": "20260815163346",
+      "name": "restore_explicit_public_schema_usage",
+      "statement_sha256": [
+        "25cbc3c999f0222b686e566c4cdb37dfd0971990a2fd4d40df4ae89b1093470b"
+      ]
+    },
+    {
+      "version": "20260820120831",
+      "name": "contain_release_recovery_ddl_authority",
+      "statement_sha256": [
+        "7c2bd39d7729825bbc4445491e755fe6c3776afbc8ce0c1faf40071cf2041aca"
+      ]
+    },
+    {
+      "version": "20260820121025",
+      "name": "revoke_residual_public_security_definer_execute",
+      "statement_sha256": [
+        "25290e19aba36374149984ace581294087f0bb90ea9887c53da76fc9aabd08c1"
+      ]
+    },
+    {
+      "version": "20260820121117",
+      "name": "revoke_public_trigger_function_rpc_execute",
+      "statement_sha256": [
+        "7972c139b87cb59bc14dd6881069f867b5c58b4a89669ee78dbe9dbdf0c6d8b6"
+      ]
+    },
+    {
+      "version": "20260822055838",
+      "name": "custodial_disaster_restore_generation_authority",
+      "statement_sha256": [
+        "315853219694bc7c05e26fd83b10f673acd561a4507bafb4229fa861cf004715"
+      ]
+    },
+    {
+      "version": "20260822060043",
+      "name": "create_application_read_authority",
+      "statement_sha256": [
+        "46635ef8ad01fce1b8540545961c60e75be0f8a524fc7213ed08aca60a0dc5e0"
+      ]
+    },
+    {
+      "version": "20260822130828",
+      "name": "retire_owner_sql_proxy",
+      "statement_sha256": [
+        "064a882c50bce17a2451ad223c306eaea9d36e1cca527449ce4f4afc3220a7b3"
+      ]
+    },
+    {
+      "version": "20260822130846",
+      "name": "bound_ops_manager_device_trust",
+      "statement_sha256": [
+        "0eeee019d724b4bba79170ebe223ec6cee5d3e5dec921f436447e310a1d3530f"
+      ]
+    },
+    {
+      "version": "20260822130909",
+      "name": "finalize_function_authority_recovery",
+      "statement_sha256": [
+        "d202ce1aca1d933130dc5a506ad4997be186218f7ce47e5b73aafa9fe2dfdb8e"
+      ]
+    },
+    {
+      "version": "20260822130925",
+      "name": "append_only_cleaning_identity_corrections",
+      "statement_sha256": [
+        "37638e894bcd36a2b3d31b4f54a243d833d33fad923ca923e7d5821c46a8e3fe"
+      ]
+    },
+    {
+      "version": "20260822131031",
+      "name": "late_gps_is_advisory_only",
+      "statement_sha256": [
+        "b6708def2b7a24178fbbc944d4ccba18fa82a54c1e24b2530d78c1738d75db0c"
+      ]
+    },
+    {
+      "version": "20260822131104",
+      "name": "precise_terminal_writer_detection",
+      "statement_sha256": [
+        "b0b58afbda38eef898c16473c28135a621b9bb18baad31024d4dd86d234c4a12"
+      ]
+    },
+    {
+      "version": "20260822131126",
+      "name": "rebind_release_recovery_inventory_to_current_authority",
+      "statement_sha256": [
+        "9e79fca19dc8a6b65578b3b9c7a8698be970ded9bbd760eaef3424db8b0136e6"
+      ]
+    },
+    {
+      "version": "20260822142917",
+      "name": "grant_readonly_cron_catalog_observation",
+      "statement_sha256": [
+        "d9d941f6a0d77cac8d42fb80b70209f4eb034d1d03fe5cd8d53db8cf0e802b5f"
+      ]
+    },
+    {
+      "version": "20260822150334",
+      "name": "fence_application_reader_relation_authority",
+      "statement_sha256": [
+        "2baaca12c5b9a4b27cbdcc3a395401e569e093cd73d0ae9594e36164388fc050"
+      ]
+    },
+    {
+      "version": "20260822153528",
+      "name": "bridge_cron_identity_and_rebind_recovery_acl",
+      "statement_sha256": [
+        "07b87d6aa82b63293f8b8c7161ab367c06b68e988df2a3e0fc5231f2b2e2aa0d"
+      ]
+    },
+    {
+      "version": "20260822175243",
+      "name": "repair_runtime_read_and_scan_alert_authority",
+      "statement_sha256": [
+        "ed1c6e71baaac0af69217471000137b806bf0f82a4a0b2fb8e35a99d7cfcfc1c"
+      ]
+    },
+    {
+      "version": "20260823012608",
+      "name": "correct_coverall_second_absence_policy",
+      "statement_sha256": [
+        "e794b31f26a115de0ee598848893322f0c423e02fa8d62e90e895107c15475d8"
+      ]
+    },
+    {
+      "version": "20260823032848",
+      "name": "provision_static_weekly_runtime_identity",
+      "statement_sha256": [
+        "8b94b9a65bb58fb8739d171e19082398e7368cb8dc39684c7efec741649a5602"
+      ]
+    },
+    {
+      "version": "20260823033203",
+      "name": "configure_static_weekly_runtime_password_20260823",
+      "statement_sha256": [
+        "7acb55ed5c8ce1bcd56eaa4f5e1a07d02c01d4739e77b80adef2ce4e5f149bea"
+      ]
+    },
+    {
+      "version": "20260823081444",
+      "name": "static_weekly_family_location_truth",
+      "statement_sha256": [
+        "ba48a19ad89c695b85dcc514f6130fa771773162808b8950906cc08aeeb5cd3b"
+      ]
+    },
+    {
+      "version": "20260823125236",
+      "name": "static_weekly_service_mode_truth",
+      "statement_sha256": [
+        "42f6936a8ae372c3fb35c0a266171a50cbaaa6d9dedce1889a088c865d131009"
+      ]
+    },
+    {
+      "version": "20260823125247",
+      "name": "static_weekly_solver_certificate_v5_authority",
+      "statement_sha256": [
+        "3ecd564f96f90df360788b75226cac7ba5016cc688e1c41aa9c723189bb938b2"
+      ]
+    },
+    {
+      "version": "20260823125258",
+      "name": "static_weekly_end_of_day_window_parity",
+      "statement_sha256": [
+        "85e03f3801ca78de5096039276291c6c3e23137dd32cea36d5058fe00754fd26"
+      ]
+    },
+    {
+      "version": "20260823145052",
+      "name": "static_weekly_registered_roster_bootstrap",
+      "statement_sha256": [
+        "e126b5d8da98ba33097142646e5f82ea2c8f7dc518a1250a55d8dc5d63cda9b0"
+      ]
+    },
+    {
+      "version": "20260824135424",
+      "name": "static_weekly_memory_bounded_document_authority",
+      "statement_sha256": [
+        "c08e330d8611adeb3a2bbc5d43d2b3c608f281ba55b3a85ec8a8cdabd194f5e0"
+      ]
+    },
+    {
+      "version": "20260824135440",
+      "name": "static_weekly_memory_bounded_validator_and_receipt",
+      "statement_sha256": [
+        "a92d355c21e064417a947d42c9d11350204dbe3d3d021b494a8893e797dc4e2a"
+      ]
+    },
+    {
+      "version": "20260824135526",
+      "name": "static_weekly_manager_snapshot_authority_source",
+      "statement_sha256": [
+        "9d8e6af42a7bc55ce4300aea93591c0cddcac3223983b8a92c92f526d6d2a230"
+      ]
+    },
+    {
+      "version": "20260824135539",
+      "name": "static_weekly_compact_document_consumers",
+      "statement_sha256": [
+        "e9424e5d641b06c2b7840d1c0bc2470233a0bd72639c1744f67fe1188334b59e"
+      ]
+    },
+    {
+      "version": "20260824160745",
+      "name": "static_weekly_initial_contractor_snapshot",
+      "statement_sha256": [
+        "b6016d68ab1af5aad6d6771e2c6007ab06ad76beb9dc35a487d9012966c49380"
+      ]
+    },
+    {
+      "version": "20260824170816",
+      "name": "static_weekly_projection_compact_snapshot",
+      "statement_sha256": [
+        "2a3cf03f11503abdfb8fa7198f63551ef529962ed2114b551551a1afb7afaacf"
+      ]
+    },
+    {
+      "version": "20260824193225",
+      "name": "static_weekly_operational_truth_cutover",
+      "statement_sha256": [
+        "ba2385840aa68073b0df771994ac97eceac9257323e81542861393613d2695e9"
+      ]
+    },
+    {
+      "version": "20260825142157",
+      "name": "scan_alert_runtime_authority_closure",
+      "statement_sha256": [
+        "5d3b2bef6d70a501528494fe040c81654ea8aee74513d0f9c90cabce5c47a1ca"
+      ]
+    },
+    {
+      "version": "20260825172858",
+      "name": "restore_application_reader_device_identity",
+      "statement_sha256": [
+        "8d0eabfef089cbeeb6072d424e6b51240ad15d45bfb4c0e2b2b1946914008759"
+      ]
+    },
+    {
+      "version": "20260825173029",
+      "name": "fence_application_reader_device_credentials",
+      "statement_sha256": [
+        "244cf01a3abac39e355ed7f9a6bf2abfe2a57b6ee606250184228ebad8009f04"
+      ]
+    },
+    {
+      "version": "20260825195150",
+      "name": "rebind_application_reader_release_recovery",
+      "statement_sha256": [
+        "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736"
+      ]
+    },
+    {
+      "version": "20260826020000",
+      "name": "preserve_offline_work_across_manager_credential_recovery",
+      "statement_sha256": [
+        "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868"
+      ]
+    },
+    {
+      "version": "20260826114516",
+      "name": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover",
+      "statement_sha256": [
+        "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf"
+      ]
+    },
+    {
+      "version": "20260826193207",
+      "name": "outlook_event_sync_ledger",
+      "statement_sha256": [
+        "c27e42abfbd329a400159d033cf9b61c93175175183ec975749c5aca1b45f207"
+      ]
+    },
+    {
+      "version": "20260826205203",
+      "name": "restore_application_reader_messenger_runtime",
+      "statement_sha256": [
+        "eb8188ba7b0bfb8ff7ed310bf0697d7dc7d6af848a350d843c86b5b64e1ddd3a"
+      ]
+    },
+    {
+      "version": "20260826210524",
+      "name": "restore_application_reader_employee_events_runtime",
+      "statement_sha256": [
+        "5058addb210be6f20f96646d0050cf7d928edde9e5f8bfd0f571965089666379"
+      ]
+    },
+    {
+      "version": "20260826231317",
+      "name": "add_education_classrooms_and_teton_grove_event_venues",
+      "statement_sha256": [
+        "93b1ff1068de622706f8e1740e6db91ef9de80ab89b2038683bb038797a41f9e"
+      ]
+    },
+    {
+      "version": "20260827014405",
+      "name": "static_weekly_vacant_roster_slots",
+      "statement_sha256": [
+        "0486d6d3d17e505e06ba21bdd1197009cc1305f6b8b1df3114adf60d93e45f1e"
+      ]
+    },
+    {
+      "version": "20260827031305",
+      "name": "static_weekly_initial_draft_roster_hydration",
+      "statement_sha256": [
+        "be0ee60af8b1f6d9fad011625098657b2e268d43a5300b25f188bb57c9a18d07"
+      ]
+    },
+    {
+      "version": "20260827042443",
+      "name": "static_weekly_registered_source_dated_status",
+      "statement_sha256": [
+        "886a3aedc334ee3f9fdf681a15cd930eb07ec005f74462cf1a2dbf2040568590"
+      ]
+    },
+    {
+      "version": "20260827150000",
+      "name": "disaster_recovery_global_mutation_fence",
+      "statement_sha256": [
+        "468d9ca9f2c685fa220ac88d36debd55d1258dade93bac692b06e1e9c6a19bd2"
+      ]
+    },
+    {
+      "version": "20260827151000",
+      "name": "restore_application_reader_feedback_runtime",
+      "statement_sha256": [
+        "85e463dc262b0001182969db7dfd6efb2bebcdd64368c784332659b1c2c3b8c5"
+      ]
+    },
+    {
+      "version": "20260827152000",
+      "name": "adopt_outlook_event_sync_authority",
+      "statement_sha256": [
+        "27ee85fc8dba1365cbdcd7143d941242d7c281a072aa8d19b4db6375bde9de52"
+      ]
+    },
+    {
+      "version": "20260827153000",
+      "name": "scope_release_health_identity_projection",
+      "statement_sha256": [
+        "f821899197b375bbd1a96dfeef11034a3e1ec5313a4b387c8a91e7a8e14cbc1a"
+      ]
+    },
+    {
+      "version": "20260827213545",
+      "name": "cancel_gregory_staples_future_hire",
+      "statement_sha256": [
+        "f988c665412877689abe2da6d64831ab6444d76312bfcf4f85669f527c09554f"
+      ]
+    },
+    {
+      "version": "20260914051527",
+      "name": "messaging_read_horizon_and_send_idempotency",
+      "statement_sha256": [
+        "923cf50c1a0f4f3e971f20e01204cd882da53d2312d95c77cba2b34302cc667f"
+      ]
+    },
+    {
+      "version": "20260916010000",
+      "name": "project_native_start_into_operational_truth",
+      "statement_sha256": [
+        "1c0ea0f3e131a100baa118ee08ef422d71a927b9968a37f04cb5ff888c0dfda2"
+      ]
+    },
+    {
+      "version": "20260918010000",
+      "name": "align_two_internal_absences",
+      "statement_sha256": [
+        "78ae02d5b2d3cd989361abe40b9d99066011bc2059b6d04fd4fc5f5e37949905"
+      ]
+    },
+    {
+      "version": "20260918011000",
+      "name": "pause_guest_notifications_when_disabled",
+      "statement_sha256": [
+        "d9f8bef965e092cf8b17fd9c37685c67c95bd57e4bcf8ac2d9f4d0a065f7baec"
+      ]
+    },
+    {
+      "version": "20260918012000",
+      "name": "event_reminder_workday_and_owner_contract",
+      "statement_sha256": [
+        "1ebd66aa0b6d4eb0212bc8e80d4dd1878a36363ec4f7e1d34a96a92a0317b2b2"
+      ]
+    },
+    {
+      "version": "20260920010000",
+      "name": "event_reminder_static_weekly_authority",
+      "statement_sha256": [
+        "58e03f2e327916b53191ead3ade40ba9373b580ccc1ad4116893bc5d8ead63c4"
+      ]
+    },
+    {
+      "version": "20260922050000",
+      "name": "lunch_delivery_failure_manager_alert",
+      "statement_sha256": [
+        "e5ac20bf41779c54c4b9145b5f56d10b62ef8ce850c3b6132ddc55a4f07e70f2"
+      ]
+    },
+    {
+      "version": "20260922070000",
+      "name": "completed_cleaning_reminder_cycles",
+      "statement_sha256": [
+        "e288d359cfbccc7e89e8ddbd395c4bb705235f4f4a1766838436b2986f36f712"
+      ]
+    },
+    {
+      "version": "20260922090000",
+      "name": "verified_visit_reminder_state",
+      "statement_sha256": [
+        "273f8786beaf5567382f08b411816cc4fc688324c480bab7da672dba9ee730e2"
+      ]
+    },
+    {
+      "version": "20260922163000",
+      "name": "static_weekly_lunch_publication",
+      "statement_sha256": [
+        "738e6bf8032cbefe9643888196262305e729c13467c533138e228ffc5afc16ab"
+      ]
+    },
+    {
+      "version": "20260922200000",
+      "name": "lunch_notification_producer",
+      "statement_sha256": [
+        "578017a8fdd5402d9d592b14651c89ef89a5a9023888f39f3b715edb45388145"
+      ]
+    },
+    {
+      "version": "20260922235500",
+      "name": "static_weekly_existing_employee_restore",
+      "statement_sha256": [
+        "c28bbb6ec36824c9100bbb18cdc8e07d69dcb45a82e26596b59726f86c31398b"
+      ]
+    },
+    {
+      "version": "20260923065000",
+      "name": "static_weekly_vacate_roster_slot",
+      "statement_sha256": [
+        "9246b744dc81004e885e788d7e2a00ec5fa7286a8d6d2a2ab79e9c97d3728834"
+      ]
+    },
+    {
+      "version": "20260923121151",
+      "name": "visitor_attendance_reader",
+      "statement_sha256": [
+        "f50364935b636627a0c3691841e0b932913ae2bcd1e661c87cf6cb169bcafbe0"
+      ]
+    },
+    {
+      "version": "20260924022250",
+      "name": "release_selection_and_occurrence_guards",
+      "statement_sha256": [
+        "2e98f268ed876ec16064af02c8b4daafb8c4e44835101bd99796d968e602931d"
+      ]
+    },
+    {
+      "version": "20260924023930",
+      "name": "notification_receipt_and_lunch_integrity",
+      "statement_sha256": [
+        "7156b75a986f329139c8edf5b8efc257be568480ee5e9beaaac094420f5b9cbc"
+      ]
+    },
+    {
+      "version": "20260924032226",
+      "name": "bind_release_selection_guard_recovery",
+      "statement_sha256": [
+        "244a0de60deae538b0c3c76d15b51bb9e983044c5466660d0d4e537d04e16ad6"
+      ]
+    },
+    {
+      "version": "20260924042758",
+      "name": "static_weekly_canonical_shift_end_derivation",
+      "statement_sha256": [
+        "a07dfc4fbb29c7c762daebad7f6e12725cebc7c395bb24b3dd38085c92f46ce5"
+      ]
+    },
+    {
+      "version": "20260924044035",
+      "name": "static_weekly_atomic_roster_completion",
+      "statement_sha256": [
+        "b08cd44d3e9a656bfacb6f8066bac7d27118ecae8c98566910f5e7ebc65555e0"
+      ]
+    },
+    {
+      "version": "20260924053507",
+      "name": "assigned_phone_activation_transport",
+      "statement_sha256": [
+        "c53fa85013799b9b5333e7272bd664fdec059fdba56de0f5ac9e8632b8e14372"
+      ]
+    },
+    {
+      "version": "20260924080839",
+      "name": "custodial_legacy_installation_observation",
+      "statement_sha256": [
+        "b10bdd8df2acdf1e35e9fe7e0fc34137f912508ab56bd326042a309d978530e3"
+      ]
+    },
+    {
+      "version": "20260924161004",
+      "name": "owner_oc24_cleaning_and_inspection_boundaries",
+      "statement_sha256": [
+        "4f4c956efc50e147e30c00a840e535623f4f841ea2e3bc0fae102cd885bc93d8"
+      ]
+    },
+    {
+      "version": "20260924172500",
+      "name": "oc24_manual_contractor_lunch",
+      "statement_sha256": [
+        "7b9a36d1469a2920f3a45dd19112c44f1a13bbbf0c09951c17426f42aa7eeaa5"
+      ]
+    },
+    {
+      "version": "20260924201258",
+      "name": "native_provider_durable_authority",
+      "statement_sha256": [
+        "fe4f617f2531cfc941624660138bbba2c3dff983e87cb04dafe04ff58dee7538"
+      ]
+    },
+    {
+      "version": "20260925015905",
+      "name": "oc24_completion_selection_normalization",
+      "statement_sha256": [
+        "769070342011d4ceb28e5dfbbfd2e436e5a98dc7d02d160ac47e2d75fa120316"
+      ]
+    },
+    {
+      "version": "20260925020244",
+      "name": "oc24_bound_legacy_completion_replay",
+      "statement_sha256": [
+        "a52245120109a50240a02b33de477281c47c389a028580820cdfea4fbcb1194d"
+      ]
+    },
+    {
+      "version": "20260925050718",
+      "name": "static_weekly_staffing_command_ledger",
+      "statement_sha256": [
+        "acc2e14294425d221af49f8567d6995f3bed0b3c015ffa54b76a6809e4770a24"
+      ]
+    },
+    {
+      "version": "20260925054802",
+      "name": "static_weekly_staffing_atomic_acceptance",
+      "statement_sha256": [
+        "34dbeb5ac62da3f507737d189a0f4c982a5187bdb34905cb87468f1776ed2e39"
+      ]
+    },
+    {
+      "version": "20260925190000",
+      "name": "gps_exact_location_authority_boundary",
+      "statement_sha256": [
+        "4a524505fa7eadf9755153a1946a8e06d91dbd8ed8196a82aa9cd6f53cffbdf4"
+      ]
+    },
+    {
+      "version": "20260926143542",
+      "name": "static_weekly_protected_separation",
+      "statement_sha256": [
+        "5a9123649c92635091854a66ad06404a5dcbc8a6b0b63b7b8b0dd8894de58032"
+      ]
+    },
+    {
+      "version": "20260926180000",
+      "name": "retire_direct_employee_status_rpc",
+      "statement_sha256": [
+        "dd2c306b679d48e015e839d1efd8f339aada7b7082e18e502344c15a7d06bc2b"
+      ]
+    },
+    {
+      "version": "20260926192656",
+      "name": "static_weekly_recurring_confirmation_ledger",
+      "statement_sha256": [
+        "f41b7f8c118dbf324088ee09b33e8efa3d5805d7909f5d8265a2c94bba035022"
+      ]
+    },
+    {
+      "version": "20260926193000",
+      "name": "retire_direct_employee_mutation_helpers",
+      "statement_sha256": [
+        "682966928d90687ea78e9a905c781438efabf5323dd6c712b7711d6668c4d597"
+      ]
+    },
+    {
+      "version": "20260926193651",
+      "name": "static_weekly_recurring_source_admission",
+      "statement_sha256": [
+        "373e8b08a8637915b4daa815f3dbef2a9107ef437b8ec1c64f1ae9dc3a35cd71"
+      ]
+    },
+    {
+      "version": "20260926194644",
+      "name": "static_weekly_recurring_generation_fence",
+      "statement_sha256": [
+        "f55c95b9a88d0042fdb419511a96b800f1461a5db1da3247190b8b1959a35102"
+      ]
+    },
+    {
+      "version": "20260926200458",
+      "name": "static_weekly_recurring_future_same_monday",
+      "statement_sha256": [
+        "9d96dd9a8ec118c4640949d20daf1e26c3cf920eba0b24e12828aeaaf8ff5dfa"
+      ]
+    },
+    {
+      "version": "20260926201644",
+      "name": "static_weekly_recurring_dependency_snapshot",
+      "statement_sha256": [
+        "92dc22d9eeb0e88c97752d156da5c098b3974f7d84f9b72cd02fa6f515965437"
+      ]
+    },
+    {
+      "version": "20260926202657",
+      "name": "static_weekly_recurring_publication_binding",
+      "statement_sha256": [
+        "42973f964f0dad31a5db6924136037864895bd3bbb6ba0896acf8e3dff86658a"
+      ]
+    },
+    {
+      "version": "20260926204235",
+      "name": "static_weekly_recurring_terminal_targets",
+      "statement_sha256": [
+        "bd2ee52ece3ceb29bc769110e7cf27bd4a1f7e0505e6aa280a236e2e55829778"
+      ]
+    },
+    {
+      "version": "20260926205849",
+      "name": "static_weekly_recurring_blocked_authority_repair",
+      "statement_sha256": [
+        "165d2d8c31b3632ac769ec44cd12944763200c462d6b83418ba1016b42c65bfd"
+      ]
+    },
+    {
+      "version": "20260926211714",
+      "name": "static_weekly_recurring_common_lock_order",
+      "statement_sha256": [
+        "53ce7d4c5151a18d0fb4d0a52b793c424d06b67f09b2551bea19bb202c4729f0"
+      ]
+    },
+    {
+      "version": "20260926220510",
+      "name": "static_weekly_recurring_dependency_reconciliation",
+      "statement_sha256": [
+        "46d5ff181cdaa82054eb9d46bdcdddf0b0285ec55db533a626c695a6d01a80c9"
+      ]
+    },
+    {
+      "version": "20260926223914",
+      "name": "static_weekly_recurring_application_targets",
+      "statement_sha256": [
+        "9fb269ef1e617d1e937674ee3f7fb093cadc02fba16b9aec1199e4e0c45aaf25"
+      ]
+    },
+    {
+      "version": "20260926225613",
+      "name": "static_weekly_recurring_atomic_finalization",
+      "statement_sha256": [
+        "00d217074b423fe02e05ee95a5175b9840b3f66b8db418cbe7d51bafe37fdd14"
+      ]
+    },
+    {
+      "version": "20260926234537",
+      "name": "static_weekly_authenticated_schedule_delivery",
+      "statement_sha256": [
+        "b51016c329b64713fccaa5d8670e9feac9817b3b793c44be96041638335faf3e"
+      ]
+    },
+    {
+      "version": "20260927001706",
+      "name": "static_weekly_lunch_validation_materialization",
+      "statement_sha256": [
+        "021b00a7765ab5424eae57f91de57ea14b975f104cdc3c3c512ca49522c36ab9"
+      ]
+    },
+    {
+      "version": "20260927010911",
+      "name": "static_weekly_current_recurring_delivery_status",
+      "statement_sha256": [
+        "0e482db72f32d3e645a86a527a51f402e9883db2d9cdaebf2db0ea1daab3d3ed"
+      ]
+    },
+    {
+      "version": "20260927031806",
+      "name": "schedule_bound_location_reminders",
+      "statement_sha256": [
+        "3ac8bb9fc3374f33721d987ec6bd6551e719d622c376d1f9d7edefa639df9aa2"
+      ]
+    },
+    {
+      "version": "20260927052929",
+      "name": "schedule_notification_admission_corrections",
+      "statement_sha256": [
+        "14f0413bfe7cef39cd17c548c1044e7bda50f71f56619f4ad4a780f3fe16dcd1"
+      ]
+    },
+    {
+      "version": "20260927072146",
+      "name": "schedule_notification_exact_canary",
+      "statement_sha256": [
+        "2d20c35105aaf2e6cfde58eec4590c10b995d41103aff0f7bd7a57a7e294e216"
+      ]
+    },
+    {
+      "version": "20260927075352",
+      "name": "protected_separation_original_context",
+      "statement_sha256": [
+        "2e6958276c9e5679d5b40b5cbc30d6345cfc134ac17783bb525949ecfc63f930"
+      ]
+    },
+    {
+      "version": "20260929125440",
+      "name": "custodial_recovery_inventory_closure",
+      "statement_sha256": [
+        "4631cebc6d4afd048fabca05244be481359cb27b20cdeb160c04c97f05ed7dd9"
+      ]
+    },
+    {
+      "version": "20261001130750",
+      "name": "october_bounded_dated_transition",
+      "statement_sha256": [
+        "2c260b0bf1e6cd5e119348ea8e442c71f074f389af9f851b0e7852ddfd894e20"
+      ]
+    },
+    {
+      "version": "20261001152633",
+      "name": "october_dated_consumer_corrections",
+      "statement_sha256": [
+        "6a15cf945b69429d5fe3243e0bf9112ef4940d104b6c3c6c71db6683c769eb0b"
+      ]
+    },
+    {
+      "version": "20261001161831",
+      "name": "october_dated_review_authority_corrections",
+      "statement_sha256": [
+        "0a6a72072e40a82f1a45b0b8b284e8970f68fcfdaa96b7ed143add547045d06f"
+      ]
+    },
+    {
+      "version": "20261002050000",
+      "name": "feedback_email_intent_capture",
+      "statement_sha256": [
+        "62b6d5300c9a524ed773f05a0a294d2fb7e61a4cd269e4c2fe6ff9f95db2d90d"
+      ]
+    },
+    {
+      "version": "20261002060000",
+      "name": "event_needs_review_isolation",
+      "statement_sha256": [
+        "ac1b6000c5e5f52266bd5fc57cb1d82ebdbb5e22618befcb5a18848ee34c90a6"
+      ]
+    },
+    {
+      "version": "20261002070000",
+      "name": "feedback_email_relay_boundary",
+      "statement_sha256": [
+        "21a75ed75caa204d8f94c7fde7096c03ea675855259361b06c6cd0caadcb6cd4"
+      ]
+    },
+    {
+      "version": "20261002080000",
+      "name": "event_manager_revision_compare_and_swap",
+      "statement_sha256": [
+        "8f11bd7bc52cf973f7bb3abbc3d387531f2c23f81114708522503c76b7604e46"
+      ]
+    },
+    {
+      "version": "20261002090000",
+      "name": "manager_issue_outcomes",
+      "statement_sha256": [
+        "1746b47a53e1f03ab66d373e3e94046b1319f89af5e1e83222c2300ae5d9e6cd"
+      ]
+    },
+    {
+      "version": "20261002100000",
+      "name": "place_lifecycle_authority",
+      "statement_sha256": [
+        "ced37a6298b0d80188675ffe2d6c31c0df1454cb228037ff0c091c7a03e7b5aa"
+      ]
+    },
+    {
+      "version": "20261002110000",
+      "name": "event_impact_preview_and_custodial_notes",
+      "statement_sha256": [
+        "a85957778f111e3a64c4ba43be58db8b30e1c5293cd5adad5884d331b4d937ee"
+      ]
+    },
+    {
+      "version": "20261002120000",
+      "name": "october_dated_recovery_inventory_rebind",
+      "statement_sha256": [
+        "688e336bc4b985bbc5ba0847f9d6c0e0f64fc05bf027d217f95e3778649d9a16"
+      ]
+    },
+    {
+      "version": "20261002130000",
+      "name": "native_provider_clock_transport",
+      "statement_sha256": [
+        "741b231b014d6123dffc5b537ecb1b44a840bd65eca8e1d4a033bdbeb64cf777"
+      ]
+    },
+    {
+      "version": "20261002140000",
+      "name": "event_supersession_and_chicago_instants",
+      "statement_sha256": [
+        "2e8ca5217c668daefe81ead57a28ad2c2cfb6671cc976b0f39d8894240cdc14a"
+      ]
+    },
+    {
+      "version": "20261002150000",
+      "name": "feedback_delivery_readback",
+      "statement_sha256": [
+        "acbf3c651f2134cadf960bf66db816cdab8c90bda7c83974a30d65cf5bed2468"
+      ]
+    },
+    {
+      "version": "20261002160000",
+      "name": "place_event_venue_bridge",
+      "statement_sha256": [
+        "6ce6a61985d99ed56c54c128b2dad28c08eadba952ee6e5b674d2c4ca6657422"
+      ]
+    },
+    {
+      "version": "20261002170000",
+      "name": "event_cancellation_cas_restore",
+      "statement_sha256": [
+        "4f4b506f239c3f41d430b34f9f39a16847fc7becb8e665dc5147e499a5866217"
+      ]
+    },
+    {
+      "version": "20261002180000",
+      "name": "native_provider_location_reservation",
+      "statement_sha256": [
+        "5ac7d3eb62a415edaed19feb3c1e2552cf95a6e75c1121a1cfe5d1e883d9fcf0"
+      ]
+    },
+    {
+      "version": "20261002200000",
+      "name": "place_operational_metadata_bridge",
+      "statement_sha256": [
+        "00c5852cabd0e9b296064a6ae38853fba011a6b3571c279fc7f66ad4a4f911e4"
+      ]
+    },
+    {
+      "version": "20261002210000",
+      "name": "event_place_overlay_admission",
+      "statement_sha256": [
+        "2897af88ae8499a4e2b16c3e88bd072887d6b068a7c3a446ea41a5662b48ddd5"
+      ]
+    },
+    {
+      "version": "20261002220000",
+      "name": "feedback_relay_preflight_and_reconciliation",
+      "statement_sha256": [
+        "2273f6e05074d74e8c51322217c6ccf6f71ac42cbc72a3e2de589159618f4ede"
+      ]
+    },
+    {
+      "version": "20261002230000",
+      "name": "feedback_protected_attachment_admission",
+      "statement_sha256": [
+        "34b0658726218d3db75d9d9d979a3ab6ea3143d8a7f53b1bfc2bf8da18eeaf6d"
+      ]
+    },
+    {
+      "version": "20261003000000",
+      "name": "memphis_current_schedule_day",
+      "statement_sha256": [
+        "fb42ea74db34f71fecdc4e6eaaed7aeec239091099969bb755864b53192a4534"
+      ]
+    },
+    {
+      "version": "20261003010000",
+      "name": "native_location_lifecycle",
+      "statement_sha256": [
+        "e0512cb5dcc284b18a92b666c495ada7cf956c2f4cce2b3753e7acbd066b0211"
+      ]
+    },
+    {
+      "version": "20261003030000",
+      "name": "place_operational_name_adoption",
+      "statement_sha256": [
+        "b59b337e081f23b8feb72130fae70e85d4dfd623723b8ca289946a6bbbefb572"
+      ]
+    },
+    {
+      "version": "20261003050000",
+      "name": "native_provider_events",
+      "statement_sha256": [
+        "cb665620d9612b0f6e7e4d15ace7aebc55a8a473ddf7ee88524bb4ca149d1e17"
+      ]
+    },
+    {
+      "version": "20261003060000",
+      "name": "event_notification_current_projection",
+      "statement_sha256": [
+        "31641c1a4363f289bc2bfa59793444102da5a7bf6e6d0621d010b54c224c2370"
+      ]
+    },
+    {
+      "version": "20261003070000",
+      "name": "feedback_triage_receipts",
+      "statement_sha256": [
+        "d9d19c2400c3d98f3819976ae557efc3e1cc5efcba4e6addc0c01d02dcdac234"
+      ]
+    },
+    {
+      "version": "20261003080000",
+      "name": "native_location_dispatch_and_ack",
+      "statement_sha256": [
+        "d9713b8df261c5a9e2dd32493d6e3b3ae4094755abed4fee8ea65bed13233cfc"
+      ]
+    },
+    {
+      "version": "20261003120000",
+      "name": "completion_taxonomy_evidence",
+      "statement_sha256": [
+        "a732bcd9077aa98b263a39e7ce29edd61a084db843c0ef02b84f6c2cd78890bf"
+      ]
+    },
+    {
+      "version": "20261003121757",
+      "name": "employee_message_source_admission",
+      "statement_sha256": [
+        "20ff06f8c0c5e82814189e1e2969b928ffa48eb1181098a73156962dc9ac1e7f"
+      ]
+    },
+    {
+      "version": "20261003140000",
+      "name": "static_weekly_nonemployee_contractor_capacity",
+      "statement_sha256": [
+        "8ae8467900940a76b296030f630fbc610b7d21d619661a13d8caee32c4d8ddca"
+      ]
+    },
+    {
+      "version": "20261003143000",
+      "name": "issue_constraint_index_recovery",
+      "statement_sha256": [
+        "651d9c0562fc6fce55d1a76553e3f1016ef2bf52d879773101e551923b757276"
+      ]
+    },
+    {
+      "version": "20261003150000",
+      "name": "native_provider_interval_protocol",
+      "statement_sha256": [
+        "cb94f7cd6dd949407a936a2c6915bd0ef0972fb79a1cf89b2e480d628c50b194"
+      ]
+    },
+    {
+      "version": "20261003160000",
+      "name": "static_weekly_contractor_capacity_extension",
+      "statement_sha256": [
+        "3c6ec864d7b2bdd6264e44225a9c3e25c98a6fe522645bfdc5fad020e5877ac7"
+      ]
+    },
+    {
+      "version": "20261003170000",
+      "name": "native_target_source_projection",
+      "statement_sha256": [
+        "e9d998154190b1156009311c9c241b418b15c4d9c029c22186c49df5cf691b5c"
+      ]
+    },
+    {
+      "version": "20261003190000",
+      "name": "static_weekly_capacity_current_source_bridge",
+      "statement_sha256": [
+        "4454a7048e7845f39bb372397dd52bcb247de5fa68ec81f3fad01cc6186aa716"
+      ]
+    },
+    {
+      "version": "20261003193000",
+      "name": "coverall_event_brief_private_reader",
+      "statement_sha256": [
+        "c4b3ef269efad069b684ccfb2ebaf72923f87200d0093a3e5c46daba930ea318"
+      ]
+    },
+    {
+      "version": "20261003194000",
+      "name": "native_lunch_delivery",
+      "statement_sha256": [
+        "22ef0f716accbd8c2222a117ba876a04631163399ec5619418ddc2e0835f156b"
+      ]
+    },
+    {
+      "version": "20261003210000",
+      "name": "static_weekly_splash_season_gate",
+      "statement_sha256": [
+        "2f17a1d235f7da72cd0db6372a76793b6860490bf5fb2688240dc883102a78bd"
+      ]
+    },
+    {
+      "version": "20261003211000",
+      "name": "static_weekly_splash_source_retention",
+      "statement_sha256": [
+        "c03305a1da6f03db6e5a737e9605cb28b594703c5a3f14778b2575fdeb124eba"
+      ]
+    },
+    {
+      "version": "20261003220000",
+      "name": "current_release_authority_completion",
+      "statement_sha256": [
+        "2121d2b2dbedc40b6345bcefcaf3f4cf7ed4ec22617c54f727a405c9e5a93332"
+      ]
+    },
+    {
+      "version": "20261003230000",
+      "name": "static_weekly_named_handoff_derivation",
+      "statement_sha256": [
+        "ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500"
+      ]
+    },
+    {
+      "version": "20261004000000",
+      "name": "native_provider_event_decision_lookup",
+      "statement_sha256": [
+        "ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd"
+      ]
+    },
+    {
+      "version": "20261004140657",
+      "name": "approved_static_template_authority",
+      "statement_sha256": [
+        "23f311b1d506c0d5ad3c0f04554a2388956f4fd8539af42e96107b1c07afa5b4"
+      ]
+    },
+    {
+      "version": "20261004150151",
+      "name": "native_alert_two_stage_preparation",
+      "statement_sha256": [
+        "ac72bda04ba89560117b04e8939f3d17b2eb65b0002b107c36f96436a02600eb"
+      ]
+    },
+    {
+      "version": "20261004150425",
+      "name": "native_alert_finalization",
+      "statement_sha256": [
+        "ff3cd8d783543702ca4e74d8ab6bd1d690c3c00b826ccbcec336adc2117b6699"
+      ]
+    },
+    {
+      "version": "20261004161015",
+      "name": "native_alert_provider_inventory_events",
+      "statement_sha256": [
+        "d4d96265a5595272f4ac8dc2d5dc35c167611bc312ffefd3621a6c320e14e2ba"
+      ]
+    },
+    {
+      "version": "20261005113826",
+      "name": "native_alert_original_decisions",
+      "statement_sha256": [
+        "dbe1df87aead707e2e59e429bf5d40b7f1d5988d52afda7dfc78c4925181fc97"
+      ]
+    },
+    {
+      "version": "20261005115223",
+      "name": "overdue_popup_stops_at_scan_start",
+      "statement_sha256": [
+        "8647da0e9f78a6ca273c9463589acde1cb306c0bb1be99bba7d48b84d2f4f3ae"
+      ]
+    },
+    {
+      "version": "20261006034155",
+      "name": "custodial_owner_delegated_actions",
+      "statement_sha256": [
+        "4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1"
+      ]
+    },
+    {
+      "version": "20261006113610",
+      "name": "custodial_shared_events_outlook",
+      "statement_sha256": [
+        "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001"
+      ]
+    },
+    {
+      "version": "20261006162427",
+      "name": "custodial_shared_events_recovery_binding",
+      "statement_sha256": [
+        "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+      ]
+    },
+    {
+      "version": "20261006172928",
+      "name": "custodial_manager_scheduler_permissions",
+      "statement_sha256": [
+        "f4cf312cd905e82181e4b376948c0fb309fd70c575a066934f843e41a17c8d12"
+      ]
+    },
+    {
+      "version": "20261006190426",
+      "name": "manager_scheduler_recovery_binding",
+      "statement_sha256": [
+        "178cc832516e2aa78835b8441da04fe801204caf123477e3c7a6eda5dc405906"
+      ]
+    },
+    {
+      "version": "20261006203931",
+      "name": "custodial_delegated_coverall",
+      "statement_sha256": [
+        "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475"
+      ]
+    },
+    {
+      "version": "20261006211215",
+      "name": "preserved_coverall_validator_recovery",
+      "statement_sha256": [
+        "2a47538c6c202482711e0ff80516c8a62a7acdf993302b3b3ef3dc0d3a237399"
+      ]
+    },
+    {
+      "version": "20261007104735",
+      "name": "native_alert_inventory_guard_recovery",
+      "statement_sha256": [
+        "a7e28742590fc62bc49bbceb349bd47b1481e3efb347ed1e97f0d6358b790195"
+      ]
+    },
+    {
+      "version": "20261007161645",
+      "name": "approved_initial_selection_metadata",
+      "statement_sha256": [
+        "48f78ed71206c475fb9097f34abcb1358d78ceefb1949772f445dd3511b97999"
+      ]
+    },
+    {
+      "version": "20261008032718",
+      "name": "native_lunch_spoken_accepted_duties",
+      "statement_sha256": [
+        "4df71a1c903b39b8378ec12c5c0b68c873427474b109671bfcbe669b3e92ea4e"
+      ]
+    },
+    {
+      "version": "20261008053837",
+      "name": "native_schedule_lunch_recipient_source",
+      "statement_sha256": [
+        "fc207c1b57592c15595be03671825ae42f8801e5634e4f8d7444b0ce3d6764ed"
+      ]
+    },
+    {
+      "version": "20261008064748",
+      "name": "native_schedule_server_source_window",
+      "statement_sha256": [
+        "39623f94c0b10d0882640bc8dad5c4c12ae87756d4746f548edfe6616f5182b1"
+      ]
+    },
+    {
+      "version": "20261008075109",
+      "name": "native_schedule_source_reservation",
+      "statement_sha256": [
+        "5f1ecc1175729df13d381227cf54644cf7edbfe3351a372370971e4ea721ac50"
+      ]
+    },
+    {
+      "version": "20261008083139",
+      "name": "native_schedule_content_source",
+      "statement_sha256": [
+        "70ededd08ce9db86db7d3255dba4b797ae80f2f4437d3bf14e66bbe6aafcec8e"
+      ]
+    },
+    {
+      "version": "20261008095837",
+      "name": "native_schedule_server_finalization",
+      "statement_sha256": [
+        "5c180b74a81cddfb5055668a26ae0cfddc805b81b3edd8686f00fe822d7aa4e9"
+      ]
+    },
+    {
+      "version": "20261008102957",
+      "name": "native_schedule_inventory",
+      "statement_sha256": [
+        "55c88058b165eaaf889a62f1a6eefe5e44f6d4a7b14a9c811d8726bcd30d09a6"
+      ]
+    },
+    {
+      "version": "20261008111355",
+      "name": "native_schedule_observation_binding",
+      "statement_sha256": [
+        "9bb421c182795b160ca45f92cdb95c453c0c62118619dc66b1009bb553833761"
+      ]
+    },
+    {
+      "version": "20261008115557",
+      "name": "native_schedule_job_preparation",
+      "statement_sha256": [
+        "fa81126b7674ad6327d46399659c843eeefd71b4dd1e6e53f70f3b96bf05af45"
+      ]
+    },
+    {
+      "version": "20261008122247",
+      "name": "native_schedule_attempt_outcome",
+      "statement_sha256": [
+        "60cbe8e4c4103adfbc0d17196c8634e5995a107eb127c707c4c210c2af13bb00"
+      ]
+    },
+    {
+      "version": "20261008124644",
+      "name": "native_schedule_sender_inventory",
+      "statement_sha256": [
+        "12c6d0a5108569e64b014ada39b8444921019e26431be5c287a2382374a546a0"
+      ]
+    },
+    {
+      "version": "20261008135429",
+      "name": "native_schedule_source_discovery",
+      "statement_sha256": [
+        "c99c64ce08b90b068133c656ea3e0166a2ac19737a23cd1c5003ca20058e92cb"
+      ]
+    },
+    {
+      "version": "20261008142316",
+      "name": "native_schedule_preparation_source",
+      "statement_sha256": [
+        "10e6712d3ad8251e51709d6912ddb6f243f0d0a269f8b91263bf89039678c4c7"
+      ]
+    },
+    {
+      "version": "20261008205342",
+      "name": "native_target_source_kind_guard",
+      "statement_sha256": [
+        "dfab42ea761f92fbfef0a03996782fd0825fc01427c4097a5dc9b9002a8ae051"
+      ]
+    },
+    {
+      "version": "20261009033647",
+      "name": "protected_separation_original_generation_reader",
+      "statement_sha256": [
+        "0b088239de2befd5711b1e83be056f7bebcd23e808149e0ba18564083bf0514c"
+      ]
+    },
+    {
+      "version": "20261009052125",
+      "name": "native_schedule_exact_recovery_identities",
+      "statement_sha256": [
+        "8e8ff4080efe401df4bded1de5651bdc403e186487b8cc781d82c1924856104d"
+      ]
+    },
+    {
+      "version": "20261009092054",
+      "name": "retained_original_native_evidence_intake",
+      "statement_sha256": [
+        "a479c5047824cd7b16639b845cd6786cee13724b1300669a33ef93702a383837"
+      ]
+    },
+    {
+      "version": "20261009191246",
+      "name": "retained_original_native_value_chunks",
+      "statement_sha256": [
+        "56cf1b0bffc34f3c5691ab909c69281b231abaabdfdf038a555559378da7ff1e"
+      ]
+    },
+    {
+      "version": "20261010193211",
+      "name": "native_private_custody_chunk_retention",
+      "statement_sha256": [
+        "fffd25207dc1f7c1953bafe2dc23d4867c79724c4ed4f19995e36d3a71c95653"
+      ]
+    },
+    {
+      "version": "20261011000206",
+      "name": "native_private_custody_complete_frame_readback",
+      "statement_sha256": [
+        "ac22e6cce896c87cf754022ee565815811fbb04e58b00fde278efc835a665889"
+      ]
+    },
+    {
+      "version": "20261011121818",
+      "name": "custodial_held_event_correction_v2",
+      "statement_sha256": [
+        "9a71543fd9e2d8797ea16f96b8ec73ab46d59b0de81e1b4d29e2ec44ecb956d0"
+      ]
+    },
+    {
+      "version": "20261011150049",
+      "name": "staffing_original_outcome_reader",
+      "statement_sha256": [
+        "fbed2fec6e4292a0e8e88cce9d8abd5964b443fb2cb4c7a04af4bb0d82b8fbac"
+      ]
+    },
+    {
+      "version": "20261011214943",
+      "name": "custodial_feedback_triage_receipt_reader",
+      "statement_sha256": [
+        "ffc4bbe60bdd7986b3553d430dab96ec819c9846806553793ae939500ebb5910"
+      ]
+    },
+    {
+      "version": "20261011214944",
+      "name": "custodial_feedback_triage_receipt_recovery_binding",
+      "statement_sha256": [
+        "378ab1007b09f319331d3ca26b9e1e20e18e770e58e26aa580c920094c92e280"
+      ]
+    },
+    {
+      "version": "20261012000449",
+      "name": "staffing_prepared_preview_bound_fields",
+      "statement_sha256": [
+        "aecfd950a23d61ead5fda7c09a59013f09db8869ade352b3f2fe16404a7f2a67"
+      ]
+    },
+    {
+      "version": "20261012001357",
+      "name": "staffing_nonemployee_refresh_identity",
+      "statement_sha256": [
+        "1306d7d80e4c02c5b41b4daebdbd3f4f6733741e0730a36bfc84b0bf15f25c3e"
+      ]
+    },
+    {
+      "version": "20261012004258",
+      "name": "staffing_absence_cancellation_target_fields",
+      "statement_sha256": [
+        "9b8178cf4c18322da053b06ea57ae7cbe287ed7961fd7b7650042f0f584e8709"
+      ]
+    },
+    {
+      "version": "20261012023928",
+      "name": "staffing_original_target_current_plan_cancellation",
+      "statement_sha256": [
+        "a4a25afb8715d82f2f5e03f4ede9504fcb0882c26920af30ea84bb02557e7703"
+      ]
+    },
+    {
+      "version": "20261012043840",
+      "name": "staffing_vacancy_original_plan_readback",
+      "statement_sha256": [
+        "02e4e30310c68a514c7d024532baae655e9790d200dfb80f606d6fa3a05e4417"
+      ]
+    },
+    {
+      "version": "20261012052430",
+      "name": "employee_event_open_original_receipt",
+      "statement_sha256": [
+        "bd31605b4fe10a1a57f6e46f5e510a44bd12fcf385b53a3c4d1e6a8cfe893a00"
+      ]
+    },
+    {
+      "version": "20261012063248",
+      "name": "staffing_vacancy_reviewed_preparation",
+      "statement_sha256": [
+        "1dd73eca8c1042096d0cf2d9b3a69bb6afa710e467389899b99ee33ecdbc821c"
+      ]
+    },
+    {
+      "version": "20261012070515",
+      "name": "employee_event_open_service_date_binding",
+      "statement_sha256": [
+        "11bfe9ece8a4ad20fadc68a0abff5bea1b91a51def3a3d5725de3550a0a9d5b4"
+      ]
+    },
+    {
+      "version": "20261012142853",
+      "name": "original_completion_protected_reader",
+      "statement_sha256": [
+        "c4c39b1a7e79eba40680e6ad43a8e213c7e205117eee48c44b15d7feeb5a9280"
+      ]
+    },
+    {
+      "version": "20261012211736",
+      "name": "custodial_employee_message_original_outcomes",
+      "statement_sha256": [
+        "9ae81a6a52e1a706ec0d18e08b901108e0ff20c0d22d99a63da60216f8bdcd44"
+      ]
+    },
+    {
+      "version": "20261013113033",
+      "name": "gemini_original_turn_preservation",
+      "statement_sha256": [
+        "33249306963b02d90e84e56f06bfe2d852c2009e869f7b50b8c8d87b91f712f4"
+      ]
+    },
+    {
+      "version": "20261013171946",
+      "name": "messenger_original_group_creation",
+      "statement_sha256": [
+        "e3cd2f32d0482e8578d109507256c944f054eecda502fc12996e205d9ede52e7"
+      ]
+    },
+    {
+      "version": "20261014000624",
+      "name": "same_original_recovery_preparation",
+      "statement_sha256": [
+        "3c6506413076bc39a0bae52a281ffd7da0d7683f30c3df1a1a21367e3c7361cb"
+      ]
+    },
+    {
+      "version": "20261014010337",
+      "name": "same_original_recovery_target_read",
+      "statement_sha256": [
+        "f91331d9f179a41c4ee81e3535c3503ae042e0203d1b6238d23947be8cd48abb"
+      ]
+    },
+    {
+      "version": "20261014024357",
+      "name": "same_original_native_challenge_registration",
+      "statement_sha256": [
+        "20b181b6021fb73b4e72eaafbc4e2e2486c3e7c85aa2f898eb9700d85e6a66ae"
+      ]
+    },
+    {
+      "version": "20261014031928",
+      "name": "same_original_native_registration_status",
+      "statement_sha256": [
+        "d5a559cb102b31ee7553e618655666c43b034492794e2df3b59f5dd3007e6965"
+      ]
+    },
+    {
+      "version": "20261014143050",
+      "name": "same_original_current_manager_preparation_read",
+      "statement_sha256": [
+        "10eea4b25e210d345382f7c89c3a82fda2273a3b486532ffe6fc70cb5d39bd2e"
+      ]
+    },
+    {
+      "version": "20261015040830",
+      "name": "same_original_retained_completion_read",
+      "statement_sha256": [
+        "18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d"
+      ]
+    },
+    {
+      "version": "20261016095134",
+      "name": "native_original_inventory_request_registration",
+      "statement_sha256": [
+        "c0d0f2b0aa9bd7a98adeb4b7a460256c2cc57b5edd748fdf3778504bf9fd7041"
+      ]
+    },
+    {
+      "version": "20261016103024",
+      "name": "native_original_inventory_request_status_read",
+      "statement_sha256": [
+        "e181509806947b79d00bc43a3472fadf46512b5983876f9a093cafc7a7a37aa6"
+      ]
+    },
+    {
+      "version": "20261016111320",
+      "name": "native_inventory_current_confirmation_guard",
+      "statement_sha256": [
+        "760877770d9739ec041d8cefa7d20f48ef771dc4f9437c3c09264d2b0be0c4c3"
+      ]
+    },
+    {
+      "version": "20261016121857",
+      "name": "native_original_inventory_manifest_chunks",
+      "statement_sha256": [
+        "4f3687fe9a35376b5859c90b3c33f417bd6d87ec41658fb53f6d79d2d51d84ce"
+      ]
+    },
+    {
+      "version": "20261016133120",
+      "name": "native_original_inventory_manager_manifest_read",
+      "statement_sha256": [
+        "7acafd2bd12cedc790aafb4fb696ba6326eb20f530f98fc6f7e6ab1b89d89827"
+      ]
+    },
+    {
+      "version": "20261016140703",
+      "name": "native_original_inventory_semantic_review",
+      "statement_sha256": [
+        "e61de073f2374bea3305ad23fa06fa22c9d2f1ef9f5c25115e8b98bb0ccbf0e8"
+      ]
+    },
+    {
+      "version": "20261016143226",
+      "name": "native_original_inventory_manager_decision",
+      "statement_sha256": [
+        "ec4d2920dc99830d217a7e179a3696e487d6ebe6170801f9f53112b9ccc00d79"
+      ]
+    },
+    {
+      "version": "20261017200958",
+      "name": "approved_static_original_confirmation_receipts",
+      "statement_sha256": [
+        "2a093cd4ef89d4e77f911b7a12c68db717a2dba298da35e565c84fee387156e8"
+      ]
+    },
+    {
+      "version": "20261017201251",
+      "name": "approved_static_current_basis_binding",
+      "statement_sha256": [
+        "905f654a03cf25b78799cc5102beb8fbb074b5993cd1cfd0f3ddac71ddf4a629"
+      ]
+    },
+    {
+      "version": "20261017225101",
+      "name": "approved_static_dated_original_materialization",
+      "statement_sha256": [
+        "7bb4e47bd18487a150f422a6a9dbe335e76e5f0309073e7ad4fa982adf8d9454"
+      ]
+    },
+    {
+      "version": "20261018151858",
+      "name": "registered_never_filled_vacancy_source_recovery",
+      "statement_sha256": [
+        "4f31bf55eb23e3e29b99000b4ff138e9c8cc735699b67129b583dcdc1000c60b"
+      ]
+    },
+    {
+      "version": "20261018161845",
+      "name": "approved_static_pending_staffing_original_recovery",
+      "statement_sha256": [
+        "b14504a2b97890944be54f4be5762c3f0dbd653cc14748da3777bc47357cfca5"
+      ]
+    },
+    {
+      "version": "20261021111917",
+      "name": "dashboard_application_reader_operational_day_repair",
+      "statement_sha256": [
+        "be68ea76fb70c183c63986307759c21ababa4b5f6aac53b01532abdb5efa267e"
+      ]
+    },
+    {
+      "version": "20261021124949",
+      "name": "dashboard_independent_verified_check_reader",
+      "statement_sha256": [
+        "fc57bbd278fea04890721ed2d15ca8799c58b5b2bae7de14bb40b8d4847d131a"
+      ]
+    },
+    {
+      "version": "20261022041249",
+      "name": "original_schedule_delivery_outcome",
+      "statement_sha256": [
+        "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1"
+      ]
+    },
+    {
+      "version": "20261022071830",
+      "name": "recurring_normal_notification_plan",
+      "statement_sha256": [
+        "f3083dba31b1973cd42692362ceda5e4c08d505c063ceb505c75214dd4e16c95"
+      ]
+    },
+    {
+      "version": "20261025094420",
+      "name": "authority_identity_renderer_counterparts",
+      "statement_sha256": [
+        "0e7b14e1e6ec1b60cab5a4d00f97491a4ae0fd8386c68d9b3c49b84f50c5ddd0"
+      ]
+    },
+    {
+      "version": "20261025124437",
+      "name": "manager_completion_evidence_opaque_session_domain",
+      "statement_sha256": [
+        "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
+      ]
+    },
+    {
+      "version": "20261026065000",
+      "name": "location_scan_state_qualified_lookup",
+      "statement_sha256": [
+        "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
+      ]
+    },
+    {
+      "version": "20261027230000",
+      "name": "accepted_actual_lunch_windows",
+      "statement_sha256": [
+        "55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b"
+      ]
+    },
+    {
+      "version": "20261027231000",
+      "name": "canonical_coverall_capacity_links",
+      "statement_sha256": [
+        "c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903"
+      ]
+    },
+    {
+      "version": "20261027234814",
+      "name": "mcp_oauth_durable_token_families",
+      "statement_sha256": [
+        "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
+      ]
+    },
+    {
+      "version": "20261028224728",
+      "name": "full_scheduled_lunch_source_policy",
+      "statement_sha256": [
+        "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514"
+      ]
+    },
+    {
+      "version": "20261030031200",
+      "name": "approved_manual_full_hour_coverers",
+      "statement_sha256": [
+        "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+      ]
+    },
+    {
+      "version": "20261030050235",
+      "name": "compact_approved_initial_confirmation",
+      "statement_sha256": [
+        "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
+      ]
+    },
+    {
+      "version": "20261030155202",
+      "name": "approved_manual_current_day_activation",
+      "statement_sha256": [
+        "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492"
+      ]
+    },
+    {
+      "version": "20261031125902",
+      "name": "approved_manual_native_operations",
+      "statement_sha256": [
+        "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d"
+      ]
+    },
+    {
+      "version": "20261031180631",
+      "name": "cohort_ticket_transaction_context",
+      "statement_sha256": [
+        "063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b"
+      ]
+    },
+    {
+      "version": "20261031225210",
+      "name": "custodial_sealed_repairs_current_eight",
+      "statement_sha256": [
+        "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73"
+      ]
+    },
+    {
+      "version": "20261101034931",
+      "name": "custodial_completion_evidence_cohort_read",
+      "statement_sha256": [
+        "99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630"
+      ]
+    },
+    {
+      "version": "20261101044239",
+      "name": "custodial_cohort_places_feedback",
+      "statement_sha256": [
+        "d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78"
+      ]
+    },
+    {
+      "version": "20261102000000",
+      "name": "unfinished_work_owner_attention",
+      "statement_sha256": [
+        "e8fb1bb569b653a53b05f52944a14ab232e5e0542eaeec30173a9194fd6ca835"
+      ]
+    },
+    {
+      "version": "20261102010000",
+      "name": "local_retained_enrollment_partition",
+      "statement_sha256": [
+        "83f817a25ffe468c715323cf71f62a0c65cbe5a2fe68fde9d75903b55678a4d1"
+      ]
+    },
+    {
+      "version": "20261102151842",
+      "name": "current_source_recovery_binding",
+      "statement_sha256": [
+        "adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27"
+      ]
+    },
+    {
+      "version": "20261102161602",
+      "name": "current_recovery_column_order",
+      "statement_sha256": [
+        "018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300"
+      ]
+    },
+    {
+      "version": "20261103004520",
+      "name": "authoritative_events_cancellation",
+      "statement_sha256": [
+        "5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9"
+      ]
+    },
+    {
+      "version": "20261104174218",
+      "name": "expired_unconsumed_assigned_activation_closure",
+      "statement_sha256": [
+        "acbdbc92b7f30fbbd77c77ba812117362827bb0d91f9edb306dfe0e99017ae6f"
+      ]
+    },
+    {
+      "version": "20261110061622",
+      "name": "custodial_activation_digest_callsite_retention",
+      "statement_sha256": [
+        "88e26d3b6c9a11b54c9482880beb282d3af5aa82353ba1dd2115f539fcdab745"
+      ]
+    },
+    {
+      "version": "20261110081920",
+      "name": "custodial_home_reader_projection_scope",
+      "statement_sha256": [
+        "0c078554624851d9314a4b3d0a32bc29ac05b31c19667c8ed61c01cc81ca44f1"
+      ]
+    },
+    {
+      "version": "20261110235315",
+      "name": "active_cleaning_dashboard_status_precedence",
+      "statement_sha256": [
+        "155cdc57039955cb05988ae6de620e8c2329a5364635fce92d2139a005aab98b"
+      ]
+    },
+    {
+      "version": "20261110235935",
+      "name": "native_active_session_gps_binding",
+      "statement_sha256": [
+        "4e2e53ccb2e98159900febcf9f03cf04718daa6a4353029f570576937fa7ae0c"
+      ]
+    },
+    {
+      "version": "20261111024546",
+      "name": "memphis_native_schedule_format",
+      "statement_sha256": [
+        "d27a71d115b5ec248362a86340337e743ecfeeb698fabcc7a24951f4cafda253"
+      ]
+    },
+    {
+      "version": "20261111161430",
+      "name": "active_work_gps_reader_policy",
+      "statement_sha256": [
+        "6bc39e329941413b3487834e2a88f08d5d0cbbca77750983e4da71b5cdf48360"
+      ]
+    },
+    {
+      "version": "20261113221252",
+      "name": "custodial_manual_event_cohort_intake",
+      "statement_sha256": [
+        "0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab"
+      ]
+    }
+  ],
+  "ledger_sha256": "ece44ce3b2f0c4cceceef589783fae73f5ad342630765c6460ab083b0515543e",
+  "historical_baseline": [
+    {
+      "version": "20260514224806",
+      "name": "install_demo_scan_mock_engine_v2"
+    },
+    {
+      "version": "20260514224945",
+      "name": "patch_demo_scan_mock_make_interval_int_casts"
+    },
+    {
+      "version": "20260514225332",
+      "name": "patch_demo_scan_mock_advance_transition"
+    },
+    {
+      "version": "20260514225800",
+      "name": "enable_demo_scan_mock_cron_20m"
+    },
+    {
+      "version": "20260514225919",
+      "name": "patch_demo_scan_mock_stop_cancel_open"
+    },
+    {
+      "version": "20260514225955",
+      "name": "add_safe_demo_scan_mock_cron_wrapper"
+    },
+    {
+      "version": "20260515023051",
+      "name": "demo_scan_mock_shift_schedule_mode"
+    },
+    {
+      "version": "20260515023123",
+      "name": "switch_demo_cron_to_shift_schedule"
+    },
+    {
+      "version": "20260515145134",
+      "name": "demo_mock_v4_complete_dynamic_helper"
+    },
+    {
+      "version": "20260515145151",
+      "name": "demo_mock_v4_assigned_locations_view"
+    },
+    {
+      "version": "20260515145238",
+      "name": "demo_mock_v4_assigned_area_tick"
+    },
+    {
+      "version": "20260515150336",
+      "name": "demo_mock_v4_wire_cron_to_assigned_area"
+    },
+    {
+      "version": "20260517031749",
+      "name": "demo_mock_v4_start_515_triple_sessions"
+    },
+    {
+      "version": "20260517111535",
+      "name": "demo_mock_v4_view_515_simple"
+    },
+    {
+      "version": "20260517111943",
+      "name": "demo_mock_v4_distinct_employee_wave_fix"
+    },
+    {
+      "version": "20260714115918",
+      "name": "security_and_stale_session_foundation_20260714"
+    },
+    {
+      "version": "20260714120020",
+      "name": "expand_session_completion_source_contract_20260714"
+    },
+    {
+      "version": "20260714121817",
+      "name": "atomic_scan_and_messaging_foundation_20260714"
+    },
+    {
+      "version": "20260714123412",
+      "name": "scan_state_v2_recovery_20260714"
+    },
+    {
+      "version": "20260714130037",
+      "name": "custodial_api_boundary_20260714"
+    },
+    {
+      "version": "20260714130742",
+      "name": "custodial_foundation_v2_20260714"
+    },
+    {
+      "version": "20260714131105",
+      "name": "custodial_scan_atomic_v2_20260714"
+    },
+    {
+      "version": "20260714131222",
+      "name": "custodial_data_write_and_stale_v2_20260714"
+    },
+    {
+      "version": "20260714131352",
+      "name": "custodial_messenger_lifecycle_v2_20260714"
+    },
+    {
+      "version": "20260714134046",
+      "name": "custodial_legacy_scan_compatibility_v2_20260714"
+    },
+    {
+      "version": "20260714135144",
+      "name": "custodial_public_rpc_lockdown_v2_20260714"
+    },
+    {
+      "version": "20260714141721",
+      "name": "custodial_archive_runtime_migration_log_20260714"
+    },
+    {
+      "version": "20260714141837",
+      "name": "custodial_remove_obsolete_scan_overloads_20260714"
+    },
+    {
+      "version": "20260714164028",
+      "name": "scheduler_foundation_application_write_20260714"
+    },
+    {
+      "version": "20260714164308",
+      "name": "scheduler_foundation_durable_reminders_20260714"
+    },
+    {
+      "version": "20260714164417",
+      "name": "scheduler_foundation_static_readiness_20260714"
+    },
+    {
+      "version": "20260714164746",
+      "name": "scheduler_foundation_authoritative_gps_20260714"
+    },
+    {
+      "version": "20260714174214",
+      "name": "scheduler_foundation_notification_ack_canonical_20260714"
+    },
+    {
+      "version": "20260714201504",
+      "name": "update_markiesha_shift_8_to_5_20260714"
+    },
+    {
+      "version": "20260714202221",
+      "name": "temporary_source_repair_payloads_20260714"
+    },
+    {
+      "version": "20260714210209",
+      "name": "temporary_repair_payload_upload_rpc_20260714"
+    },
+    {
+      "version": "20260714213818",
+      "name": "temporary_repair_payload_staging_20260714"
+    },
+    {
+      "version": "20260714214652",
+      "name": "remove_temporary_repair_payload_channel_20260714"
+    },
+    {
+      "version": "20260714220206",
+      "name": "markiesha_shift_0800_1700_20260714"
+    },
+    {
+      "version": "20260714223858",
+      "name": "temporary_repair_payload_chunks_20260714"
+    },
+    {
+      "version": "20260714224744",
+      "name": "scheduler_full_day_my_schedule_contract_20260714"
+    },
+    {
+      "version": "20260714224811",
+      "name": "messenger_notification_instance_deduplication_20260714"
+    },
+    {
+      "version": "20260714224925",
+      "name": "device_notification_acknowledgement_list_20260714"
+    },
+    {
+      "version": "20260714225409",
+      "name": "release_validation_ledger_20260714"
+    },
+    {
+      "version": "20260714231421",
+      "name": "internal_http_health_monitor_pg_net_20260714"
+    },
+    {
+      "version": "20260714232148",
+      "name": "my_schedule_current_and_full_day_contract_20260714"
+    },
+    {
+      "version": "20260714232459",
+      "name": "backfill_event_read_acknowledgements_20260714"
+    },
+    {
+      "version": "20260714235212",
+      "name": "scheduler_full_window_absence_coverage_20260714"
+    },
+    {
+      "version": "20260715004418",
+      "name": "terminal_cancelled_queue_reconciliation_20260715"
+    },
+    {
+      "version": "20260715012451",
+      "name": "messenger_thread_foundation_20260715"
+    },
+    {
+      "version": "20260715013305",
+      "name": "schedule_assignment_exact_duplicate_guard_20260715_v2"
+    },
+    {
+      "version": "20260715013329",
+      "name": "messenger_orphan_reply_recovery_and_smoke_cleanup_20260715"
+    },
+    {
+      "version": "20260715013904",
+      "name": "temporary_fleet_acceptance_rpc_20260715"
+    },
+    {
+      "version": "20260715014014",
+      "name": "remove_temporary_fleet_acceptance_rpc_20260715"
+    },
+    {
+      "version": "20260715021137",
+      "name": "dedupe_schedule_display_rows_20260715"
+    },
+    {
+      "version": "20260715021411",
+      "name": "event_notification_one_instance_guarantee_v2_20260715"
+    },
+    {
+      "version": "20260715035139",
+      "name": "archive_automated_acceptance_cleaning_sessions_20260715"
+    },
+    {
+      "version": "20260715035227",
+      "name": "archive_all_message_state_before_clear_20260715"
+    },
+    {
+      "version": "20260715035431",
+      "name": "isolate_moxie_private_data_from_memphis_clients_20260715"
+    },
+    {
+      "version": "20260715040708",
+      "name": "foundational_runtime_schema_preprovision_20260715"
+    },
+    {
+      "version": "20260715041327",
+      "name": "lock_moxie_private_tables_20260715"
+    },
+    {
+      "version": "20260715042105",
+      "name": "secure_moxie_private_data_boundary_20260715"
+    },
+    {
+      "version": "20260715042229",
+      "name": "remove_foundation_concurrency_locations_20260715"
+    },
+    {
+      "version": "20260715043004",
+      "name": "disable_destructive_retention_jobs_20260715"
+    },
+    {
+      "version": "20260715043255",
+      "name": "retired_identity_archive_20260715"
+    },
+    {
+      "version": "20260715043425",
+      "name": "event_notification_superseded_state_20260715"
+    },
+    {
+      "version": "20260715043547",
+      "name": "revoke_trigger_function_public_execute_20260715"
+    },
+    {
+      "version": "20260715044458",
+      "name": "isolate_moxie_private_data_20260715"
+    },
+    {
+      "version": "20260715112141",
+      "name": "fix_schedule_source_type_contract_20260715"
+    },
+    {
+      "version": "20260715121049",
+      "name": "remove_demo_people_and_harden_messenger_identity_20260715"
+    },
+    {
+      "version": "20260715130556",
+      "name": "messenger_runtime_membership_and_thread_visibility_20260715"
+    },
+    {
+      "version": "20260715130800",
+      "name": "messenger_thread_delete_server_authority_20260715"
+    },
+    {
+      "version": "20260715200108",
+      "name": "ops_manager_trusted_device_auth"
+    },
+    {
+      "version": "20260715233040",
+      "name": "device_credential_foundation"
+    },
+    {
+      "version": "20260716000250",
+      "name": "device_credential_foundation"
+    },
+    {
+      "version": "20260716001029",
+      "name": "add_missing_foreign_key_indexes"
+    },
+    {
+      "version": "20260716001048",
+      "name": "retire_abandoned_repair_payload_tables"
+    },
+    {
+      "version": "20260716001441",
+      "name": "moxie_persistent_password_credentials"
+    },
+    {
+      "version": "20260716001701",
+      "name": "release_deployment_manifest"
+    },
+    {
+      "version": "20260716001853",
+      "name": "ai_provider_data_boundary"
+    },
+    {
+      "version": "20260716001958",
+      "name": "retire_legacy_backup_tables"
+    },
+    {
+      "version": "20260716002449",
+      "name": "harden_dynamic_sql_functions"
+    },
+    {
+      "version": "20260716002500",
+      "name": "migration_log_governance"
+    },
+    {
+      "version": "20260716002543",
+      "name": "harden_security_definer_search_paths"
+    },
+    {
+      "version": "20260716003127",
+      "name": "force_rls_public_tables"
+    },
+    {
+      "version": "20260716003629",
+      "name": "auto_enforce_device_credentials_v2"
+    },
+    {
+      "version": "20260716004053",
+      "name": "retire_mcp_write_test_table"
+    },
+    {
+      "version": "20260716010600",
+      "name": "residual_database_hygiene"
+    },
+    {
+      "version": "20260716010648",
+      "name": "rls_and_function_hardening"
+    },
+    {
+      "version": "20260716121245",
+      "name": "operational_recovery_20260716"
+    },
+    {
+      "version": "20260716193526",
+      "name": "foundation_repair_archive_cleanup"
+    },
+    {
+      "version": "20260716193547",
+      "name": "foundation_repair_schedule_audit"
+    },
+    {
+      "version": "20260716193606",
+      "name": "foundation_repair_schedule_window"
+    },
+    {
+      "version": "20260716193627",
+      "name": "foundation_repair_schedule_cron"
+    },
+    {
+      "version": "20260716193644",
+      "name": "foundation_repair_migration_log_compaction"
+    },
+    {
+      "version": "20260716193725",
+      "name": "foundation_repair_migration_runner_governance"
+    },
+    {
+      "version": "20260716194539",
+      "name": "foundation_repair_legacy_ledger_rollup"
+    },
+    {
+      "version": "20260717170035",
+      "name": "custodial_foundation_repair_delta"
+    },
+    {
+      "version": "20260717170136",
+      "name": "custodial_foundation_repair_device_eval_fix"
+    },
+    {
+      "version": "20260717175320",
+      "name": "ops_manager_pairing_links"
+    },
+    {
+      "version": "20260717203456",
+      "name": "manager_passwordless_onboarding_security_app"
+    },
+    {
+      "version": "20260717211212",
+      "name": "device_security_code_rpc_qualification"
+    },
+    {
+      "version": "20260718002000",
+      "name": "ops_manager_one_time_codes"
+    },
+    {
+      "version": "20260718021910",
+      "name": "event_input_console_scope_venue_taxonomy"
+    },
+    {
+      "version": "20260718022648",
+      "name": "event_input_console_verified_venue_backfill_20260718"
+    },
+    {
+      "version": "20260718070417",
+      "name": "ops_manager_shared_48_hour_enrollment"
+    },
+    {
+      "version": "20260718072634",
+      "name": "ops_manager_shared_enrollment_fk_indexes"
+    },
+    {
+      "version": "20260718081916",
+      "name": "gemini_console_professional_foundation"
+    },
+    {
+      "version": "20260718083335",
+      "name": "reconstruct_public_grant_hardening"
+    },
+    {
+      "version": "20260718084607",
+      "name": "schema_authority_cron_jobs"
+    },
+    {
+      "version": "20260718085603",
+      "name": "schema_authority_comments"
+    },
+    {
+      "version": "20260718124426",
+      "name": "custodial_v3_reliability_and_retention"
+    },
+    {
+      "version": "20260718124433",
+      "name": "restore_members_night_retention_recovery"
+    },
+    {
+      "version": "20260718131734",
+      "name": "prevent_cleaning_notes_false_maintenance_tickets"
+    },
+    {
+      "version": "20260718143726",
+      "name": "moxie_password_rotation"
+    },
+    {
+      "version": "20260718160914",
+      "name": "ops_manager_shared_messenger"
+    },
+    {
+      "version": "20260718181345",
+      "name": "professional_employee_messenger"
+    },
+    {
+      "version": "20260718194840",
+      "name": "messenger_delete_retention_shared_identity"
+    },
+    {
+      "version": "20260718195342",
+      "name": "messenger_delete_actor_fk_indexes"
+    },
+    {
+      "version": "20260719235243",
+      "name": "gps_proximity_motion_hardening_20260719"
+    },
+    {
+      "version": "20260721212246",
+      "name": "operations_leadership_mobile_foundation_schema"
+    },
+    {
+      "version": "20260721212339",
+      "name": "operations_leadership_mobile_foundation_data"
+    },
+    {
+      "version": "20260721212406",
+      "name": "operations_leadership_mobile_foundation_finalize"
+    },
+    {
+      "version": "20260721212552",
+      "name": "manager_mobile_notifications_schema"
+    },
+    {
+      "version": "20260721214714",
+      "name": "manager_mobile_notifications_runtime"
+    },
+    {
+      "version": "20260722210339",
+      "name": "custodial_employee_phone_foundation"
+    },
+    {
+      "version": "20260722210533",
+      "name": "custodial_employee_phone_assignment"
+    },
+    {
+      "version": "20260722210620",
+      "name": "custodial_employee_status_management"
+    },
+    {
+      "version": "20260722210658",
+      "name": "retire_forced_operations_leadership_thread"
+    },
+    {
+      "version": "20260722230915",
+      "name": "event_notification_retention_integrity"
+    },
+    {
+      "version": "20260723004728",
+      "name": "operational_retention_and_analytics"
+    },
+    {
+      "version": "20260723004749",
+      "name": "event_retention_history_guard"
+    },
+    {
+      "version": "20260723111542",
+      "name": "v17_trigger_privilege_hardening"
+    },
+    {
+      "version": "20260724015534",
+      "name": "event_messenger_cutover_deletion_semantics"
+    },
+    {
+      "version": "20260724020041",
+      "name": "msg_thread_deletion_operations_user_index"
+    },
+    {
+      "version": "20260729205327",
+      "name": "third_audit_recovery_gemini_gps"
+    },
+    {
+      "version": "20260729222013",
+      "name": "audit4_attendance_inspection_integrity"
+    },
+    {
+      "version": "20260730013936",
+      "name": "audit5_feedback_guest_approval_lifecycle"
+    },
+    {
+      "version": "20260730143817",
+      "name": "audit6_coverall_assignment_link_security"
+    },
+    {
+      "version": "20260730143914",
+      "name": "audit6_coverall_assignment_link_service_policy"
+    },
+    {
+      "version": "20260730183936",
+      "name": "disaster_recovery_backup_reader"
+    },
+    {
+      "version": "20260730221607",
+      "name": "production_availability_warm_bridge"
+    },
+    {
+      "version": "20260730222357",
+      "name": "index_remaining_foreign_keys"
+    },
+    {
+      "version": "20260731142827",
+      "name": "deactivate_render_free_tier_warm_bridge"
+    },
+    {
+      "version": "20260731142828",
+      "name": "inspection_spot_check_policy"
+    },
+    {
+      "version": "20260801131340",
+      "name": "custodial_atomic_offline_completion_identity"
+    },
+    {
+      "version": "20260801134430",
+      "name": "reconcile_canonical_schema_security_metadata"
+    },
+    {
+      "version": "20260801173321",
+      "name": "custodial_enrollment_resume_and_push_revocation"
+    },
+    {
+      "version": "20260801195620",
+      "name": "custodial_device_removal_operation"
+    },
+    {
+      "version": "20260809125735",
+      "name": "cleaning_inspection_24_hour_freshness"
+    },
+    {
+      "version": "20260810120000",
+      "name": "retire_named_manager_shared_room_authority"
+    },
+    {
+      "version": "20260810130000",
+      "name": "harden_named_manager_retired_archive_and_concurrency"
+    },
+    {
+      "version": "20260810140000",
+      "name": "finalize_named_manager_messenger_retirement_integrity"
+    },
+    {
+      "version": "20260810143000",
+      "name": "offline_actor_occurrence_reconciliation"
+    },
+    {
+      "version": "20260810150000",
+      "name": "enforce_integrated_backend_authority"
+    },
+    {
+      "version": "20260810160000",
+      "name": "close_offline_authority_integrity_gaps"
+    },
+    {
+      "version": "20260810170000",
+      "name": "finish_offline_authority_operational_closure"
+    },
+    {
+      "version": "20260810190000",
+      "name": "final_integrated_backend_operational_correction"
+    },
+    {
+      "version": "20260810200000",
+      "name": "static_weekly_scheduler_authority_integrated"
+    },
+    {
+      "version": "20260810210000",
+      "name": "static_weekly_scheduler_three_high_foundation_correction"
+    },
+    {
+      "version": "20260810220000",
+      "name": "static_weekly_scheduler_complete_authority_correction"
+    },
+    {
+      "version": "20260810230000",
+      "name": "static_weekly_scheduler_authority_closure_correction"
+    },
+    {
+      "version": "20260812032055",
+      "name": "static_weekly_manager_snapshot"
+    },
+    {
+      "version": "20260812130000",
+      "name": "static_weekly_employee_turnover"
+    },
+    {
+      "version": "20260813035530",
+      "name": "offline_scan_authority_snapshot"
+    },
+    {
+      "version": "20260813050000",
+      "name": "offline_snapshot_operational_truth_closure"
+    },
+    {
+      "version": "20260813060000",
+      "name": "release_canary_operational_recovery"
+    },
+    {
+      "version": "20260813070000",
+      "name": "operational_service_date_foundation"
+    },
+    {
+      "version": "20260813141806",
+      "name": "custodial_operational_boundary_closure"
+    },
+    {
+      "version": "20260813173000",
+      "name": "device_sync_actor_groups"
+    },
+    {
+      "version": "20260813190000",
+      "name": "release_phone_transport_and_offline_activation_closure"
+    },
+    {
+      "version": "20260813210000",
+      "name": "custodial_u4_ops_closure"
+    },
+    {
+      "version": "20260814224034",
+      "name": "reconcile_static_weekly_day_change_receipts"
+    },
+    {
+      "version": "20260815160613",
+      "name": "normalize_managed_production_schema_security"
+    },
+    {
+      "version": "20260815163346",
+      "name": "restore_explicit_public_schema_usage"
+    },
+    {
+      "version": "20260820120831",
+      "name": "contain_release_recovery_ddl_authority"
+    },
+    {
+      "version": "20260820121025",
+      "name": "revoke_residual_public_security_definer_execute"
+    },
+    {
+      "version": "20260820121117",
+      "name": "revoke_public_trigger_function_rpc_execute"
+    },
+    {
+      "version": "20260822055838",
+      "name": "custodial_disaster_restore_generation_authority"
+    },
+    {
+      "version": "20260822060043",
+      "name": "create_application_read_authority"
+    },
+    {
+      "version": "20260822130828",
+      "name": "retire_owner_sql_proxy"
+    },
+    {
+      "version": "20260822130846",
+      "name": "bound_ops_manager_device_trust"
+    },
+    {
+      "version": "20260822130909",
+      "name": "finalize_function_authority_recovery"
+    },
+    {
+      "version": "20260822130925",
+      "name": "append_only_cleaning_identity_corrections"
+    },
+    {
+      "version": "20260822131031",
+      "name": "late_gps_is_advisory_only"
+    },
+    {
+      "version": "20260822131104",
+      "name": "precise_terminal_writer_detection"
+    },
+    {
+      "version": "20260822131126",
+      "name": "rebind_release_recovery_inventory_to_current_authority"
+    },
+    {
+      "version": "20260822142917",
+      "name": "grant_readonly_cron_catalog_observation"
+    },
+    {
+      "version": "20260822150334",
+      "name": "fence_application_reader_relation_authority"
+    },
+    {
+      "version": "20260822153528",
+      "name": "bridge_cron_identity_and_rebind_recovery_acl"
+    },
+    {
+      "version": "20260822175243",
+      "name": "repair_runtime_read_and_scan_alert_authority"
+    },
+    {
+      "version": "20260823012608",
+      "name": "correct_coverall_second_absence_policy"
+    },
+    {
+      "version": "20260823032848",
+      "name": "provision_static_weekly_runtime_identity"
+    },
+    {
+      "version": "20260823033203",
+      "name": "configure_static_weekly_runtime_password_20260823"
+    },
+    {
+      "version": "20260823081444",
+      "name": "static_weekly_family_location_truth"
+    },
+    {
+      "version": "20260823125236",
+      "name": "static_weekly_service_mode_truth"
+    },
+    {
+      "version": "20260823125247",
+      "name": "static_weekly_solver_certificate_v5_authority"
+    },
+    {
+      "version": "20260823125258",
+      "name": "static_weekly_end_of_day_window_parity"
+    },
+    {
+      "version": "20260823145052",
+      "name": "static_weekly_registered_roster_bootstrap"
+    },
+    {
+      "version": "20260824135424",
+      "name": "static_weekly_memory_bounded_document_authority"
+    },
+    {
+      "version": "20260824135440",
+      "name": "static_weekly_memory_bounded_validator_and_receipt"
+    },
+    {
+      "version": "20260824135526",
+      "name": "static_weekly_manager_snapshot_authority_source"
+    },
+    {
+      "version": "20260824135539",
+      "name": "static_weekly_compact_document_consumers"
+    },
+    {
+      "version": "20260824160745",
+      "name": "static_weekly_initial_contractor_snapshot"
+    },
+    {
+      "version": "20260824170816",
+      "name": "static_weekly_projection_compact_snapshot"
+    },
+    {
+      "version": "20260824193225",
+      "name": "static_weekly_operational_truth_cutover"
+    },
+    {
+      "version": "20260825142157",
+      "name": "scan_alert_runtime_authority_closure"
+    },
+    {
+      "version": "20260825172858",
+      "name": "restore_application_reader_device_identity"
+    },
+    {
+      "version": "20260825173029",
+      "name": "fence_application_reader_device_credentials"
+    },
+    {
+      "version": "20260825195150",
+      "name": "rebind_application_reader_release_recovery"
+    },
+    {
+      "version": "20260826020000",
+      "name": "preserve_offline_work_across_manager_credential_recovery"
+    },
+    {
+      "version": "20260826114516",
+      "name": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover"
+    },
+    {
+      "version": "20260826193207",
+      "name": "outlook_event_sync_ledger"
+    },
+    {
+      "version": "20260826205203",
+      "name": "restore_application_reader_messenger_runtime"
+    },
+    {
+      "version": "20260826210524",
+      "name": "restore_application_reader_employee_events_runtime"
+    },
+    {
+      "version": "20260826231317",
+      "name": "add_education_classrooms_and_teton_grove_event_venues"
+    },
+    {
+      "version": "20260827014405",
+      "name": "static_weekly_vacant_roster_slots"
+    },
+    {
+      "version": "20260827031305",
+      "name": "static_weekly_initial_draft_roster_hydration"
+    },
+    {
+      "version": "20260827042443",
+      "name": "static_weekly_registered_source_dated_status"
+    },
+    {
+      "version": "20260827150000",
+      "name": "disaster_recovery_global_mutation_fence"
+    },
+    {
+      "version": "20260827151000",
+      "name": "restore_application_reader_feedback_runtime"
+    },
+    {
+      "version": "20260827152000",
+      "name": "adopt_outlook_event_sync_authority"
+    },
+    {
+      "version": "20260827153000",
+      "name": "scope_release_health_identity_projection"
+    },
+    {
+      "version": "20260827213545",
+      "name": "cancel_gregory_staples_future_hire"
+    },
+    {
+      "version": "20260914051527",
+      "name": "messaging_read_horizon_and_send_idempotency"
+    },
+    {
+      "version": "20260916010000",
+      "name": "project_native_start_into_operational_truth"
+    },
+    {
+      "version": "20260918010000",
+      "name": "align_two_internal_absences"
+    },
+    {
+      "version": "20260918011000",
+      "name": "pause_guest_notifications_when_disabled"
+    },
+    {
+      "version": "20260918012000",
+      "name": "event_reminder_workday_and_owner_contract"
+    },
+    {
+      "version": "20260920010000",
+      "name": "event_reminder_static_weekly_authority"
+    },
+    {
+      "version": "20261006034155",
+      "name": "custodial_owner_delegated_actions"
+    },
+    {
+      "version": "20261006113610",
+      "name": "custodial_shared_events_outlook"
+    },
+    {
+      "version": "20261006162427",
+      "name": "custodial_shared_events_recovery_binding"
+    },
+    {
+      "version": "20261006203931",
+      "name": "custodial_delegated_coverall"
+    },
+    {
+      "version": "20261021111917",
+      "name": "dashboard_application_reader_operational_day_repair"
+    }
+  ],
+  "historical_membership_sha256": "2fe465338697f3addf6f70cbecc6b3be91c1d976bc1ebaaa5efaf5535dacf3e2",
+  "historical_baseline_basis": "observed_statement_hashes_not_source_approval",
+  "original_v1_extensions": [
+    {
+      "ledger_version": "20261006034155",
+      "ledger_name": "custodial_owner_delegated_actions",
+      "source_file": "20261006031304_custodial_owner_delegated_actions.sql",
+      "sql_sha256": "4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1",
+      "source_location": "retained_installed"
+    },
+    {
+      "ledger_version": "20261006113610",
+      "ledger_name": "custodial_shared_events_outlook",
+      "source_file": "20261006113610_custodial_shared_events_outlook.sql",
+      "sql_sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001",
+      "source_location": "retained_installed"
+    },
+    {
+      "ledger_version": "20261006162427",
+      "ledger_name": "custodial_shared_events_recovery_binding",
+      "source_file": "20261006162427_custodial_shared_events_recovery_binding.sql",
+      "sql_sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537",
+      "source_location": "retained_installed"
+    },
+    {
+      "ledger_version": "20261006203931",
+      "ledger_name": "custodial_delegated_coverall",
+      "source_file": "20261006203931_custodial_delegated_coverall.sql",
+      "sql_sha256": "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475",
+      "source_location": "retained_installed"
+    },
+    {
+      "ledger_version": "20261021111917",
+      "ledger_name": "dashboard_application_reader_operational_day_repair",
+      "source_file": "20261021111917_dashboard_application_reader_operational_day_repair.sql",
+      "source_location": "retained_installed",
+      "sql_sha256": "be68ea76fb70c183c63986307759c21ababa4b5f6aac53b01532abdb5efa267e"
+    }
+  ],
+  "source_bindings": [
+    {
+      "ledger_version": "20260922050000",
+      "ledger_name": "lunch_delivery_failure_manager_alert",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260922050000_lunch_delivery_failure_manager_alert.sql",
+      "sql_sha256": "e5ac20bf41779c54c4b9145b5f56d10b62ef8ce850c3b6132ddc55a4f07e70f2"
+    },
+    {
+      "ledger_version": "20260922070000",
+      "ledger_name": "completed_cleaning_reminder_cycles",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260922070000_completed_cleaning_reminder_cycles.sql",
+      "sql_sha256": "e288d359cfbccc7e89e8ddbd395c4bb705235f4f4a1766838436b2986f36f712"
+    },
+    {
+      "ledger_version": "20260922090000",
+      "ledger_name": "verified_visit_reminder_state",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260922090000_verified_visit_reminder_state.sql",
+      "sql_sha256": "273f8786beaf5567382f08b411816cc4fc688324c480bab7da672dba9ee730e2"
+    },
+    {
+      "ledger_version": "20260922163000",
+      "ledger_name": "static_weekly_lunch_publication",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260922163000_static_weekly_lunch_publication.sql",
+      "sql_sha256": "738e6bf8032cbefe9643888196262305e729c13467c533138e228ffc5afc16ab"
+    },
+    {
+      "ledger_version": "20260922200000",
+      "ledger_name": "lunch_notification_producer",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260922200000_lunch_notification_producer.sql",
+      "sql_sha256": "578017a8fdd5402d9d592b14651c89ef89a5a9023888f39f3b715edb45388145"
+    },
+    {
+      "ledger_version": "20260922235500",
+      "ledger_name": "static_weekly_existing_employee_restore",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260922235500_static_weekly_existing_employee_restore.sql",
+      "sql_sha256": "c28bbb6ec36824c9100bbb18cdc8e07d69dcb45a82e26596b59726f86c31398b"
+    },
+    {
+      "ledger_version": "20260923065000",
+      "ledger_name": "static_weekly_vacate_roster_slot",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260923065000_static_weekly_vacate_roster_slot.sql",
+      "sql_sha256": "9246b744dc81004e885e788d7e2a00ec5fa7286a8d6d2a2ab79e9c97d3728834"
+    },
+    {
+      "ledger_version": "20260923121151",
+      "ledger_name": "visitor_attendance_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260923121151_visitor_attendance_reader.sql",
+      "sql_sha256": "f50364935b636627a0c3691841e0b932913ae2bcd1e661c87cf6cb169bcafbe0"
+    },
+    {
+      "ledger_version": "20260924022250",
+      "ledger_name": "release_selection_and_occurrence_guards",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924022250_release_selection_and_occurrence_guards.sql",
+      "sql_sha256": "2e98f268ed876ec16064af02c8b4daafb8c4e44835101bd99796d968e602931d"
+    },
+    {
+      "ledger_version": "20260924023930",
+      "ledger_name": "notification_receipt_and_lunch_integrity",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924023930_notification_receipt_and_lunch_integrity.sql",
+      "sql_sha256": "7156b75a986f329139c8edf5b8efc257be568480ee5e9beaaac094420f5b9cbc"
+    },
+    {
+      "ledger_version": "20260924032226",
+      "ledger_name": "bind_release_selection_guard_recovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924032226_bind_release_selection_guard_recovery.sql",
+      "sql_sha256": "244a0de60deae538b0c3c76d15b51bb9e983044c5466660d0d4e537d04e16ad6"
+    },
+    {
+      "ledger_version": "20260924042758",
+      "ledger_name": "static_weekly_canonical_shift_end_derivation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+      "sql_sha256": "a07dfc4fbb29c7c762daebad7f6e12725cebc7c395bb24b3dd38085c92f46ce5"
+    },
+    {
+      "ledger_version": "20260924044035",
+      "ledger_name": "static_weekly_atomic_roster_completion",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924044035_static_weekly_atomic_roster_completion.sql",
+      "sql_sha256": "b08cd44d3e9a656bfacb6f8066bac7d27118ecae8c98566910f5e7ebc65555e0"
+    },
+    {
+      "ledger_version": "20260924053507",
+      "ledger_name": "assigned_phone_activation_transport",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924053507_assigned_phone_activation_transport.sql",
+      "sql_sha256": "c53fa85013799b9b5333e7272bd664fdec059fdba56de0f5ac9e8632b8e14372"
+    },
+    {
+      "ledger_version": "20260924080839",
+      "ledger_name": "custodial_legacy_installation_observation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924080839_custodial_legacy_installation_observation.sql",
+      "sql_sha256": "b10bdd8df2acdf1e35e9fe7e0fc34137f912508ab56bd326042a309d978530e3"
+    },
+    {
+      "ledger_version": "20260924161004",
+      "ledger_name": "owner_oc24_cleaning_and_inspection_boundaries",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+      "sql_sha256": "4f4c956efc50e147e30c00a840e535623f4f841ea2e3bc0fae102cd885bc93d8"
+    },
+    {
+      "ledger_version": "20260924172500",
+      "ledger_name": "oc24_manual_contractor_lunch",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924172500_oc24_manual_contractor_lunch.sql",
+      "sql_sha256": "7b9a36d1469a2920f3a45dd19112c44f1a13bbbf0c09951c17426f42aa7eeaa5"
+    },
+    {
+      "ledger_version": "20260924201258",
+      "ledger_name": "native_provider_durable_authority",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260924201258_native_provider_durable_authority.sql",
+      "sql_sha256": "fe4f617f2531cfc941624660138bbba2c3dff983e87cb04dafe04ff58dee7538"
+    },
+    {
+      "ledger_version": "20260925015905",
+      "ledger_name": "oc24_completion_selection_normalization",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260925015905_oc24_completion_selection_normalization.sql",
+      "sql_sha256": "769070342011d4ceb28e5dfbbfd2e436e5a98dc7d02d160ac47e2d75fa120316"
+    },
+    {
+      "ledger_version": "20260925020244",
+      "ledger_name": "oc24_bound_legacy_completion_replay",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260925020244_oc24_bound_legacy_completion_replay.sql",
+      "sql_sha256": "a52245120109a50240a02b33de477281c47c389a028580820cdfea4fbcb1194d"
+    },
+    {
+      "ledger_version": "20260925050718",
+      "ledger_name": "static_weekly_staffing_command_ledger",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260925050718_static_weekly_staffing_command_ledger.sql",
+      "sql_sha256": "acc2e14294425d221af49f8567d6995f3bed0b3c015ffa54b76a6809e4770a24"
+    },
+    {
+      "ledger_version": "20260925054802",
+      "ledger_name": "static_weekly_staffing_atomic_acceptance",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+      "sql_sha256": "34dbeb5ac62da3f507737d189a0f4c982a5187bdb34905cb87468f1776ed2e39"
+    },
+    {
+      "ledger_version": "20260925190000",
+      "ledger_name": "gps_exact_location_authority_boundary",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260925190000_gps_exact_location_authority_boundary.sql",
+      "sql_sha256": "4a524505fa7eadf9755153a1946a8e06d91dbd8ed8196a82aa9cd6f53cffbdf4"
+    },
+    {
+      "ledger_version": "20260926143542",
+      "ledger_name": "static_weekly_protected_separation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926143542_static_weekly_protected_separation.sql",
+      "sql_sha256": "5a9123649c92635091854a66ad06404a5dcbc8a6b0b63b7b8b0dd8894de58032"
+    },
+    {
+      "ledger_version": "20260926180000",
+      "ledger_name": "retire_direct_employee_status_rpc",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926180000_retire_direct_employee_status_rpc.sql",
+      "sql_sha256": "dd2c306b679d48e015e839d1efd8f339aada7b7082e18e502344c15a7d06bc2b"
+    },
+    {
+      "ledger_version": "20260926192656",
+      "ledger_name": "static_weekly_recurring_confirmation_ledger",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+      "sql_sha256": "f41b7f8c118dbf324088ee09b33e8efa3d5805d7909f5d8265a2c94bba035022"
+    },
+    {
+      "ledger_version": "20260926193000",
+      "ledger_name": "retire_direct_employee_mutation_helpers",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926193000_retire_direct_employee_mutation_helpers.sql",
+      "sql_sha256": "682966928d90687ea78e9a905c781438efabf5323dd6c712b7711d6668c4d597"
+    },
+    {
+      "ledger_version": "20260926193651",
+      "ledger_name": "static_weekly_recurring_source_admission",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926193651_static_weekly_recurring_source_admission.sql",
+      "sql_sha256": "373e8b08a8637915b4daa815f3dbef2a9107ef437b8ec1c64f1ae9dc3a35cd71"
+    },
+    {
+      "ledger_version": "20260926194644",
+      "ledger_name": "static_weekly_recurring_generation_fence",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926194644_static_weekly_recurring_generation_fence.sql",
+      "sql_sha256": "f55c95b9a88d0042fdb419511a96b800f1461a5db1da3247190b8b1959a35102"
+    },
+    {
+      "ledger_version": "20260926200458",
+      "ledger_name": "static_weekly_recurring_future_same_monday",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926200458_static_weekly_recurring_future_same_monday.sql",
+      "sql_sha256": "9d96dd9a8ec118c4640949d20daf1e26c3cf920eba0b24e12828aeaaf8ff5dfa"
+    },
+    {
+      "ledger_version": "20260926201644",
+      "ledger_name": "static_weekly_recurring_dependency_snapshot",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+      "sql_sha256": "92dc22d9eeb0e88c97752d156da5c098b3974f7d84f9b72cd02fa6f515965437"
+    },
+    {
+      "ledger_version": "20260926202657",
+      "ledger_name": "static_weekly_recurring_publication_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926202657_static_weekly_recurring_publication_binding.sql",
+      "sql_sha256": "42973f964f0dad31a5db6924136037864895bd3bbb6ba0896acf8e3dff86658a"
+    },
+    {
+      "ledger_version": "20260926204235",
+      "ledger_name": "static_weekly_recurring_terminal_targets",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926204235_static_weekly_recurring_terminal_targets.sql",
+      "sql_sha256": "bd2ee52ece3ceb29bc769110e7cf27bd4a1f7e0505e6aa280a236e2e55829778"
+    },
+    {
+      "ledger_version": "20260926205849",
+      "ledger_name": "static_weekly_recurring_blocked_authority_repair",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+      "sql_sha256": "165d2d8c31b3632ac769ec44cd12944763200c462d6b83418ba1016b42c65bfd"
+    },
+    {
+      "ledger_version": "20260926211714",
+      "ledger_name": "static_weekly_recurring_common_lock_order",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926211714_static_weekly_recurring_common_lock_order.sql",
+      "sql_sha256": "53ce7d4c5151a18d0fb4d0a52b793c424d06b67f09b2551bea19bb202c4729f0"
+    },
+    {
+      "ledger_version": "20260926220510",
+      "ledger_name": "static_weekly_recurring_dependency_reconciliation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+      "sql_sha256": "46d5ff181cdaa82054eb9d46bdcdddf0b0285ec55db533a626c695a6d01a80c9"
+    },
+    {
+      "ledger_version": "20260926223914",
+      "ledger_name": "static_weekly_recurring_application_targets",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926223914_static_weekly_recurring_application_targets.sql",
+      "sql_sha256": "9fb269ef1e617d1e937674ee3f7fb093cadc02fba16b9aec1199e4e0c45aaf25"
+    },
+    {
+      "ledger_version": "20260926225613",
+      "ledger_name": "static_weekly_recurring_atomic_finalization",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926225613_static_weekly_recurring_atomic_finalization.sql",
+      "sql_sha256": "00d217074b423fe02e05ee95a5175b9840b3f66b8db418cbe7d51bafe37fdd14"
+    },
+    {
+      "ledger_version": "20260926234537",
+      "ledger_name": "static_weekly_authenticated_schedule_delivery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+      "sql_sha256": "b51016c329b64713fccaa5d8670e9feac9817b3b793c44be96041638335faf3e"
+    },
+    {
+      "ledger_version": "20260927001706",
+      "ledger_name": "static_weekly_lunch_validation_materialization",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260927001706_static_weekly_lunch_validation_materialization.sql",
+      "sql_sha256": "021b00a7765ab5424eae57f91de57ea14b975f104cdc3c3c512ca49522c36ab9"
+    },
+    {
+      "ledger_version": "20260927010911",
+      "ledger_name": "static_weekly_current_recurring_delivery_status",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260927010911_static_weekly_current_recurring_delivery_status.sql",
+      "sql_sha256": "0e482db72f32d3e645a86a527a51f402e9883db2d9cdaebf2db0ea1daab3d3ed"
+    },
+    {
+      "ledger_version": "20260927031806",
+      "ledger_name": "schedule_bound_location_reminders",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260927031806_schedule_bound_location_reminders.sql",
+      "sql_sha256": "3ac8bb9fc3374f33721d987ec6bd6551e719d622c376d1f9d7edefa639df9aa2"
+    },
+    {
+      "ledger_version": "20260927052929",
+      "ledger_name": "schedule_notification_admission_corrections",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260927052929_schedule_notification_admission_corrections.sql",
+      "sql_sha256": "14f0413bfe7cef39cd17c548c1044e7bda50f71f56619f4ad4a780f3fe16dcd1"
+    },
+    {
+      "ledger_version": "20260927072146",
+      "ledger_name": "schedule_notification_exact_canary",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260927072146_schedule_notification_exact_canary.sql",
+      "sql_sha256": "2d20c35105aaf2e6cfde58eec4590c10b995d41103aff0f7bd7a57a7e294e216"
+    },
+    {
+      "ledger_version": "20260927075352",
+      "ledger_name": "protected_separation_original_context",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260927075352_protected_separation_original_context.sql",
+      "sql_sha256": "2e6958276c9e5679d5b40b5cbc30d6345cfc134ac17783bb525949ecfc63f930"
+    },
+    {
+      "ledger_version": "20260929125440",
+      "ledger_name": "custodial_recovery_inventory_closure",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20260929125440_custodial_recovery_inventory_closure.sql",
+      "sql_sha256": "4631cebc6d4afd048fabca05244be481359cb27b20cdeb160c04c97f05ed7dd9"
+    },
+    {
+      "ledger_version": "20261001130750",
+      "ledger_name": "october_bounded_dated_transition",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261001130750_october_bounded_dated_transition.sql",
+      "sql_sha256": "2c260b0bf1e6cd5e119348ea8e442c71f074f389af9f851b0e7852ddfd894e20"
+    },
+    {
+      "ledger_version": "20261001152633",
+      "ledger_name": "october_dated_consumer_corrections",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261001152633_october_dated_consumer_corrections.sql",
+      "sql_sha256": "6a15cf945b69429d5fe3243e0bf9112ef4940d104b6c3c6c71db6683c769eb0b"
+    },
+    {
+      "ledger_version": "20261001161831",
+      "ledger_name": "october_dated_review_authority_corrections",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261001161831_october_dated_review_authority_corrections.sql",
+      "sql_sha256": "0a6a72072e40a82f1a45b0b8b284e8970f68fcfdaa96b7ed143add547045d06f"
+    },
+    {
+      "ledger_version": "20261002050000",
+      "ledger_name": "feedback_email_intent_capture",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002050000_feedback_email_intent_capture.sql",
+      "sql_sha256": "62b6d5300c9a524ed773f05a0a294d2fb7e61a4cd269e4c2fe6ff9f95db2d90d"
+    },
+    {
+      "ledger_version": "20261002060000",
+      "ledger_name": "event_needs_review_isolation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002060000_event_needs_review_isolation.sql",
+      "sql_sha256": "ac1b6000c5e5f52266bd5fc57cb1d82ebdbb5e22618befcb5a18848ee34c90a6"
+    },
+    {
+      "ledger_version": "20261002070000",
+      "ledger_name": "feedback_email_relay_boundary",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002070000_feedback_email_relay_boundary.sql",
+      "sql_sha256": "21a75ed75caa204d8f94c7fde7096c03ea675855259361b06c6cd0caadcb6cd4"
+    },
+    {
+      "ledger_version": "20261002080000",
+      "ledger_name": "event_manager_revision_compare_and_swap",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002080000_event_manager_revision_compare_and_swap.sql",
+      "sql_sha256": "8f11bd7bc52cf973f7bb3abbc3d387531f2c23f81114708522503c76b7604e46"
+    },
+    {
+      "ledger_version": "20261002090000",
+      "ledger_name": "manager_issue_outcomes",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002090000_manager_issue_outcomes.sql",
+      "sql_sha256": "1746b47a53e1f03ab66d373e3e94046b1319f89af5e1e83222c2300ae5d9e6cd"
+    },
+    {
+      "ledger_version": "20261002100000",
+      "ledger_name": "place_lifecycle_authority",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002100000_place_lifecycle_authority.sql",
+      "sql_sha256": "ced37a6298b0d80188675ffe2d6c31c0df1454cb228037ff0c091c7a03e7b5aa"
+    },
+    {
+      "ledger_version": "20261002110000",
+      "ledger_name": "event_impact_preview_and_custodial_notes",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002110000_event_impact_preview_and_custodial_notes.sql",
+      "sql_sha256": "a85957778f111e3a64c4ba43be58db8b30e1c5293cd5adad5884d331b4d937ee"
+    },
+    {
+      "ledger_version": "20261002120000",
+      "ledger_name": "october_dated_recovery_inventory_rebind",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002120000_october_dated_recovery_inventory_rebind.sql",
+      "sql_sha256": "688e336bc4b985bbc5ba0847f9d6c0e0f64fc05bf027d217f95e3778649d9a16"
+    },
+    {
+      "ledger_version": "20261002130000",
+      "ledger_name": "native_provider_clock_transport",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002130000_native_provider_clock_transport.sql",
+      "sql_sha256": "741b231b014d6123dffc5b537ecb1b44a840bd65eca8e1d4a033bdbeb64cf777"
+    },
+    {
+      "ledger_version": "20261002140000",
+      "ledger_name": "event_supersession_and_chicago_instants",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002140000_event_supersession_and_chicago_instants.sql",
+      "sql_sha256": "2e8ca5217c668daefe81ead57a28ad2c2cfb6671cc976b0f39d8894240cdc14a"
+    },
+    {
+      "ledger_version": "20261002150000",
+      "ledger_name": "feedback_delivery_readback",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002150000_feedback_delivery_readback.sql",
+      "sql_sha256": "acbf3c651f2134cadf960bf66db816cdab8c90bda7c83974a30d65cf5bed2468"
+    },
+    {
+      "ledger_version": "20261002160000",
+      "ledger_name": "place_event_venue_bridge",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002160000_place_event_venue_bridge.sql",
+      "sql_sha256": "6ce6a61985d99ed56c54c128b2dad28c08eadba952ee6e5b674d2c4ca6657422"
+    },
+    {
+      "ledger_version": "20261002170000",
+      "ledger_name": "event_cancellation_cas_restore",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002170000_event_cancellation_cas_restore.sql",
+      "sql_sha256": "4f4b506f239c3f41d430b34f9f39a16847fc7becb8e665dc5147e499a5866217"
+    },
+    {
+      "ledger_version": "20261002180000",
+      "ledger_name": "native_provider_location_reservation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002180000_native_provider_location_reservation.sql",
+      "sql_sha256": "5ac7d3eb62a415edaed19feb3c1e2552cf95a6e75c1121a1cfe5d1e883d9fcf0"
+    },
+    {
+      "ledger_version": "20261002200000",
+      "ledger_name": "place_operational_metadata_bridge",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002200000_place_operational_metadata_bridge.sql",
+      "sql_sha256": "00c5852cabd0e9b296064a6ae38853fba011a6b3571c279fc7f66ad4a4f911e4"
+    },
+    {
+      "ledger_version": "20261002210000",
+      "ledger_name": "event_place_overlay_admission",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002210000_event_place_overlay_admission.sql",
+      "sql_sha256": "2897af88ae8499a4e2b16c3e88bd072887d6b068a7c3a446ea41a5662b48ddd5"
+    },
+    {
+      "ledger_version": "20261002220000",
+      "ledger_name": "feedback_relay_preflight_and_reconciliation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002220000_feedback_relay_preflight_and_reconciliation.sql",
+      "sql_sha256": "2273f6e05074d74e8c51322217c6ccf6f71ac42cbc72a3e2de589159618f4ede"
+    },
+    {
+      "ledger_version": "20261002230000",
+      "ledger_name": "feedback_protected_attachment_admission",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261002230000_feedback_protected_attachment_admission.sql",
+      "sql_sha256": "34b0658726218d3db75d9d9d979a3ab6ea3143d8a7f53b1bfc2bf8da18eeaf6d"
+    },
+    {
+      "ledger_version": "20261003000000",
+      "ledger_name": "memphis_current_schedule_day",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003000000_memphis_current_schedule_day.sql",
+      "sql_sha256": "fb42ea74db34f71fecdc4e6eaaed7aeec239091099969bb755864b53192a4534"
+    },
+    {
+      "ledger_version": "20261003010000",
+      "ledger_name": "native_location_lifecycle",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003010000_native_location_lifecycle.sql",
+      "sql_sha256": "e0512cb5dcc284b18a92b666c495ada7cf956c2f4cce2b3753e7acbd066b0211"
+    },
+    {
+      "ledger_version": "20261003030000",
+      "ledger_name": "place_operational_name_adoption",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003030000_place_operational_name_adoption.sql",
+      "sql_sha256": "b59b337e081f23b8feb72130fae70e85d4dfd623723b8ca289946a6bbbefb572"
+    },
+    {
+      "ledger_version": "20261003050000",
+      "ledger_name": "native_provider_events",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003050000_native_provider_events.sql",
+      "sql_sha256": "cb665620d9612b0f6e7e4d15ace7aebc55a8a473ddf7ee88524bb4ca149d1e17"
+    },
+    {
+      "ledger_version": "20261003060000",
+      "ledger_name": "event_notification_current_projection",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003060000_event_notification_current_projection.sql",
+      "sql_sha256": "31641c1a4363f289bc2bfa59793444102da5a7bf6e6d0621d010b54c224c2370"
+    },
+    {
+      "ledger_version": "20261003070000",
+      "ledger_name": "feedback_triage_receipts",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003070000_feedback_triage_receipts.sql",
+      "sql_sha256": "d9d19c2400c3d98f3819976ae557efc3e1cc5efcba4e6addc0c01d02dcdac234"
+    },
+    {
+      "ledger_version": "20261003080000",
+      "ledger_name": "native_location_dispatch_and_ack",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003080000_native_location_dispatch_and_ack.sql",
+      "sql_sha256": "d9713b8df261c5a9e2dd32493d6e3b3ae4094755abed4fee8ea65bed13233cfc"
+    },
+    {
+      "ledger_version": "20261003120000",
+      "ledger_name": "completion_taxonomy_evidence",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003120000_completion_taxonomy_evidence.sql",
+      "sql_sha256": "a732bcd9077aa98b263a39e7ce29edd61a084db843c0ef02b84f6c2cd78890bf"
+    },
+    {
+      "ledger_version": "20261003121757",
+      "ledger_name": "employee_message_source_admission",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003121757_employee_message_source_admission.sql",
+      "sql_sha256": "20ff06f8c0c5e82814189e1e2969b928ffa48eb1181098a73156962dc9ac1e7f"
+    },
+    {
+      "ledger_version": "20261003140000",
+      "ledger_name": "static_weekly_nonemployee_contractor_capacity",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003140000_static_weekly_nonemployee_contractor_capacity.sql",
+      "sql_sha256": "8ae8467900940a76b296030f630fbc610b7d21d619661a13d8caee32c4d8ddca"
+    },
+    {
+      "ledger_version": "20261003143000",
+      "ledger_name": "issue_constraint_index_recovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003143000_issue_constraint_index_recovery.sql",
+      "sql_sha256": "651d9c0562fc6fce55d1a76553e3f1016ef2bf52d879773101e551923b757276"
+    },
+    {
+      "ledger_version": "20261003150000",
+      "ledger_name": "native_provider_interval_protocol",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003150000_native_provider_interval_protocol.sql",
+      "sql_sha256": "cb94f7cd6dd949407a936a2c6915bd0ef0972fb79a1cf89b2e480d628c50b194"
+    },
+    {
+      "ledger_version": "20261003160000",
+      "ledger_name": "static_weekly_contractor_capacity_extension",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003160000_static_weekly_contractor_capacity_extension.sql",
+      "sql_sha256": "3c6ec864d7b2bdd6264e44225a9c3e25c98a6fe522645bfdc5fad020e5877ac7"
+    },
+    {
+      "ledger_version": "20261003170000",
+      "ledger_name": "native_target_source_projection",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003170000_native_target_source_projection.sql",
+      "sql_sha256": "e9d998154190b1156009311c9c241b418b15c4d9c029c22186c49df5cf691b5c"
+    },
+    {
+      "ledger_version": "20261003190000",
+      "ledger_name": "static_weekly_capacity_current_source_bridge",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003190000_static_weekly_capacity_current_source_bridge.sql",
+      "sql_sha256": "4454a7048e7845f39bb372397dd52bcb247de5fa68ec81f3fad01cc6186aa716"
+    },
+    {
+      "ledger_version": "20261003193000",
+      "ledger_name": "coverall_event_brief_private_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003193000_coverall_event_brief_private_reader.sql",
+      "sql_sha256": "c4b3ef269efad069b684ccfb2ebaf72923f87200d0093a3e5c46daba930ea318"
+    },
+    {
+      "ledger_version": "20261003194000",
+      "ledger_name": "native_lunch_delivery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003194000_native_lunch_delivery.sql",
+      "sql_sha256": "22ef0f716accbd8c2222a117ba876a04631163399ec5619418ddc2e0835f156b"
+    },
+    {
+      "ledger_version": "20261003210000",
+      "ledger_name": "static_weekly_splash_season_gate",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003210000_static_weekly_splash_season_gate.sql",
+      "sql_sha256": "2f17a1d235f7da72cd0db6372a76793b6860490bf5fb2688240dc883102a78bd"
+    },
+    {
+      "ledger_version": "20261003211000",
+      "ledger_name": "static_weekly_splash_source_retention",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003211000_static_weekly_splash_source_retention.sql",
+      "sql_sha256": "c03305a1da6f03db6e5a737e9605cb28b594703c5a3f14778b2575fdeb124eba"
+    },
+    {
+      "ledger_version": "20261003220000",
+      "ledger_name": "current_release_authority_completion",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003220000_current_release_authority_completion.sql",
+      "sql_sha256": "2121d2b2dbedc40b6345bcefcaf3f4cf7ed4ec22617c54f727a405c9e5a93332"
+    },
+    {
+      "ledger_version": "20261003230000",
+      "ledger_name": "static_weekly_named_handoff_derivation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261003230000_static_weekly_named_handoff_derivation.sql",
+      "sql_sha256": "ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500"
+    },
+    {
+      "ledger_version": "20261004000000",
+      "ledger_name": "native_provider_event_decision_lookup",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261004000000_native_provider_event_decision_lookup.sql",
+      "sql_sha256": "ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd"
+    },
+    {
+      "ledger_version": "20261004140657",
+      "ledger_name": "approved_static_template_authority",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261004140657_approved_static_template_authority.sql",
+      "sql_sha256": "23f311b1d506c0d5ad3c0f04554a2388956f4fd8539af42e96107b1c07afa5b4"
+    },
+    {
+      "ledger_version": "20261004150151",
+      "ledger_name": "native_alert_two_stage_preparation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261004150151_native_alert_two_stage_preparation.sql",
+      "sql_sha256": "ac72bda04ba89560117b04e8939f3d17b2eb65b0002b107c36f96436a02600eb"
+    },
+    {
+      "ledger_version": "20261004150425",
+      "ledger_name": "native_alert_finalization",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261004150425_native_alert_finalization.sql",
+      "sql_sha256": "ff3cd8d783543702ca4e74d8ab6bd1d690c3c00b826ccbcec336adc2117b6699"
+    },
+    {
+      "ledger_version": "20261004161015",
+      "ledger_name": "native_alert_provider_inventory_events",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261004161015_native_alert_provider_inventory_events.sql",
+      "sql_sha256": "d4d96265a5595272f4ac8dc2d5dc35c167611bc312ffefd3621a6c320e14e2ba"
+    },
+    {
+      "ledger_version": "20261005113826",
+      "ledger_name": "native_alert_original_decisions",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261005113826_native_alert_original_decisions.sql",
+      "sql_sha256": "dbe1df87aead707e2e59e429bf5d40b7f1d5988d52afda7dfc78c4925181fc97"
+    },
+    {
+      "ledger_version": "20261005115223",
+      "ledger_name": "overdue_popup_stops_at_scan_start",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261005115223_overdue_popup_stops_at_scan_start.sql",
+      "sql_sha256": "8647da0e9f78a6ca273c9463589acde1cb306c0bb1be99bba7d48b84d2f4f3ae"
+    },
+    {
+      "ledger_version": "20261006034155",
+      "ledger_name": "custodial_owner_delegated_actions",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006031304_custodial_owner_delegated_actions.sql",
+      "sql_sha256": "4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1"
+    },
+    {
+      "ledger_version": "20261006113610",
+      "ledger_name": "custodial_shared_events_outlook",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006113610_custodial_shared_events_outlook.sql",
+      "sql_sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001"
+    },
+    {
+      "ledger_version": "20261006162427",
+      "ledger_name": "custodial_shared_events_recovery_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006162427_custodial_shared_events_recovery_binding.sql",
+      "sql_sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+    },
+    {
+      "ledger_version": "20261006172928",
+      "ledger_name": "custodial_manager_scheduler_permissions",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006172928_custodial_manager_scheduler_permissions.sql",
+      "sql_sha256": "f4cf312cd905e82181e4b376948c0fb309fd70c575a066934f843e41a17c8d12"
+    },
+    {
+      "ledger_version": "20261006190426",
+      "ledger_name": "manager_scheduler_recovery_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006190426_manager_scheduler_recovery_binding.sql",
+      "sql_sha256": "178cc832516e2aa78835b8441da04fe801204caf123477e3c7a6eda5dc405906"
+    },
+    {
+      "ledger_version": "20261006203931",
+      "ledger_name": "custodial_delegated_coverall",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006203931_custodial_delegated_coverall.sql",
+      "sql_sha256": "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475"
+    },
+    {
+      "ledger_version": "20261006211215",
+      "ledger_name": "preserved_coverall_validator_recovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261006211215_preserved_coverall_validator_recovery.sql",
+      "sql_sha256": "2a47538c6c202482711e0ff80516c8a62a7acdf993302b3b3ef3dc0d3a237399"
+    },
+    {
+      "ledger_version": "20261007104735",
+      "ledger_name": "native_alert_inventory_guard_recovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261007104735_native_alert_inventory_guard_recovery.sql",
+      "sql_sha256": "a7e28742590fc62bc49bbceb349bd47b1481e3efb347ed1e97f0d6358b790195"
+    },
+    {
+      "ledger_version": "20261007161645",
+      "ledger_name": "approved_initial_selection_metadata",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261007161645_approved_initial_selection_metadata.sql",
+      "sql_sha256": "48f78ed71206c475fb9097f34abcb1358d78ceefb1949772f445dd3511b97999"
+    },
+    {
+      "ledger_version": "20261008032718",
+      "ledger_name": "native_lunch_spoken_accepted_duties",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008032718_native_lunch_spoken_accepted_duties.sql",
+      "sql_sha256": "4df71a1c903b39b8378ec12c5c0b68c873427474b109671bfcbe669b3e92ea4e"
+    },
+    {
+      "ledger_version": "20261008053837",
+      "ledger_name": "native_schedule_lunch_recipient_source",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008053837_native_schedule_lunch_recipient_source.sql",
+      "sql_sha256": "fc207c1b57592c15595be03671825ae42f8801e5634e4f8d7444b0ce3d6764ed"
+    },
+    {
+      "ledger_version": "20261008064748",
+      "ledger_name": "native_schedule_server_source_window",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008064748_native_schedule_server_source_window.sql",
+      "sql_sha256": "39623f94c0b10d0882640bc8dad5c4c12ae87756d4746f548edfe6616f5182b1"
+    },
+    {
+      "ledger_version": "20261008075109",
+      "ledger_name": "native_schedule_source_reservation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008075109_native_schedule_source_reservation.sql",
+      "sql_sha256": "5f1ecc1175729df13d381227cf54644cf7edbfe3351a372370971e4ea721ac50"
+    },
+    {
+      "ledger_version": "20261008083139",
+      "ledger_name": "native_schedule_content_source",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008083139_native_schedule_content_source.sql",
+      "sql_sha256": "70ededd08ce9db86db7d3255dba4b797ae80f2f4437d3bf14e66bbe6aafcec8e"
+    },
+    {
+      "ledger_version": "20261008095837",
+      "ledger_name": "native_schedule_server_finalization",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008095837_native_schedule_server_finalization.sql",
+      "sql_sha256": "5c180b74a81cddfb5055668a26ae0cfddc805b81b3edd8686f00fe822d7aa4e9"
+    },
+    {
+      "ledger_version": "20261008102957",
+      "ledger_name": "native_schedule_inventory",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008102957_native_schedule_inventory.sql",
+      "sql_sha256": "55c88058b165eaaf889a62f1a6eefe5e44f6d4a7b14a9c811d8726bcd30d09a6"
+    },
+    {
+      "ledger_version": "20261008111355",
+      "ledger_name": "native_schedule_observation_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008111355_native_schedule_observation_binding.sql",
+      "sql_sha256": "9bb421c182795b160ca45f92cdb95c453c0c62118619dc66b1009bb553833761"
+    },
+    {
+      "ledger_version": "20261008115557",
+      "ledger_name": "native_schedule_job_preparation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008115557_native_schedule_job_preparation.sql",
+      "sql_sha256": "fa81126b7674ad6327d46399659c843eeefd71b4dd1e6e53f70f3b96bf05af45"
+    },
+    {
+      "ledger_version": "20261008122247",
+      "ledger_name": "native_schedule_attempt_outcome",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008122247_native_schedule_attempt_outcome.sql",
+      "sql_sha256": "60cbe8e4c4103adfbc0d17196c8634e5995a107eb127c707c4c210c2af13bb00"
+    },
+    {
+      "ledger_version": "20261008124644",
+      "ledger_name": "native_schedule_sender_inventory",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008124644_native_schedule_sender_inventory.sql",
+      "sql_sha256": "12c6d0a5108569e64b014ada39b8444921019e26431be5c287a2382374a546a0"
+    },
+    {
+      "ledger_version": "20261008135429",
+      "ledger_name": "native_schedule_source_discovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008135429_native_schedule_source_discovery.sql",
+      "sql_sha256": "c99c64ce08b90b068133c656ea3e0166a2ac19737a23cd1c5003ca20058e92cb"
+    },
+    {
+      "ledger_version": "20261008142316",
+      "ledger_name": "native_schedule_preparation_source",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008142316_native_schedule_preparation_source.sql",
+      "sql_sha256": "10e6712d3ad8251e51709d6912ddb6f243f0d0a269f8b91263bf89039678c4c7"
+    },
+    {
+      "ledger_version": "20261008205342",
+      "ledger_name": "native_target_source_kind_guard",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261008205342_native_target_source_kind_guard.sql",
+      "sql_sha256": "dfab42ea761f92fbfef0a03996782fd0825fc01427c4097a5dc9b9002a8ae051"
+    },
+    {
+      "ledger_version": "20261009033647",
+      "ledger_name": "protected_separation_original_generation_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261009033647_protected_separation_original_generation_reader.sql",
+      "sql_sha256": "0b088239de2befd5711b1e83be056f7bebcd23e808149e0ba18564083bf0514c"
+    },
+    {
+      "ledger_version": "20261009052125",
+      "ledger_name": "native_schedule_exact_recovery_identities",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261009052125_native_schedule_exact_recovery_identities.sql",
+      "sql_sha256": "8e8ff4080efe401df4bded1de5651bdc403e186487b8cc781d82c1924856104d"
+    },
+    {
+      "ledger_version": "20261009092054",
+      "ledger_name": "retained_original_native_evidence_intake",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261009092054_retained_original_native_evidence_intake.sql",
+      "sql_sha256": "a479c5047824cd7b16639b845cd6786cee13724b1300669a33ef93702a383837"
+    },
+    {
+      "ledger_version": "20261009191246",
+      "ledger_name": "retained_original_native_value_chunks",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261009191246_retained_original_native_value_chunks.sql",
+      "sql_sha256": "56cf1b0bffc34f3c5691ab909c69281b231abaabdfdf038a555559378da7ff1e"
+    },
+    {
+      "ledger_version": "20261010193211",
+      "ledger_name": "native_private_custody_chunk_retention",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261010193211_native_private_custody_chunk_retention.sql",
+      "sql_sha256": "fffd25207dc1f7c1953bafe2dc23d4867c79724c4ed4f19995e36d3a71c95653"
+    },
+    {
+      "ledger_version": "20261011000206",
+      "ledger_name": "native_private_custody_complete_frame_readback",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261011000206_native_private_custody_complete_frame_readback.sql",
+      "sql_sha256": "ac22e6cce896c87cf754022ee565815811fbb04e58b00fde278efc835a665889"
+    },
+    {
+      "ledger_version": "20261011121818",
+      "ledger_name": "custodial_held_event_correction_v2",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261011121818_custodial_held_event_correction_v2.sql",
+      "sql_sha256": "9a71543fd9e2d8797ea16f96b8ec73ab46d59b0de81e1b4d29e2ec44ecb956d0"
+    },
+    {
+      "ledger_version": "20261011150049",
+      "ledger_name": "staffing_original_outcome_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261011150049_staffing_original_outcome_reader.sql",
+      "sql_sha256": "fbed2fec6e4292a0e8e88cce9d8abd5964b443fb2cb4c7a04af4bb0d82b8fbac"
+    },
+    {
+      "ledger_version": "20261011214943",
+      "ledger_name": "custodial_feedback_triage_receipt_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261011214943_custodial_feedback_triage_receipt_reader.sql",
+      "sql_sha256": "ffc4bbe60bdd7986b3553d430dab96ec819c9846806553793ae939500ebb5910"
+    },
+    {
+      "ledger_version": "20261011214944",
+      "ledger_name": "custodial_feedback_triage_receipt_recovery_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261011214944_custodial_feedback_triage_receipt_recovery_binding.sql",
+      "sql_sha256": "378ab1007b09f319331d3ca26b9e1e20e18e770e58e26aa580c920094c92e280"
+    },
+    {
+      "ledger_version": "20261012000449",
+      "ledger_name": "staffing_prepared_preview_bound_fields",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012000449_staffing_prepared_preview_bound_fields.sql",
+      "sql_sha256": "aecfd950a23d61ead5fda7c09a59013f09db8869ade352b3f2fe16404a7f2a67"
+    },
+    {
+      "ledger_version": "20261012001357",
+      "ledger_name": "staffing_nonemployee_refresh_identity",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012001357_staffing_nonemployee_refresh_identity.sql",
+      "sql_sha256": "1306d7d80e4c02c5b41b4daebdbd3f4f6733741e0730a36bfc84b0bf15f25c3e"
+    },
+    {
+      "ledger_version": "20261012004258",
+      "ledger_name": "staffing_absence_cancellation_target_fields",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012004258_staffing_absence_cancellation_target_fields.sql",
+      "sql_sha256": "9b8178cf4c18322da053b06ea57ae7cbe287ed7961fd7b7650042f0f584e8709"
+    },
+    {
+      "ledger_version": "20261012023928",
+      "ledger_name": "staffing_original_target_current_plan_cancellation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012023928_staffing_original_target_current_plan_cancellation.sql",
+      "sql_sha256": "a4a25afb8715d82f2f5e03f4ede9504fcb0882c26920af30ea84bb02557e7703"
+    },
+    {
+      "ledger_version": "20261012043840",
+      "ledger_name": "staffing_vacancy_original_plan_readback",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012043840_staffing_vacancy_original_plan_readback.sql",
+      "sql_sha256": "02e4e30310c68a514c7d024532baae655e9790d200dfb80f606d6fa3a05e4417"
+    },
+    {
+      "ledger_version": "20261012052430",
+      "ledger_name": "employee_event_open_original_receipt",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012052430_employee_event_open_original_receipt.sql",
+      "sql_sha256": "bd31605b4fe10a1a57f6e46f5e510a44bd12fcf385b53a3c4d1e6a8cfe893a00"
+    },
+    {
+      "ledger_version": "20261012063248",
+      "ledger_name": "staffing_vacancy_reviewed_preparation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "sql_sha256": "1dd73eca8c1042096d0cf2d9b3a69bb6afa710e467389899b99ee33ecdbc821c"
+    },
+    {
+      "ledger_version": "20261012070515",
+      "ledger_name": "employee_event_open_service_date_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012070515_employee_event_open_service_date_binding.sql",
+      "sql_sha256": "11bfe9ece8a4ad20fadc68a0abff5bea1b91a51def3a3d5725de3550a0a9d5b4"
+    },
+    {
+      "ledger_version": "20261012142853",
+      "ledger_name": "original_completion_protected_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012142853_original_completion_protected_reader.sql",
+      "sql_sha256": "c4c39b1a7e79eba40680e6ad43a8e213c7e205117eee48c44b15d7feeb5a9280"
+    },
+    {
+      "ledger_version": "20261012211736",
+      "ledger_name": "custodial_employee_message_original_outcomes",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261012211736_custodial_employee_message_original_outcomes.sql",
+      "sql_sha256": "9ae81a6a52e1a706ec0d18e08b901108e0ff20c0d22d99a63da60216f8bdcd44"
+    },
+    {
+      "ledger_version": "20261013113033",
+      "ledger_name": "gemini_original_turn_preservation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261013113033_gemini_original_turn_preservation.sql",
+      "sql_sha256": "33249306963b02d90e84e56f06bfe2d852c2009e869f7b50b8c8d87b91f712f4"
+    },
+    {
+      "ledger_version": "20261013171946",
+      "ledger_name": "messenger_original_group_creation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261013171946_messenger_original_group_creation.sql",
+      "sql_sha256": "e3cd2f32d0482e8578d109507256c944f054eecda502fc12996e205d9ede52e7"
+    },
+    {
+      "ledger_version": "20261014000624",
+      "ledger_name": "same_original_recovery_preparation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261014000624_same_original_recovery_preparation.sql",
+      "sql_sha256": "3c6506413076bc39a0bae52a281ffd7da0d7683f30c3df1a1a21367e3c7361cb"
+    },
+    {
+      "ledger_version": "20261014010337",
+      "ledger_name": "same_original_recovery_target_read",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261014010337_same_original_recovery_target_read.sql",
+      "sql_sha256": "f91331d9f179a41c4ee81e3535c3503ae042e0203d1b6238d23947be8cd48abb"
+    },
+    {
+      "ledger_version": "20261014024357",
+      "ledger_name": "same_original_native_challenge_registration",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261014024357_same_original_native_challenge_registration.sql",
+      "sql_sha256": "20b181b6021fb73b4e72eaafbc4e2e2486c3e7c85aa2f898eb9700d85e6a66ae"
+    },
+    {
+      "ledger_version": "20261014031928",
+      "ledger_name": "same_original_native_registration_status",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261014031928_same_original_native_registration_status.sql",
+      "sql_sha256": "d5a559cb102b31ee7553e618655666c43b034492794e2df3b59f5dd3007e6965"
+    },
+    {
+      "ledger_version": "20261014143050",
+      "ledger_name": "same_original_current_manager_preparation_read",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261014143050_same_original_current_manager_preparation_read.sql",
+      "sql_sha256": "10eea4b25e210d345382f7c89c3a82fda2273a3b486532ffe6fc70cb5d39bd2e"
+    },
+    {
+      "ledger_version": "20261015040830",
+      "ledger_name": "same_original_retained_completion_read",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261015040830_same_original_retained_completion_read.sql",
+      "sql_sha256": "18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d"
+    },
+    {
+      "ledger_version": "20261016095134",
+      "ledger_name": "native_original_inventory_request_registration",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016095134_native_original_inventory_request_registration.sql",
+      "sql_sha256": "c0d0f2b0aa9bd7a98adeb4b7a460256c2cc57b5edd748fdf3778504bf9fd7041"
+    },
+    {
+      "ledger_version": "20261016103024",
+      "ledger_name": "native_original_inventory_request_status_read",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016103024_native_original_inventory_request_status_read.sql",
+      "sql_sha256": "e181509806947b79d00bc43a3472fadf46512b5983876f9a093cafc7a7a37aa6"
+    },
+    {
+      "ledger_version": "20261016111320",
+      "ledger_name": "native_inventory_current_confirmation_guard",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016111320_native_inventory_current_confirmation_guard.sql",
+      "sql_sha256": "760877770d9739ec041d8cefa7d20f48ef771dc4f9437c3c09264d2b0be0c4c3"
+    },
+    {
+      "ledger_version": "20261016121857",
+      "ledger_name": "native_original_inventory_manifest_chunks",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016121857_native_original_inventory_manifest_chunks.sql",
+      "sql_sha256": "4f3687fe9a35376b5859c90b3c33f417bd6d87ec41658fb53f6d79d2d51d84ce"
+    },
+    {
+      "ledger_version": "20261016133120",
+      "ledger_name": "native_original_inventory_manager_manifest_read",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016133120_native_original_inventory_manager_manifest_read.sql",
+      "sql_sha256": "7acafd2bd12cedc790aafb4fb696ba6326eb20f530f98fc6f7e6ab1b89d89827"
+    },
+    {
+      "ledger_version": "20261016140703",
+      "ledger_name": "native_original_inventory_semantic_review",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016140703_native_original_inventory_semantic_review.sql",
+      "sql_sha256": "e61de073f2374bea3305ad23fa06fa22c9d2f1ef9f5c25115e8b98bb0ccbf0e8"
+    },
+    {
+      "ledger_version": "20261016143226",
+      "ledger_name": "native_original_inventory_manager_decision",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261016143226_native_original_inventory_manager_decision.sql",
+      "sql_sha256": "ec4d2920dc99830d217a7e179a3696e487d6ebe6170801f9f53112b9ccc00d79"
+    },
+    {
+      "ledger_version": "20261017200958",
+      "ledger_name": "approved_static_original_confirmation_receipts",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261017200958_approved_static_original_confirmation_receipts.sql",
+      "sql_sha256": "2a093cd4ef89d4e77f911b7a12c68db717a2dba298da35e565c84fee387156e8"
+    },
+    {
+      "ledger_version": "20261017201251",
+      "ledger_name": "approved_static_current_basis_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261017201251_approved_static_current_basis_binding.sql",
+      "sql_sha256": "905f654a03cf25b78799cc5102beb8fbb074b5993cd1cfd0f3ddac71ddf4a629"
+    },
+    {
+      "ledger_version": "20261017225101",
+      "ledger_name": "approved_static_dated_original_materialization",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261017225101_approved_static_dated_original_materialization.sql",
+      "sql_sha256": "7bb4e47bd18487a150f422a6a9dbe335e76e5f0309073e7ad4fa982adf8d9454"
+    },
+    {
+      "ledger_version": "20261018151858",
+      "ledger_name": "registered_never_filled_vacancy_source_recovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+      "sql_sha256": "4f31bf55eb23e3e29b99000b4ff138e9c8cc735699b67129b583dcdc1000c60b"
+    },
+    {
+      "ledger_version": "20261018161845",
+      "ledger_name": "approved_static_pending_staffing_original_recovery",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261018161845_approved_static_pending_staffing_original_recovery.sql",
+      "sql_sha256": "b14504a2b97890944be54f4be5762c3f0dbd653cc14748da3777bc47357cfca5"
+    },
+    {
+      "ledger_version": "20261021111917",
+      "ledger_name": "dashboard_application_reader_operational_day_repair",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261021111917_dashboard_application_reader_operational_day_repair.sql",
+      "sql_sha256": "be68ea76fb70c183c63986307759c21ababa4b5f6aac53b01532abdb5efa267e"
+    },
+    {
+      "ledger_version": "20261021124949",
+      "ledger_name": "dashboard_independent_verified_check_reader",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261021124949_dashboard_independent_verified_check_reader.sql",
+      "sql_sha256": "fc57bbd278fea04890721ed2d15ca8799c58b5b2bae7de14bb40b8d4847d131a"
+    },
+    {
+      "ledger_version": "20261022041249",
+      "ledger_name": "original_schedule_delivery_outcome",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261022041249_original_schedule_delivery_outcome.sql",
+      "sql_sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1"
+    },
+    {
+      "ledger_version": "20261022071830",
+      "ledger_name": "recurring_normal_notification_plan",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261022071830_recurring_normal_notification_plan.sql",
+      "sql_sha256": "f3083dba31b1973cd42692362ceda5e4c08d505c063ceb505c75214dd4e16c95"
+    },
+    {
+      "ledger_version": "20261025094420",
+      "ledger_name": "authority_identity_renderer_counterparts",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261025094420_authority_identity_renderer_counterparts.sql",
+      "sql_sha256": "0e7b14e1e6ec1b60cab5a4d00f97491a4ae0fd8386c68d9b3c49b84f50c5ddd0"
+    },
+    {
+      "ledger_version": "20261025124437",
+      "ledger_name": "manager_completion_evidence_opaque_session_domain",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+      "sql_sha256": "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
+    },
+    {
+      "ledger_version": "20261026065000",
+      "ledger_name": "location_scan_state_qualified_lookup",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261026065000_location_scan_state_qualified_lookup.sql",
+      "sql_sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
+    },
+    {
+      "ledger_version": "20261027230000",
+      "ledger_name": "accepted_actual_lunch_windows",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261027230000_accepted_actual_lunch_windows.sql",
+      "sql_sha256": "55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b"
+    },
+    {
+      "ledger_version": "20261027231000",
+      "ledger_name": "canonical_coverall_capacity_links",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261027231000_canonical_coverall_capacity_links.sql",
+      "sql_sha256": "c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903"
+    },
+    {
+      "ledger_version": "20261027234814",
+      "ledger_name": "mcp_oauth_durable_token_families",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261027234814_mcp_oauth_durable_token_families.sql",
+      "sql_sha256": "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
+    },
+    {
+      "ledger_version": "20261028224728",
+      "ledger_name": "full_scheduled_lunch_source_policy",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261028224728_full_scheduled_lunch_source_policy.sql",
+      "sql_sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514"
+    },
+    {
+      "ledger_version": "20261030031200",
+      "ledger_name": "approved_manual_full_hour_coverers",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261030031200_approved_manual_full_hour_coverers.sql",
+      "sql_sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+    },
+    {
+      "ledger_version": "20261030050235",
+      "ledger_name": "compact_approved_initial_confirmation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261030050235_compact_approved_initial_confirmation.sql",
+      "sql_sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
+    },
+    {
+      "ledger_version": "20261030155202",
+      "ledger_name": "approved_manual_current_day_activation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261030155202_approved_manual_current_day_activation.sql",
+      "sql_sha256": "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492"
+    },
+    {
+      "ledger_version": "20261031125902",
+      "ledger_name": "approved_manual_native_operations",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261031125902_approved_manual_native_operations.sql",
+      "sql_sha256": "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d"
+    },
+    {
+      "ledger_version": "20261031180631",
+      "ledger_name": "cohort_ticket_transaction_context",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261031180631_cohort_ticket_transaction_context.sql",
+      "sql_sha256": "063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b"
+    },
+    {
+      "ledger_version": "20261031225210",
+      "ledger_name": "custodial_sealed_repairs_current_eight",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261031225210_custodial_sealed_repairs_current_eight.sql",
+      "sql_sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73"
+    },
+    {
+      "ledger_version": "20261101034931",
+      "ledger_name": "custodial_completion_evidence_cohort_read",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261101034931_custodial_completion_evidence_cohort_read.sql",
+      "sql_sha256": "99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630"
+    },
+    {
+      "ledger_version": "20261101044239",
+      "ledger_name": "custodial_cohort_places_feedback",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261101044239_custodial_cohort_places_feedback.sql",
+      "sql_sha256": "d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78"
+    },
+    {
+      "ledger_version": "20261102000000",
+      "ledger_name": "unfinished_work_owner_attention",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261102000000_unfinished_work_owner_attention.sql",
+      "sql_sha256": "e8fb1bb569b653a53b05f52944a14ab232e5e0542eaeec30173a9194fd6ca835"
+    },
+    {
+      "ledger_version": "20261102010000",
+      "ledger_name": "local_retained_enrollment_partition",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261102010000_local_retained_enrollment_partition.sql",
+      "sql_sha256": "83f817a25ffe468c715323cf71f62a0c65cbe5a2fe68fde9d75903b55678a4d1"
+    },
+    {
+      "ledger_version": "20261102151842",
+      "ledger_name": "current_source_recovery_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261102151842_current_source_recovery_binding.sql",
+      "sql_sha256": "adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27"
+    },
+    {
+      "ledger_version": "20261102161602",
+      "ledger_name": "current_recovery_column_order",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261102161602_current_recovery_column_order.sql",
+      "sql_sha256": "018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300"
+    },
+    {
+      "ledger_version": "20261103004520",
+      "ledger_name": "authoritative_events_cancellation",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261103004520_authoritative_events_cancellation.sql",
+      "sql_sha256": "5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9"
+    },
+    {
+      "ledger_version": "20261104174218",
+      "ledger_name": "expired_unconsumed_assigned_activation_closure",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261104174218_expired_unconsumed_assigned_activation_closure.sql",
+      "sql_sha256": "acbdbc92b7f30fbbd77c77ba812117362827bb0d91f9edb306dfe0e99017ae6f"
+    },
+    {
+      "ledger_version": "20261110061622",
+      "ledger_name": "custodial_activation_digest_callsite_retention",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261110061622_custodial_activation_digest_callsite_retention.sql",
+      "sql_sha256": "88e26d3b6c9a11b54c9482880beb282d3af5aa82353ba1dd2115f539fcdab745"
+    },
+    {
+      "ledger_version": "20261110081920",
+      "ledger_name": "custodial_home_reader_projection_scope",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261110081920_custodial_home_reader_projection_scope.sql",
+      "sql_sha256": "0c078554624851d9314a4b3d0a32bc29ac05b31c19667c8ed61c01cc81ca44f1"
+    },
+    {
+      "ledger_version": "20261110235315",
+      "ledger_name": "active_cleaning_dashboard_status_precedence",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261110235315_active_cleaning_dashboard_status_precedence.sql",
+      "sql_sha256": "155cdc57039955cb05988ae6de620e8c2329a5364635fce92d2139a005aab98b"
+    },
+    {
+      "ledger_version": "20261110235935",
+      "ledger_name": "native_active_session_gps_binding",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261110235935_native_active_session_gps_binding.sql",
+      "sql_sha256": "4e2e53ccb2e98159900febcf9f03cf04718daa6a4353029f570576937fa7ae0c"
+    },
+    {
+      "ledger_version": "20261111024546",
+      "ledger_name": "memphis_native_schedule_format",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261111024546_memphis_native_schedule_format.sql",
+      "sql_sha256": "d27a71d115b5ec248362a86340337e743ecfeeb698fabcc7a24951f4cafda253"
+    },
+    {
+      "ledger_version": "20261111161430",
+      "ledger_name": "active_work_gps_reader_policy",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261111161430_active_work_gps_reader_policy.sql",
+      "sql_sha256": "6bc39e329941413b3487834e2a88f08d5d0cbbca77750983e4da71b5cdf48360"
+    },
+    {
+      "ledger_version": "20261113221252",
+      "ledger_name": "custodial_manual_event_cohort_intake",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261113221252_custodial_manual_event_cohort_intake.sql",
+      "sql_sha256": "0b3967d4feab8329f98bfe56007048f2417e6f9592cbe923a9565893518732ab"
+    }
+  ],
+  "source_bindings_sha256": "6ab7110f0eff144e59a52df350453e10f5776e2aaf59745d123c96412d046cbb"
+}
