@@ -3,20 +3,20 @@
   "service_id": "srv-d7fsvg57vvec73bhe2r0",
   "origin": "https://memphis-zoo-mcp.onrender.com",
   "receipt_source": "Existing Render connector exact deployment readback",
-  "original_receipt_sha256": "3f1aea705f042d44fa75a7136b81bef5a6df1b19807ba3c992b3ca33b5e8d5ba",
-  "observed_at": "2026-11-13T23:14:12.654Z",
+  "original_receipt_sha256": "812d453ba76e40bb7a188e0b0f161c38a39a1f14dcd0d4fda0a1d07b277f4b22",
+  "observed_at": "2026-11-14T05:47:00.524Z",
   "deployment": {
     "commit": {
-      "createdAt": "2026-11-13T23:03:22Z",
-      "id": "c6ef88e00ebd404de2d8645b471479c79556909a",
-      "message": "Bind release evidence to complete qualified v80 backend runtime"
+      "createdAt": "2026-11-14T04:36:33Z",
+      "id": "4c00e1177275d6879adbd8d2dd82287ccd8105d7",
+      "message": "Bind backend source evidence for Basecamp duty reader"
     },
-    "createdAt": "2026-11-13T23:12:07.576342Z",
-    "finishedAt": "2026-11-13T23:12:53.163132Z",
-    "id": "dep-dbrpihp9aqoc739hru90",
-    "startedAt": "2026-11-13T23:12:07.826628Z",
+    "createdAt": "2026-11-14T05:34:22.177448Z",
+    "finishedAt": "2026-11-14T05:35:07.398236Z",
+    "id": "dep-dbrv5nl6e07s738c2k9g",
+    "startedAt": "2026-11-14T05:34:22.148483Z",
     "status": "live",
     "trigger": "api",
-    "updatedAt": "2026-11-13T23:13:21.37409Z"
+    "updatedAt": "2026-11-14T05:35:34.422685Z"
   }
 }
