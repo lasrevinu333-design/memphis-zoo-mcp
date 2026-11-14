@@ -41,7 +41,7 @@ export function verifyBasecampCiInputs(root){
  const projected=actual.map(line=>line.includes('--consumer owner ')?'node scripts/owner-actions-database-tests.mjs':line);
  assert.deepEqual(projected,ownerCommands,'every owning test remains called once in the original order');
 
- assert.equal(sha(readFileSync(resolve(root,'scripts/current-owned-sql-ci-entry.py'))),'612379ec137abefc89903e4b970404ada2388e47da1e3414e8ce4b44ce4f4a01','exact existing owned fixture entry with three admitted Foundation consumers');
+ assert.equal(sha(readFileSync(resolve(root,'scripts/current-owned-sql-ci-entry.py'))),'0b04fcd18011062f2c940dcf675fcb4d34466e09dc7b68d0b44428b559b0c989','exact existing owned fixture entry with three admitted Foundation consumers');
  assert.equal(sha(readFileSync(resolve(root,'scripts/basecamp-birthday-work-tests.mjs'))),'cca99c59bc8c64b933d5d4f30b5688947ed3c96d4513d5ba6a55c27da4b36a19');
  for(const change of [p=>{p.scripts['test:reviewed-source-regressions']='true';},p=>{delete p.scripts['test:basecamp-birthday'];},p=>{p.dependencies={};}]){
   const p=JSON.parse(bytes);change(p);assert.throws(()=>verifyBasecampCiPackage(Buffer.from(JSON.stringify(p,null,2)+'\n')));

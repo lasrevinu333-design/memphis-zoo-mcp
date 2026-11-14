@@ -26,10 +26,11 @@ assert sha(manifest)==('731de02212315ce3af9985e5ff9258602c444a3b0439a5b736f11af9
 old=json.loads(manifest.read_text());rows=[r for p in old['phases'] for r in p['files']]
 current=json.loads((B/'supabase/canonical/migration-replay-order.json').read_text());assert [r for p in current['phases'] for r in p['files']][:count]==rows and len(rows)==count
 for row in rows:assert sha(B/'supabase/migrations'/row['name'])==row['sha256']
+assert sha(B/'certs/supabase-root-2021-ca.pem')=='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7', 'Exact existing public CA source required before reconstruction'
 # Explicit source stage for the selected original admitted308/310 constructor. The current
 # source-only fixture helper and 317-file directory are not execution grants.
 T.mkdir(mode=0o700);S.mkdir(mode=0o700)
-for n in ['scripts','src','release','config']:
+for n in ['scripts','src','release','config','certs']:
  assert not any(p.is_symlink() for p in (B/n).rglob('*')), 'Source symlinks refused'
  shutil.copytree(B/n,S/n,symlinks=False)
 for n in ['package.json','package-lock.json']:shutil.copy2(B/n,S/n)
