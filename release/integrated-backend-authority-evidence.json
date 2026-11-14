@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "a05bd5f09ff08817bc06d6dc153c12d44097ef0f"
+        "object_id": "b8c38007f0d8be847af0790069bcd80ec9bfbd23"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -3055,7 +3055,7 @@
       {
         "path": "scripts/current-owned-sql-ci-entry.py",
         "mode": "100644",
-        "object_id": "f73d61df0ba7b3c04924fda5faaea5c8fbc09992"
+        "object_id": "2f3820a4830de10384ebb4b56bd4ee35c2dc438e"
       },
       {
         "path": "scripts/current-preservation-manager-sql-fixture.mjs",
@@ -3715,7 +3715,7 @@
       {
         "path": "scripts/fixtures/basecamp-ci-input-successor.mjs",
         "mode": "100644",
-        "object_id": "a864470b83bdaee3de95243b59fb76c98440b4b5"
+        "object_id": "bab183a0141391107d5c3cefa926ed81328d5ee3"
       },
       {
         "path": "scripts/fixtures/cohort-places-feedback-database-regression.sql",
@@ -3760,7 +3760,7 @@
       {
         "path": "scripts/fixtures/current-foundation-source-successor.mjs",
         "mode": "100644",
-        "object_id": "ca9246165cb6820286b39ebb45ab9c8e45711678"
+        "object_id": "ac6bb3f058554489f649d82222522e12d00994e3"
       },
       {
         "path": "scripts/fixtures/current-manager-219-source.mjs",
