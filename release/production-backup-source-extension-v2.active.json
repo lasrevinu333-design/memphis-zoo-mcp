@@ -11,9 +11,9 @@
     "migration_head": "20260920010000",
     "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
   },
-  "observed_ledger_count": 425,
-  "observed_ledger_head": "20261114005000",
-  "observed_catalog_fingerprint": "819f49a7c344f973e409513355bd76156dd16379ff7dcf9f7b6a71d432febe0f",
+  "observed_ledger_count": 426,
+  "observed_ledger_head": "20261114045933",
+  "observed_catalog_fingerprint": "1569d0087224a6fe4f26e9763fdd7a8587d8c8a0ac76a74ac17c09a638c6fdc8",
   "ledger": [
     {
       "version": "20260514224806",
@@ -2989,9 +2989,16 @@
       "statement_sha256": [
         "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82"
       ]
+    },
+    {
+      "version": "20261114045933",
+      "name": "custodial_basecamp_birthday_work_qualified",
+      "statement_sha256": [
+        "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383"
+      ]
     }
   ],
-  "ledger_sha256": "9717ff9a954ac7d7554cd43350cfcf65a0a454d60e838065fb4a34364337cc85",
+  "ledger_sha256": "3cdf416340a7fcbbedafc816d62f378ee2a6f3419e6d07ac992ef207ead0282a",
   "historical_baseline": [
     {
       "version": "20260514224806",
@@ -5533,7 +5540,15 @@
       "source_location": "retained_installed",
       "source_file": "20261114005000_custodial_messenger_contact_directory_qualified.sql",
       "sql_sha256": "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82"
+    },
+    {
+      "ledger_version": "20261114045933",
+      "ledger_name": "custodial_basecamp_birthday_work_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261114045933_custodial_basecamp_birthday_work_qualified.sql",
+      "sql_sha256": "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383"
     }
   ],
-  "source_bindings_sha256": "1b2e54986b803d3efb90847af65186597472dee7aabed1831996994cd19fcd2c"
+  "source_bindings_sha256": "95ecb5913c85bbc8b7ccaf082ae8517d04d943d3002f1e1d85184533ec8d21d3"
 }

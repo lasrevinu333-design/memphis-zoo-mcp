@@ -12,6 +12,7 @@ const REVIEWED_BOUNDARIES=Object.freeze({
  '420':Object.freeze({head:'20261113221252',added:185,sources:'6ab7110f0eff144e59a52df350453e10f5776e2aaf59745d123c96412d046cbb'}),
  '424':Object.freeze({head:'20261113225746',added:189,sources:'b93f1dcbbbabae796f6d90260e03f3b57e04d1006c4b908d471a9b1516d08c18'}),
  '425':Object.freeze({head:'20261114005000',added:190,sources:'1b2e54986b803d3efb90847af65186597472dee7aabed1831996994cd19fcd2c'}),
+ '426':Object.freeze({head:'20261114045933',added:191,sources:'95ecb5913c85bbc8b7ccaf082ae8517d04d943d3002f1e1d85184533ec8d21d3'}),
 });
 const sha=value=>createHash('sha256').update(value).digest('hex');
 // Canonical encoding is UTF-8 JSON of arrays, never locale sorting or object-key order.

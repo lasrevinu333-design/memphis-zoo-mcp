@@ -104,7 +104,7 @@ for(const [name,mutate]of [
  ['catalog drift',x=>x.catalog.tables.push({schema_name:'public',table_name:'unexpected'})],['wrong release identity',x=>x.releaseIdentity.backend_commit='0'.repeat(40)],['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
 ])test('424 binding rejects '+name,()=>{const x=currentInput(latest);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
 
-const messenger=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const messenger=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.messenger425.active.json',import.meta.url),'utf8'));
 const messengerCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.messenger425.candidate.json',import.meta.url),'utf8'));
 test('exact 425 declaration adds only the applied contact migration while preserving 424 and the deployed identity',()=>{
  assert.equal(validateBackupLedgerDeclarationV2(messenger),true);assert.equal(validateBackupLedgerDeclarationV2(messengerCandidate),true);
@@ -123,7 +123,7 @@ test('425 synthetic capture and archive verification keep all three prior finite
  assert.equal(bindBackupSchemaExtension(currentInput(messenger)).captured_ledger_count,425);
 });
 for(const [name,mutate]of [
- ['unknown 426',x=>x.declaration.observed_ledger_count=426],['unknown 421',x=>x.declaration.observed_ledger_count=421],['unknown 422',x=>x.declaration.observed_ledger_count=422],['unknown 423',x=>x.declaration.observed_ledger_count=423],
+ ['426 count on 425 contents',x=>x.declaration.observed_ledger_count=426],['unknown 421',x=>x.declaration.observed_ledger_count=421],['unknown 422',x=>x.declaration.observed_ledger_count=422],['unknown 423',x=>x.declaration.observed_ledger_count=423],
  ['old head',x=>x.declaration.observed_ledger_head=latest.observed_ledger_head],['changed contact SQL',x=>x.migrationLedger[424].statements[0]+='\n'],
  ['missing contact binding',x=>x.declaration.source_bindings.pop()],['old source pin',x=>x.declaration.source_bindings_sha256=latest.source_bindings_sha256],
  ['changed retained contact source',x=>{const prior=x.readSource;x.readSource=(file,where)=>file.startsWith('20261114005000')?Buffer.from('changed'):prior(file,where);}],
@@ -131,3 +131,38 @@ for(const [name,mutate]of [
  ['catalog drift',x=>x.catalog.functions.push({schema_name:'public',function_name:'unexpected'})],['wrong release identity',x=>x.releaseIdentity.frontend_commit='0'.repeat(40)],
  ['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
 ])test('425 binding rejects '+name,()=>{const x=currentInput(messenger);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
+
+const basecamp=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const basecampCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.basecamp426.candidate.json',import.meta.url),'utf8'));
+test('exact426 adds only the installed Basecamp source and preserves all425metadata/sources and runtime identity',()=>{
+ assert.equal(validateBackupLedgerDeclarationV2(basecamp),true);assert.equal(validateBackupLedgerDeclarationV2(basecampCandidate),true);
+ assert.deepEqual({...basecamp,activation_status:'candidate'},basecampCandidate);
+ assert.equal(basecamp.observed_ledger_count,426);assert.equal(basecamp.observed_ledger_head,'20261114045933');
+ assert.deepEqual(basecamp.ledger.slice(0,425),messenger.ledger);assert.deepEqual(basecamp.source_bindings.slice(0,195),messenger.source_bindings);
+ assert.deepEqual(basecamp.deployed_release,messenger.deployed_release);assert.deepEqual(basecamp.historical_baseline,messenger.historical_baseline);
+ assert.equal(basecamp.source_bindings.length,196);assert.equal(basecamp.source_bindings.at(-1).sql_sha256,'e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383');
+ assert.equal(basecamp.ledger_sha256,'3cdf416340a7fcbbedafc816d62f378ee2a6f3419e6d07ac992ef207ead0282a');
+ assert.equal(basecamp.source_bindings_sha256,'95ecb5913c85bbc8b7ccaf082ae8517d04d943d3002f1e1d85184533ec8d21d3');
+ assert.equal(basecamp.observed_catalog_fingerprint,'1569d0087224a6fe4f26e9763fdd7a8587d8c8a0ac76a74ac17c09a638c6fdc8');
+ for(const s of basecamp.source_bindings)assert.equal(sha(source(s.source_file,s.source_location)),s.sql_sha256);
+});
+test('426synthetic capture/archive verification keeps every earlier finite declaration valid',()=>{
+ for(const x of [input(),currentInput(),currentInput(latest),currentInput(messenger),currentInput(basecamp)])assert.equal(verifyArchivedSchemaExtension(archiveFor(x)),true);
+ assert.equal(bindBackupSchemaExtension(currentInput(basecamp)).captured_ledger_count,426);
+});
+for(const[name,mutate]of[
+ ['unknown427',x=>x.declaration.observed_ledger_count=427],['425count on426contents',x=>x.declaration.observed_ledger_count=425],
+ ['old head',x=>x.declaration.observed_ledger_head=messenger.observed_ledger_head],['changed Basecamp SQL',x=>x.migrationLedger[425].statements[0]+='\n'],
+ ['missing Basecamp binding',x=>x.declaration.source_bindings.pop()],['425source pin',x=>x.declaration.source_bindings_sha256=messenger.source_bindings_sha256],
+ ['changed retained Basecamp source',x=>{const read=x.readSource;x.readSource=(file,where)=>file.startsWith('20261114045933')?Buffer.from('changed'):read(file,where);}],
+ ['extra statement',x=>x.migrationLedger[425].statements.push('select 1;')],['changed older ledger',x=>x.migrationLedger[424].statements[0]+='\n'],
+ ['catalog drift',x=>x.catalog.functions.push({schema_name:'public',function_name:'unexpected'})],['wrong runtime release',x=>x.releaseIdentity.backend_commit='0'.repeat(40)],
+ ['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
+ ['missing prior source',x=>x.declaration.source_bindings.splice(190,1)],['intermediate423',x=>x.declaration.observed_ledger_count=423],
+])test('426binding rejects '+name,()=>{const x=currentInput(basecamp);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
+test('426provenance is exact source-only addition with no private absolute paths or replay permission',()=>{
+ const text=fs.readFileSync(new URL('../release/backup-installed-source-basecamp426-provenance.json',import.meta.url),'utf8'),p=JSON.parse(text),s=basecamp.source_bindings.at(-1);
+ assert.doesNotMatch(text,/\/mnt\/|\/home\/|evidence\/|live-catalog|live-source/);assert.equal(p.replay_authorized,false);assert.equal(p.prior_ledger_count,425);assert.equal(p.current_ledger_count,426);
+ assert.equal(p.deployed_release_identity_unchanged,true);assert.equal(p.prior_source_bindings_sha256,messenger.source_bindings_sha256);assert.equal(p.source_bindings_sha256,basecamp.source_bindings_sha256);
+ assert.equal(p.statement_source_bindings.length,1);const row=p.statement_source_bindings[0];assert.equal(row.retained_path,'release/installed-source/'+s.source_file);assert.equal(row.installed_sha256,s.sql_sha256);assert.equal(row.transformation,'none');assert.equal(sha(source(s.source_file,s.source_location)),row.source_raw_sha256);
+});
