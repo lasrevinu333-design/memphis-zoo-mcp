@@ -102,7 +102,11 @@ jobs:
           set -euo pipefail
           ci_sql_parent="/mnt/custodial-sql-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           test ! -e "$ci_sql_parent"
-          test "$(stat -c %d /mnt)" != "$(stat -c %d /)"
+          stat -c 'CI_SQL_PATH=%n device=%d mount=%m' /mnt /
+          if [ "$(stat -c %d /mnt)" = "$(stat -c %d /)" ]; then
+            printf '%s\n' '::error::Foundation database qualification requires an existing secondary disk. This runner exposes /mnt on its root disk; the guarded local fixture remains available. No root-disk or tmpfs fallback is permitted.' >&2
+            exit 1
+          fi
           if ! command -v bwrap; then
             sudo apt-get update -qq
             sudo apt-get install -y --no-install-recommends bubblewrap
