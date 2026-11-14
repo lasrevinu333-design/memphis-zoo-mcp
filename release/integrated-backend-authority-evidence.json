@@ -760,12 +760,12 @@
       {
         "path": "release/operational-live-api-receipt.json",
         "mode": "100644",
-        "object_id": "455dc7ae133dad2dd569ab3688c737cf8b6758e5"
+        "object_id": "1669f04269c327cb0a55396e6481f4ecaa3aaa17"
       },
       {
         "path": "release/operational-live-approved-target.json",
         "mode": "100644",
-        "object_id": "0bed52fdb32458fe4641276f542934b6efdbab83"
+        "object_id": "8503af09aec85fa22209951b11202315a68acb47"
       },
       {
         "path": "release/operational-live-health-contract/health-route.txt",
