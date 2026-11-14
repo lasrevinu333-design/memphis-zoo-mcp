@@ -3,20 +3,20 @@
   "service_id": "srv-d7fsvg57vvec73bhe2r0",
   "origin": "https://memphis-zoo-mcp.onrender.com",
   "receipt_source": "Existing Render connector exact deployment readback",
-  "original_receipt_sha256": "8ca859d9ace5d6fd43ee368c7e1deff2390b3c61c2ab0f05b7b140857773101d",
-  "observed_at": "2026-11-14T15:19:12.112158+00:00",
+  "original_receipt_sha256": "1b73868c78e00e8226fcca8a58e51de40b85fdc262eb1d7c0c290f881bee5716",
+  "observed_at": "2026-11-14T19:04:37.099014+00:00",
   "deployment": {
     "commit": {
-      "createdAt": "2026-11-14T15:16:25Z",
-      "id": "6a57ec0e2439f49fa544ad3e8304ddcfab1624bc",
-      "message": "Bind release evidence to audited Messenger and CI repairs"
+      "createdAt": "2026-11-14T19:01:15Z",
+      "id": "118ffc4ebb31b84b038ce519e4deccf53ad72379",
+      "message": "Refresh authority evidence for patched backend dependency tree"
     },
-    "createdAt": "2026-11-14T15:17:38.862881Z",
-    "finishedAt": "2026-11-14T15:18:33.047988Z",
-    "id": "dep-dbs7n4mk1f9s738guq9g",
-    "startedAt": "2026-11-14T15:17:38.832447Z",
+    "createdAt": "2026-11-14T19:02:51.124569Z",
+    "finishedAt": "2026-11-14T19:03:37.428078Z",
+    "id": "dep-dbsb0mon74is739c8bag",
+    "startedAt": "2026-11-14T19:02:51.097411Z",
     "status": "live",
     "trigger": "api",
-    "updatedAt": "2026-11-14T15:18:33.048213Z"
+    "updatedAt": "2026-11-14T19:03:37.428289Z"
   }
 }
