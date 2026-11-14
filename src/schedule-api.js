@@ -2,6 +2,7 @@ import {assertManualScheduleDeliveryOrigin} from './approved-manual-device-deliv
 import {readZooWideCoverage} from './employee-zoo-wide-coverage.js';
 import {readRecurringNotificationPlan,exactPlanReceiptInstant} from './recurring-notification-plan.js';
 import {readHomeTimeFacts} from './employee-home-time-facts.js';
+import {readBasecampBirthdayWork} from './basecamp-birthday-work.js';
 import {normalizeCoverAllLanguage,coverAllLabels} from './coverall-language.js';
 import express from "express";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -3416,10 +3417,12 @@ export function createScheduleRouter({
       const zooWideCoverage=await readZooWideCoverage({day:data,runReadOnlySql});
       const ordinaryNotificationPlan=await readRecurringNotificationPlan({runRpc,delivery,serviceDate,assignment,
         credentialId:req.memphisDeviceCredential?.credential_id});
+      const basecampBirthdayWork=await readBasecampBirthdayWork({req,day:data,assignment,runReadOnlySql});
       res.status(200).json({
         ok: true,
         data: {
           ...data,
+          ...(basecampBirthdayWork===undefined?{}:{basecamp_birthday_work:basecampBirthdayWork}),
           ordinary_notification_plan:ordinaryNotificationPlan,
           zoo_wide_coverage:zooWideCoverage,
           requested_device_id: assignment?.requested_device_id || deviceId || null,
