@@ -745,7 +745,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "46a39b0c163e85e34dd01a04cd1b30d5d90b02ab"
+        "object_id": "1cd0def09d4c9bcba8c82edd7fc19f9f2787c923"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -2776,6 +2776,11 @@
         "path": "scripts/backup-release-schema-binding.mjs",
         "mode": "100644",
         "object_id": "421c0c9756c9b3ec10dd0918ce510f39615495a8"
+      },
+      {
+        "path": "scripts/basecamp-birthday-work-tests.mjs",
+        "mode": "100644",
+        "object_id": "a47a29d0431f5dc20ead2b39cd16dc9dc76161e6"
       },
       {
         "path": "scripts/batch-2-event-messenger-cutover-database-tests.mjs",
@@ -8718,6 +8723,11 @@
         "object_id": "ebd9c482b25a04ce1a536dbe963a803422478ac8"
       },
       {
+        "path": "src/basecamp-birthday-work.js",
+        "mode": "100644",
+        "object_id": "c4f78981eb7552758d61f919d7c22b1a5a19326a"
+      },
+      {
         "path": "src/city-work-orders.js",
         "mode": "100644",
         "object_id": "8100947a3841b4e47eb11ca7190739a1c838ed3f"
@@ -9560,7 +9570,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "11a746b34c75fc738a661315fec40c8f470883f7"
+        "object_id": "84f79d54e3f9c8dfde13aed7d671d5480a35ce83"
       },
       {
         "path": "src/schedule-component-weight-authority.js",
@@ -12173,7 +12183,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2409,
+    "authority_path_count": 2411,
     "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
