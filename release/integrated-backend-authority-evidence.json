@@ -185,7 +185,7 @@
       {
         "path": ".github/workflows/operational-recovery-live.yml",
         "mode": "100644",
-        "object_id": "0a1c12ba155df69f70fc182c38009138b5a1f01d"
+        "object_id": "25a5a2a95144802f1b6d9bba824fcdc513447abe"
       },
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
@@ -765,7 +765,17 @@
       {
         "path": "release/operational-live-approved-target.json",
         "mode": "100644",
-        "object_id": "6811a102aadfb5d7e7bbef9a3af30d0a53573ad7"
+        "object_id": "bac84467d4750ce65861f0e8f29d6ef67c1fb4ec"
+      },
+      {
+        "path": "release/operational-live-health-contract/health-route.txt",
+        "mode": "100644",
+        "object_id": "9b00f11c04be73cf1b94ccf7b77028295d5afcf0"
+      },
+      {
+        "path": "release/operational-live-health-contract/security-http-boundaries.mjs",
+        "mode": "100644",
+        "object_id": "d2202d2d87a2a490dfa6dbd5e043452f098ba525"
       },
       {
         "path": "release/production-backup-source-extension.json",
@@ -993,14 +1003,19 @@
         "object_id": "51ed8bb756d7f518d7759cb1a265cdd5bc3bacb5"
       },
       {
+        "path": "scripts/approved-operational-dependency-tests.mjs",
+        "mode": "100644",
+        "object_id": "04bba30257118ce25ca5a9417ddd8da9d0a42fce"
+      },
+      {
         "path": "scripts/approved-operational-live-target-tests.mjs",
         "mode": "100644",
-        "object_id": "7763e192e772b8ddc87b35fe4d7c0887f88e7aa5"
+        "object_id": "2fd48665cd3cfd0bf4d4077c126366a5577dc515"
       },
       {
         "path": "scripts/approved-operational-live-target.mjs",
         "mode": "100644",
-        "object_id": "b797bd72b5cf63ca4555a11f72b1821c9bd04ff2"
+        "object_id": "bf5713933f9c4fb028f07281b6e9ae97f6c98dad"
       },
       {
         "path": "scripts/assigned-activation-transport-database-tests.mjs",
@@ -5708,7 +5723,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1116,
+    "authority_path_count": 1119,
     "migration_path_count": 294,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
