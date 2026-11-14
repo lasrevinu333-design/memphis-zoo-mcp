@@ -926,3 +926,18 @@ for(const change of [{owner_access_probes:[]},{owner_access_probes:[{status:'UNK
   assert.throws(()=>storageResult({...providerResult,storage:{...providerResult.storage,...change}},providerArchive,providerIntent));
 assert.match(productionBackupRehearsal,/official_local_storage_provider:[\s\S]*type: boolean[\s\S]*default: false/);
 assert.match(productionBackupRehearsal,/if test "\$OFFICIAL_LOCAL_STORAGE_PROVIDER" = true; then\n\s+test "\$REHEARSAL_SCOPE" = backup_only\n\s+restore_command=\(node scripts\/run-official-local-storage-rehearsal\.mjs\)/);
+
+// Live acceptance targets an independently qualified deployment; advancing
+// the backup launcher is neither deployment nor permission to revive Moxie.
+const operationalLive = readFileSync(resolve(workflowDirectory, 'operational-recovery-live.yml'), 'utf8');
+assert.match(operationalLive, /ref: \$\{\{ github\.sha \}\}[\s\S]*persist-credentials: false/);
+assert.match(operationalLive, /expected_sha="\$\(node scripts\/approved-operational-live-target\.mjs\)"/);
+assert.match(operationalLive, /node scripts\/approved-operational-live-target\.mjs --verify-response "\$expected_sha"/);
+assert.doesNotMatch(operationalLive, /expected_sha="\$\{GITHUB_SHA\}"|auth_required|--data-urlencode|MOXIE_WEB_PASSWORD/);
+assert.match(operationalLive, /retired_endpoints=\([^\n]*\/moxie\/health[^\n]*\/moxie-mobile-api\/health\)/);
+assert.match(operationalLive, /test "\$retired_status" = '404'/);
+for (const active of ['/auth-api/session','/scan-api/health','/schedule-api/health','/messaging-api/health','/dashboard-api/health','/health/dependencies','/device-auth/status','/schedule-api/my-day-summary'])
+  assert.ok(operationalLive.includes(active), 'Active authority/privacy coverage retained: '+active);
+const approvedTargetContracts = spawnSync(process.execPath, ['scripts/approved-operational-live-target-tests.mjs'], {cwd:root,encoding:'utf8'});
+assert.equal(approvedTargetContracts.status, 0, approvedTargetContracts.stdout + approvedTargetContracts.stderr);
+console.log(approvedTargetContracts.stdout.trim());

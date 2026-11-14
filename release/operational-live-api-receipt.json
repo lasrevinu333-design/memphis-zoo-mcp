@@ -1,0 +1,22 @@
+{
+  "schema": "custodial.operational-live-api-receipt.v1",
+  "service_id": "srv-d7fsvg57vvec73bhe2r0",
+  "origin": "https://memphis-zoo-mcp.onrender.com",
+  "receipt_source": "Existing Render connector exact deployment readback",
+  "original_receipt_sha256": "3f1aea705f042d44fa75a7136b81bef5a6df1b19807ba3c992b3ca33b5e8d5ba",
+  "observed_at": "2026-11-13T23:14:12.654Z",
+  "deployment": {
+    "commit": {
+      "createdAt": "2026-11-13T23:03:22Z",
+      "id": "c6ef88e00ebd404de2d8645b471479c79556909a",
+      "message": "Bind release evidence to complete qualified v80 backend runtime"
+    },
+    "createdAt": "2026-11-13T23:12:07.576342Z",
+    "finishedAt": "2026-11-13T23:12:53.163132Z",
+    "id": "dep-dbrpihp9aqoc739hru90",
+    "startedAt": "2026-11-13T23:12:07.826628Z",
+    "status": "live",
+    "trigger": "api",
+    "updatedAt": "2026-11-13T23:13:21.37409Z"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "custodial.operational-live-approved-target.v1",
+  "scope": "api_only",
+  "approval_kind": "qualified_exact_source_and_deployment",
+  "repository": "lasrevinu333-design/memphis-zoo-mcp",
+  "service_id": "srv-d7fsvg57vvec73bhe2r0",
+  "origin": "https://memphis-zoo-mcp.onrender.com",
+  "backend_commit_sha": "c6ef88e00ebd404de2d8645b471479c79556909a",
+  "deployment_id": "dep-dbrpihp9aqoc739hru90",
+  "deployment_receipt_sha256": "8557a27dc61495a201c2ab1e156bac116e0fb13febd11106fb6a7d2b8ea705eb",
+  "not_launcher_identity": true,
+  "retired_application_http_status": 404
+}
