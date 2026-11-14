@@ -1360,7 +1360,7 @@
       {
         "path": "scripts/event-static-authority-database-tests.mjs",
         "mode": "100644",
-        "object_id": "57aaa622b9491f28d28d0fb62ce552d188e46c54"
+        "object_id": "e0ec73031d48bf11d7ae8532bb4eecd0f64c69ee"
       },
       {
         "path": "scripts/events-ai-source-identity-tests.mjs",
