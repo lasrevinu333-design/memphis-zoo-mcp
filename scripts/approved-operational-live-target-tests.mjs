@@ -36,3 +36,4 @@ for (const [args,body] of [
   [['--verify-response',approved.backend_commit_sha],''],
 ]) {const result=run(args,body);assert.equal(result.status,1);assert.equal(result.stdout,'');refusals++;}
 console.log(JSON.stringify({ok:true,independent_target:true,refusal_cases:refusals,network:false}));
+await import('./approved-operational-dependency-tests.mjs');

@@ -75,8 +75,15 @@ jobs:
           done
           test "$all_endpoints_current" = true
 
-          dependencies="$(curl -fsSL --max-time 40 "$root/health/dependencies")"
-          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["database_reachable"] is True and d["required_schema_present"] is True and d["worker"]["durable_database_leases"] is True' <<<"$dependencies"
+          # The exact approved API computes public readiness from its full
+          # database/schema/worker/canary/credential checks, then redacts the
+          # details. Its retained exact-source predicate tests run above.
+          # Detailed diagnostics must still reject an unauthenticated caller.
+          dependencies="$(curl -fsSL --max-time 40 "$root/health")"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d == {"ok": True, "process_alive": True}' <<<"$dependencies"
+          diagnostics_status="$(curl -sS --max-time 40 -o /tmp/protected-health-diagnostics.json -w '%{http_code}' "$root/health/dependencies")"
+          test "$diagnostics_status" = '401'
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is False; assert not any(k in d for k in ["database_reachable","required_schema_present","worker","schema_fingerprint"])' < /tmp/protected-health-diagnostics.json
 
           # Retired application routes must stay absent. Do not attempt a
           # password login, logout, asset fetch, or resurrected feature check.

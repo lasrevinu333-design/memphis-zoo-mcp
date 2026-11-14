@@ -13,7 +13,7 @@ export function validateApprovedOperationalTarget(target, receiptBytes) {
   assert.deepEqual(Object.keys(target).sort(), [
     'schema','scope','approval_kind','repository','service_id','origin',
     'backend_commit_sha','deployment_id','deployment_receipt_sha256',
-    'not_launcher_identity','retired_application_http_status',
+    'not_launcher_identity','retired_application_http_status','dependency_readiness_contract',
   ].sort());
   assert.equal(target.schema, 'custodial.operational-live-approved-target.v1');
   assert.equal(target.scope, 'api_only');
@@ -40,6 +40,16 @@ export function validateApprovedOperationalTarget(target, receiptBytes) {
     assert.ok(Number.isFinite(Date.parse(at)));
   }
   assert.match(receipt.original_receipt_sha256, /^[a-f0-9]{64}$/);
+  const health = target.dependency_readiness_contract;
+  assert.equal(health?.source_commit, target.backend_commit_sha);
+  assert.equal(health.public_readiness_path, '/health');
+  assert.equal(health.private_diagnostics_path, '/health/dependencies');
+  for (const field of ['index_source_sha256','route_fragment_sha256','http_boundary_sha256'])
+    assert.match(health[field], /^[a-f0-9]{64}$/);
+  assert.deepEqual(health.successful_public_readiness_implies, [
+    'database_reachable','restricted_read_authority','required_schema_including_worker_claim_rpc',
+    'release_canary_ready','device_credential_secret_ready',
+  ]);
   return Object.freeze({...target});
 }
 
