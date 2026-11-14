@@ -138,6 +138,11 @@
         "object_id": "ed9e6bccc234af1196e01d1fb5a7ad1e5110a538"
       },
       {
+        "path": ".github/workflows/custodial-backup-identity-check.yml",
+        "mode": "100644",
+        "object_id": "4576fa3798e50e2f1bd3296ef372fc5c9ea56eae"
+      },
+      {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
         "mode": "100644",
         "object_id": "ad8b37f899866384ab4ad510b9d8e8fa0c750227"
@@ -180,7 +185,7 @@
       {
         "path": ".github/workflows/operational-recovery-live.yml",
         "mode": "100644",
-        "object_id": "5d3b48b6fdf39d1540df167839dff5c2b42ae814"
+        "object_id": "0a1c12ba155df69f70fc182c38009138b5a1f01d"
       },
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
@@ -210,7 +215,7 @@
       {
         "path": ".github/workflows/production-disaster-recovery-backup.yml",
         "mode": "100644",
-        "object_id": "49f0ab5be05e7c84dd805512519e7f87d6ac8e2a"
+        "object_id": "93de6a3979bd067222bd26175cd856c66c806279"
       },
       {
         "path": ".github/workflows/production-release-deployment-record.yml",
@@ -753,6 +758,16 @@
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
       },
       {
+        "path": "release/operational-live-api-receipt.json",
+        "mode": "100644",
+        "object_id": "097c076eb5e91175743fb509ac370ab3d9eca3c9"
+      },
+      {
+        "path": "release/operational-live-approved-target.json",
+        "mode": "100644",
+        "object_id": "6811a102aadfb5d7e7bbef9a3af30d0a53573ad7"
+      },
+      {
         "path": "release/production-backup-source-extension.json",
         "mode": "100644",
         "object_id": "b73a27c189c7d0416240736d2957b32e878a9966"
@@ -978,6 +993,16 @@
         "object_id": "51ed8bb756d7f518d7759cb1a265cdd5bc3bacb5"
       },
       {
+        "path": "scripts/approved-operational-live-target-tests.mjs",
+        "mode": "100644",
+        "object_id": "7763e192e772b8ddc87b35fe4d7c0887f88e7aa5"
+      },
+      {
+        "path": "scripts/approved-operational-live-target.mjs",
+        "mode": "100644",
+        "object_id": "b797bd72b5cf63ca4555a11f72b1821c9bd04ff2"
+      },
+      {
         "path": "scripts/assigned-activation-transport-database-tests.mjs",
         "mode": "100644",
         "object_id": "8246c59eb40dc62d3ea6148e47c7458036068a0d"
@@ -1065,7 +1090,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fbfbd2b4434ac9a883ef9a4718f5087dc1ffcbf0"
+        "object_id": "34e2397c146a8ea497344544661bcfd4035cf3e0"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -5683,7 +5708,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1111,
+    "authority_path_count": 1116,
     "migration_path_count": 294,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
