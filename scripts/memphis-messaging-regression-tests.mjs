@@ -4,6 +4,7 @@ import { createMemphisResponder } from "../src/memphis-ai.js";
 import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
 import {makeDeviceCredentialMiddleware,deviceCredentialInternals} from '../src/auth/device-credential-auth.js';
+import './messaging-read-owner-tests.mjs';
 
 async function withServer(app, fn) {
   const server = await new Promise((resolve, reject) => {

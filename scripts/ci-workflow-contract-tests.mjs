@@ -432,7 +432,7 @@ for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate,
       'echo "npm() { return 0; }" > "$RUNNER_TEMP/skip.sh"; echo "BASH_ENV=$RUNNER_TEMP/skip.sh" >> "$GITHUB_ENV"',
       "printf 'process.exit(0);' > scripts/legacy-activation-http-tests.mjs",
     ].map(body => source.replace(`      - name: ${targetStepName}`, `      - name: Unexpected predecessor\n        run: |\n          ${body}\n      - name: ${targetStepName}`)),
-    source.replace(reviewedInputChecks[0], reviewedInputChecks[0].replace(/[a-f0-9]/, "0")),
+    source.replace(reviewedInputChecks[0], reviewedInputChecks[0].replace(/[a-f0-9]/, digit => digit === "0" ? "1" : "0")),
     source.replace("--check --strict", "--check --status || true #"),
   ]) {
     assert.throws(() => assertReviewedRegressionGate(mutant, job, "independent skip/failure mutation"));

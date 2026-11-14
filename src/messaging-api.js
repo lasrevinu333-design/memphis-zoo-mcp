@@ -7,6 +7,7 @@ import { resolveCanonicalDevice } from "./device-identity.js";
 import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
 import { createOriginalMessageActions } from "./messaging-original-outcome.js";
 import { recipientDirectory } from "./messenger-recipient-directory.js";
+import { createMessagingReadOwners } from "./messaging-read-owner.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, leadershipMessagingBridge, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
@@ -19,6 +20,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
   const originalMessageActions = typeof requireDeviceAccess === "function"
     ? createOriginalMessageActions({ runReadOnlySql, runRpc, requireDeviceAccess }) : null;
+  const messagingReadOwners = typeof requireDeviceAccess === "function"
+    ? createMessagingReadOwners({runReadOnlySql,requireDeviceAccess}) : null;
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
   const requireOpsManagerAuth = suppliedOpsManagerAuth || makeOpsAccessMiddleware();
   const retiredGeminiAdminRoute = (_req, res) => res.status(410).json({ ok: false, error: "This diagnostic route is retired. Use /gemini-api." });
@@ -45,22 +48,26 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       }
       return;
     }
+    let readOwner;
+    try { readOwner=messagingReadOwners?.prepare(req,res); }
+    catch(error){ fail(res,error,"Device authentication failed.");return; }
     const canonicalDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || requestDeviceId(req)).trim();
     if (!canonicalDeviceId) {
       res.status(401).json({ ok: false, error: "device_id is required." });
       return;
     }
     getViewerIdentity(canonicalDeviceId)
-      .then((identity) => {
+      .then(async(identity) => {
         if (!identity) {
           res.status(401).json({ ok: false, error: "Device is not registered in the messaging system." });
           return;
         }
-        req.memphisMessagingDevice = { deviceId: canonicalDeviceId, identity };
+        if(readOwner)await readOwner.admit(identity);
+        req.memphisMessagingDevice = { deviceId: canonicalDeviceId, identity:readOwner?.identity||identity };
         next();
       })
       .catch((error) => {
-        res.status(401).json({ ok: false, error: error?.message || "Device authentication failed." });
+        fail(res,error,"Device authentication failed.");
       });
   }
 
@@ -120,11 +127,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       catch (error) { finish(false, error); }
     });
     if (!allowed || res.headersSent || res.writableEnded || res.destroyed) return false;
-    const current = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+    const current = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null,request:req });
     if (longPollOwner(req, current) !== owner) {
       throw Object.assign(new Error('Messenger access changed while waiting for updates.'), { status: 403 });
     }
     return true;
+  }
+
+  async function confirmEmployeeRead(req,res){
+    const owner=messagingReadOwners?.get(req);
+    if(owner)await owner.confirm();
+    return !res.headersSent&&!res.writableEnded&&!res.destroyed;
   }
 
   function requireWritableDeviceOrOpsAuth(req, res, next) {
@@ -326,7 +339,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     };
   }
 
-  async function resolveViewerContext({ userId = "", deviceId = "", managerSession = null } = {}) {
+  async function resolveViewerContext({ userId = "", deviceId = "", managerSession = null,request=null } = {}) {
     const normalizedUserId = String(userId || "").trim();
     const normalizedDeviceId = String(deviceId || "").trim();
     if (managerSession) {
@@ -344,8 +357,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       };
     }
     if (!normalizedDeviceId) throw new Error("device_id is required.");
-    const identity = await getViewerIdentity(normalizedDeviceId);
-    const effectiveUserId = String(identity?.msg_user_id || normalizedUserId || "").trim();
+    const readOwner=request?messagingReadOwners?.get(request):null;
+    const identity = readOwner?readOwner.identity:await getViewerIdentity(normalizedDeviceId);
+    const effectiveUserId = String(identity?.msg_user_id || "").trim();
     const isManagerOverview = Boolean(
       identity
       && String(identity.role || "").trim().toLowerCase() === "manager"
@@ -366,7 +380,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       return null;
     }
     try {
-      return await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      return await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null,request:req });
     } catch (error) {
       res.status(401).json({ ok: false, error: error?.message || "Unauthorized." });
       return null;
@@ -1485,6 +1499,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         data = { ...data, employee_id: relationship.employee_id, credential_id: relationship.credential_id,
           assignment_epoch: Number(relationship.assignment_epoch), canonical_device_id: relationship.device_id };
       }
+      if(!await confirmEmployeeRead(req,res))return;
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
       fail(res, error, "Device identity lookup failed");
@@ -1495,9 +1510,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const requestedUserId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || req.header("x-device-id") || "").trim();
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const baseRows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
       const rows = await enrichMessagingUsers(baseRows,viewer.effectiveUserId);
+      if(!await confirmEmployeeRead(req,res))return;
       res.status(200).json({ ok: true, data: rows, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
@@ -1508,7 +1524,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const userId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || "").trim();
-      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const notificationState = deviceId && !req.memphisAuth ? await getDeviceNotificationState(deviceId) : null;
       const suppressedNotificationState = notificationState ? phoneSuppressedNotificationState(notificationState) : null;
       const suppressUnreadForPhone = deviceId && !req.memphisAuth && shouldSuppressPhoneNotificationPayloads(notificationState);
@@ -1522,6 +1538,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const data = (Array.isArray(rows) ? rows : []).map((row) => suppressUnreadForPhone
         ? { ...row, unread_count: 0 }
         : row);
+      if(!await confirmEmployeeRead(req,res))return;
       res.status(200).json({ ok: true, data, meta: messagingMeta(suppressedNotificationState ? notificationStateMeta(suppressedNotificationState) : {}) });
     } catch (error) {
       fail(res, error, "Thread list failed");
@@ -1544,7 +1561,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || "100"), 10) || 100, 1), 200);
       if (!after || Number.isNaN(Date.parse(after))) throw Object.assign(new Error("A valid server thread cursor is required."), { status: 422 });
       if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor thread id is required."), { status: 422 });
-      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const canonicalViewerDevice = String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim();
       const owner = longPollOwner(req, viewer);
       let rows = [];
@@ -1969,7 +1986,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!isUuid(threadId)) throw Object.assign(new Error("A valid thread id is required."), { status: 422 });
       if (!after || Number.isNaN(Date.parse(after))) throw Object.assign(new Error("A valid server message cursor is required."), { status: 422 });
       if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor message id is required."), { status: 422 });
-      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const owner = longPollOwner(req, viewer);
       let rows = [];
       do {
@@ -2019,8 +2036,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const limit = Number.parseInt(String(req.query.limit || 100), 10) || 100;
       const before = req.query.before ? String(req.query.before).trim() : "";
       const beforeId = req.query.before_id ? String(req.query.before_id).trim() : "";
-      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const rows = await runReadOnlySql(buildThreadMessagesSql({ threadId, viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview, before, beforeId, limit }));
+      if(!await confirmEmployeeRead(req,res))return;
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Thread messages failed");
@@ -2032,7 +2050,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const otherUserId = String(req.body?.other_user_id || "").trim();
       const deviceId = String(req.body?.device_id || "").trim();
-      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       if (!otherUserId) throw new Error("other_user_id is required.");
       if (viewer.effectiveUserId === otherUserId) throw new Error("Pick someone else to message.");
       const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId });
@@ -2054,7 +2072,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const memberUserIds = Array.isArray(req.body?.member_user_ids)
         ? req.body.member_user_ids.map((x) => String(x || "").trim()).filter(Boolean)
         : [];
-      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const uniqueMembers = [...new Set(memberUserIds)];
       if (uniqueMembers.length < 2) throw Object.assign(new Error("Choose at least two people for a group conversation."), { status: 422 });
       if (uniqueMembers.length > 100) throw Object.assign(new Error("A group may contain at most 100 recipients."), { status: 422 });
@@ -2090,7 +2108,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || metadataJson.client_message_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       assertMessageBodyWithinLimit(body);
-      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       if (senderUserId && viewer.effectiveUserId !== senderUserId) {
         res.status(403).json({ ok: false, error: "Sender user ID must match the authenticated viewer." });
         return;
@@ -2171,7 +2189,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       }
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const claimedUserId = String(req.body?.user_id || req.body?.userId || "").trim();
-      const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null,request:req });
       const authenticatedUserId = String(viewer.identity?.msg_user_id || "").trim();
       if (!authenticatedUserId
           || authenticatedUserId.toLowerCase() !== String(viewer.effectiveUserId || "").toLowerCase()) {
@@ -2299,7 +2317,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const userId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const throughMessageId = String(req.body?.through_message_id || req.body?.throughMessageId || "").trim();
-      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null,request:req });
       if (userId && viewer.effectiveUserId !== userId) {
         res.status(403).json({ ok: false, error: "Read acknowledgement user ID must match the authenticated viewer." });
         return;
@@ -2371,7 +2389,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const requestedUserId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -2461,7 +2479,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!body) throw new Error("body is required.");
       assertMessageBodyWithinLimit(body);
 
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
       const data = await sendMemphisConversationMessage({
         userId: viewer.effectiveUserId,
@@ -2485,7 +2503,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const title = req.body?.title == null ? null : String(req.body.title);
       const body = String(req.body?.body || "");
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
+      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       if (!viewer.isManagerOverview && !viewer.authenticatedManager) {
         res.status(403).json({ ok: false, error: "Broadcast requires a manager device." });
         return;

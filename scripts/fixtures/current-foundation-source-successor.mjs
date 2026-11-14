@@ -1,3 +1,4 @@
+import {restoreBasecampCiWorkflow,verifyBasecampCiInputs} from './basecamp-ci-input-successor.mjs';
 // Source-only CI lineage. The actual current workflow and current added tests
 // are checked before the immutable historical workflow contract is evaluated.
 import assert from 'node:assert/strict';
@@ -8,6 +9,7 @@ import {spawnSync} from 'node:child_process';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const added='          node --test scripts/source252-production-role-order-tests.mjs scripts/current310-production-role-order-tests.mjs scripts/production-forward-current310-311-tests.mjs\n';
 export function restoreCurrentFoundationProof(source){
+ source=restoreBasecampCiWorkflow(source,'foundation-security-gate.yml');
  assert.equal(sha(source),'50ff473e92806741673452014374bfc4b84623ae03dcb09e25d8e3417e7ff774');
  for(const[from,to]of [
   ['edf046bfee522838fc0d4a48fef82862865debf705e3d96a4d04e89d29506bcc  package.json','1332a6e1176035f18e283667472e107f57c681da203684c0ba8417158e8423af  package.json'],
@@ -23,6 +25,7 @@ export function currentFoundationReviewedRegressionView(source){
  return source.replace(added,'');
 }
 export function restoreCurrentRepairWorkflowProof(source){
+ source=restoreBasecampCiWorkflow(source,'custodial-production-repair.yml');
  assert.equal(sha(source),'2eab0ed3a7b838b3fa592332cb7738034643b41e2b5048952e3ecce7954c1ea7');
  for(const[from,to]of [
   ['edf046bfee522838fc0d4a48fef82862865debf705e3d96a4d04e89d29506bcc  package.json','1332a6e1176035f18e283667472e107f57c681da203684c0ba8417158e8423af  package.json'],
@@ -37,6 +40,7 @@ export function restoreCurrentBuild52WorkflowProof(source){
  assert.equal(sha(source),'6f6f498a29f0cf189123050b7dda63feada17c9fed49fe208281390a0fbd0a05');return source;
 }
 export function verifyCurrentFoundationSource(root){
+ verifyBasecampCiInputs(root);
  const current=readFileSync(resolve(root,'.github/workflows/foundation-security-gate.yml'),'utf8');
  const historical=restoreCurrentFoundationProof(current);let rejected=0;
  for(const mutation of [current+'\n',current.replace(added,''),current.replace(added,added+added),current.replace('node --test','node --test || true')]){assert.throws(()=>restoreCurrentFoundationProof(mutation));rejected++;}
@@ -44,6 +48,7 @@ export function verifyCurrentFoundationSource(root){
  const bound=[...block.matchAll(/^          ([a-f0-9]{64})  ([a-zA-Z0-9_./-]+)$/gm)];assert.equal(bound.length,7);
  for(const[,digest,path]of bound)assert.equal(sha(readFileSync(resolve(root,path))),digest,'current Foundation reviewed input '+path);
  const tests={
+  'scripts/basecamp-birthday-work-tests.mjs':'cca99c59bc8c64b933d5d4f30b5688947ed3c96d4513d5ba6a55c27da4b36a19',
   'scripts/source252-production-role-order-tests.mjs':'c9e2b2dd4d61afefe08a2bfa7f1cf91ab9c4dda0f33ce1922fd5e479c325b40e',
   'scripts/current310-production-role-order-tests.mjs':'bf6d7f081a366b20ebdbaa314ceb514ac3335fe896d6888c877139ebbc117b06',
   'scripts/production-forward-current310-311-tests.mjs':'85d04cf8742dd5f0e9c17a30ec8a3b23326ac4718d2e26c88f5196429b3068df',
@@ -51,6 +56,6 @@ export function verifyCurrentFoundationSource(root){
  for(const[path,digest]of Object.entries(tests))assert.equal(sha(readFileSync(resolve(root,path))),digest);
  const result=spawnSync(process.execPath,['--test',...Object.keys(tests)],{cwd:root,env:{PATH:process.env.PATH,LANG:'C.UTF-8'},encoding:'utf8',timeout:30000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.equal(result.signal,null);assert.equal(result.status,0,result.stdout+result.stderr);
- console.log(JSON.stringify({suite:'current-foundation-source-successor',status:'PASS',current_bound_inputs:7,current_source_suites:3,rejected,SQL_executed:false,build:false,runtime_admission:false}));
+ console.log(JSON.stringify({suite:'current-foundation-source-successor',status:'PASS',current_bound_inputs:7,current_source_suites:4,rejected,SQL_executed:false,build:false,runtime_admission:false}));
  return historical;
 }

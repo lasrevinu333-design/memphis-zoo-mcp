@@ -1,3 +1,4 @@
+import {restoreBasecampCiProofSource} from './basecamp-ci-input-successor.mjs';
 // Exact test-only projection. It does not execute SQL or admit a native release.
 import assert from 'node:assert/strict';
 import {readFileSync,lstatSync} from 'node:fs';
@@ -11,6 +12,7 @@ assert.equal(document.schema,'custodial.reminder-timing-source-successor.v1');
 assert.equal(document.historical_pins_rewritten,false);assert.equal(document.production_admission,false);
 const rows=new Map(document.modified.map(r=>[r.path,r]));assert.equal(rows.size,document.modified.length);
 export function restoreReminderHistoricalSource(path,source){
+ source=restoreBasecampCiProofSource(path,source);
  const row=rows.get(path);if(!row||sha(source)!==row.current_sha256)return source;
  for(const h of row.hunks){assert.equal(source.split(h.current).length,2,'unique complete timing successor hunk');source=source.replace(h.current,()=>h.prior);}
  assert.equal(sha(source),row.prior_sha256,'exact whole timing predecessor: '+path);return source;
