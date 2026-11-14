@@ -85,6 +85,10 @@ export async function readOutlookSourceReceipts({client,selector,signal,assertCu
         ||row.source_event_key!==PREFIX+observation?.source_event_key
         ||Date.parse(row.received_at)!==Date.parse(observation?.source?.received_at))fail();
       validateEventObservation(observation,row.sync_status);
+      // JSON preserves UUID casing while PostgreSQL UUID columns normalize it.
+      // An explicit observed target must still name this exact stored binding.
+      if(Object.hasOwn(observation,'event_id')
+        &&observation.event_id.toLowerCase()!==row.event_id?.toLowerCase())fail();
       seen.add(row.id.toLowerCase());
       const source=observation.source;
       return{ledger_id:row.id,event_id:row.event_id,source_key:row.source_event_key,

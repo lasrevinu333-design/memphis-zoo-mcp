@@ -136,6 +136,43 @@ test('durable NEEDS_REVIEW is reported as staged; no event, fake publication or 
   assert.equal(r.canonical_events.state,'not_applicable');assert.equal(f.calls.length,2);
   assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);assert.equal(r.records[0].reason,undefined);
 });
+function explicitlyBoundRow(state){
+  const row=eventRow({review:state==='NEEDS_REVIEW'});
+  row.sync_status=state;row.event_id=eid;row.source_payload.event_id=eid;
+  if(state==='CANCELLED'){
+    delete row.source_payload.event;
+    row.source_payload.source.evidence_kind='event_cancellation';
+    row.source_payload.expected_revision=1;
+  }
+  return row;
+}
+for(const state of ['APPLIED','CANCELLED','UNCHANGED','BLOCKED_MANUAL','NEEDS_REVIEW']){
+  test('explicit observed event ID must match the stored '+state+' binding before any canonical read',async()=>{
+    const row=explicitlyBoundRow(state);row.event_id='83000000-0000-4000-8000-000000000001';
+    const f=fixture({rows:[row]}),r=(await invoke(f,eventSelector())).source_receipt;
+    assert.equal(r.state,'unavailable');assert.equal(r.records,undefined);assert.equal(f.calls.length,2);
+  });
+  test('explicit matching event ID retains the valid '+state+' disposition',async()=>{
+    const f=fixture({rows:[explicitlyBoundRow(state)]}),r=(await invoke(f,eventSelector())).source_receipt;
+    assert.equal(r.state,'found');assert.equal(r.records[0].state,state);assert.equal(r.records[0].event_id,eid);
+    assert.equal(r.records[0].publication_verified,false);assert.equal(r.records[0].review_required,state==='NEEDS_REVIEW');
+    assert.equal(r.canonical_events.state,'snapshot');assert.equal(f.calls.length,3);
+  });
+}
+test('an explicit review target cannot be paired with a null stored event binding',async()=>{
+  const row=explicitlyBoundRow('NEEDS_REVIEW');row.event_id=null;
+  const f=fixture({rows:[row]}),r=(await invoke(f,eventSelector())).source_receipt;
+  assert.equal(r.state,'unavailable');assert.equal(r.records,undefined);assert.equal(f.calls.length,2);
+});
+test('uppercase JSON UUID and lowercase PostgreSQL UUID are the same binding without rewriting source or digest',async()=>{
+  const row=explicitlyBoundRow('APPLIED'),id='8a000000-0000-4000-8000-00000000000a';
+  row.event_id=id;row.source_payload.event_id=id.toUpperCase();
+  const original=structuredClone(row),event=canonicalEvent();event.id=id;
+  const f=fixture({rows:[row],events:[event]}),r=(await invoke(f,eventSelector())).source_receipt;
+  assert.equal(r.state,'found');assert.equal(r.records[0].event_id,id);
+  assert.equal(r.records[0].payload_sha256,original.payload_hash);assert.deepEqual(row,original);
+  assert.equal(r.canonical_events.events[0].id,id);assert.equal(f.calls.length,3);
+});
 test('one original event notice can have multiple separately bound review observations',async()=>{
   const a=eventRow({review:true}),b=structuredClone(a);b.id='83000000-0000-4000-8000-000000000001';
   b.source_payload.source_event_key='second-event-in-same-original';b.source_event_key='custodial-outlook-events-v1/event/'+b.source_payload.source_event_key;
