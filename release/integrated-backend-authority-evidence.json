@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "46ef7a42515b0d6a94ea765c9261e3b4318b1739"
+        "object_id": "9c6b0bc6e40a38e647248e136eec52374b90d92e"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "7e3156aac7c13570e68714d5baa3f97264077b7b"
+        "object_id": "a05bd5f09ff08817bc06d6dc153c12d44097ef0f"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -2890,7 +2890,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "43acb9fd1ffbd18efbd7180fc056c3f03a3b5a2a"
+        "object_id": "7814e6dd870386e95230e475f9f78c0d0aaaf5e1"
       },
       {
         "path": "scripts/city-work-orders-tests.mjs",
@@ -3713,6 +3713,11 @@
         "object_id": "977ebda91d29811bddbe2bcb7b8f65ad13458b8e"
       },
       {
+        "path": "scripts/fixtures/basecamp-ci-input-successor.mjs",
+        "mode": "100644",
+        "object_id": "a864470b83bdaee3de95243b59fb76c98440b4b5"
+      },
+      {
         "path": "scripts/fixtures/cohort-places-feedback-database-regression.sql",
         "mode": "100644",
         "object_id": "242958dec473c12a3242974b6c67469a1b894e0b"
@@ -3755,7 +3760,7 @@
       {
         "path": "scripts/fixtures/current-foundation-source-successor.mjs",
         "mode": "100644",
-        "object_id": "05b228f32b22363a38a72787e28d94fbbb283ae1"
+        "object_id": "ca9246165cb6820286b39ebb45ab9c8e45711678"
       },
       {
         "path": "scripts/fixtures/current-manager-219-source.mjs",
@@ -4580,7 +4585,7 @@
       {
         "path": "scripts/fixtures/reminder-timing-source-successor.mjs",
         "mode": "100644",
-        "object_id": "4ca59d4713efee9d322ab584046742810b4484a7"
+        "object_id": "082ac40e901a1220785ab733fbee50c9ef44aace"
       },
       {
         "path": "scripts/fixtures/runtime-predecessor/MANIFEST.json",
@@ -5355,7 +5360,7 @@
       {
         "path": "scripts/memphis-messaging-regression-tests.mjs",
         "mode": "100644",
-        "object_id": "fe252779dc67749bba808598d8d81c2c4c4478fe"
+        "object_id": "d74eb52d5cd2125bdfb9e0569590114eebaa5ad9"
       },
       {
         "path": "scripts/memphis-messaging-route-recovery-tests.mjs",
@@ -5411,6 +5416,11 @@
         "path": "scripts/messaging-manager-authority-tests.mjs",
         "mode": "100644",
         "object_id": "8a6a7e9a7101075302c2aed3c14afe7b8043e2ce"
+      },
+      {
+        "path": "scripts/messaging-read-owner-tests.mjs",
+        "mode": "100644",
+        "object_id": "e80fc879dd19755eeab9fd8244631cce798d4330"
       },
       {
         "path": "scripts/messaging-synthetic-roundtrip-tests.mjs",
@@ -9085,12 +9095,17 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "0bbfdc3777dee19823291d58aad552a2a3728bae"
+        "object_id": "9423cb759f71ca3a45e61733de1bc66fa663083a"
       },
       {
         "path": "src/messaging-original-outcome.js",
         "mode": "100644",
         "object_id": "21221b13c1517a209cc27cb0921b9bb6ca08bc8c"
+      },
+      {
+        "path": "src/messaging-read-owner.js",
+        "mode": "100644",
+        "object_id": "639a43cd4870fde32f959c765e3b334ff2a1f29d"
       },
       {
         "path": "src/messenger-recipient-directory.js",
@@ -12213,7 +12228,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2417,
+    "authority_path_count": 2420,
     "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
