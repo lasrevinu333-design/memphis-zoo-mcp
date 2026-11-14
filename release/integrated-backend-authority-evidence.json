@@ -528,6 +528,11 @@
         "object_id": "d12443a49e06b652c458282463983327c67dbf3b"
       },
       {
+        "path": "docs/OUTLOOK_SOURCE_RECEIPTS.md",
+        "mode": "100644",
+        "object_id": "2df56cbf66054212420666a640b04859de036b4b"
+      },
+      {
         "path": "docs/applied-repairs/20261104174218_expired_unconsumed_assigned_activation_closure.sql",
         "mode": "100644",
         "object_id": "8fcd9ad660ac46416a6df9e9594ee2186f5f8f8b"
@@ -6135,7 +6140,7 @@
       {
         "path": "scripts/operations-mail-ledger-tests.mjs",
         "mode": "100644",
-        "object_id": "030562576950f55a1b84558a7ade7b41ef907a5c"
+        "object_id": "7ee21f0278fd3f07afd6ff1dcaafb4d5d305c9c0"
       },
       {
         "path": "scripts/operations-mail-sync-adapter-tests.mjs",
@@ -6186,6 +6191,11 @@
         "path": "scripts/outlook-published-feed-tests.mjs",
         "mode": "100644",
         "object_id": "7a552c214657e96bbfcf42c589e15dd67e77aa0c"
+      },
+      {
+        "path": "scripts/outlook-source-receipt-tests.mjs",
+        "mode": "100644",
+        "object_id": "a73a33553a6e037a6d7c0b899de825bf60662678"
       },
       {
         "path": "scripts/owner-actions-database-tests.mjs",
@@ -8835,7 +8845,7 @@
       {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "9a6efbe0e51f4431219ae471a8ddf7ab388ddde0"
+        "object_id": "b17c60d126a54878043a597a63d66b2dfd167460"
       },
       {
         "path": "src/events-time.js",
@@ -9035,7 +9045,7 @@
       {
         "path": "src/mcp/outlook-event-tools.js",
         "mode": "100644",
-        "object_id": "1d0e3b2e6782ead7a6ac1d514d61cdcdeea0bf02"
+        "object_id": "5e2b8cdde6c2d4a9e7fc40bf9b0bbd95ba04c468"
       },
       {
         "path": "src/mcp/register.js",
@@ -9065,7 +9075,7 @@
       {
         "path": "src/mcp/tool-manifest.js",
         "mode": "100644",
-        "object_id": "aa1490277c6e1991c354799ed43f741034b0274c"
+        "object_id": "6af0771ea781c01ab31e32da874293e6aa67b5de"
       },
       {
         "path": "src/memphis-ai.js",
@@ -9380,7 +9390,7 @@
       {
         "path": "src/operations-mail-ledger.js",
         "mode": "100644",
-        "object_id": "881696faed25f3c9789e2d5022c2841cf28fac50"
+        "object_id": "a2e9e7e91b3e627e815bfd3a59be11e106946007"
       },
       {
         "path": "src/operations-mail-sync.js",
@@ -9415,12 +9425,17 @@
       {
         "path": "src/outlook-event-sync.js",
         "mode": "100644",
-        "object_id": "6a20bf4269cf2785743d8acf158b76f1c0977b2e"
+        "object_id": "b7a0e38cdb43d00f419bf13b19342b05c4ed42d0"
       },
       {
         "path": "src/outlook-published-feed.js",
         "mode": "100644",
         "object_id": "e2588b5ac592950d1e2f4e2ad2a8edd96714fa92"
+      },
+      {
+        "path": "src/outlook-source-receipts.js",
+        "mode": "100644",
+        "object_id": "75b99c6ea664dc0052f9ed815a3121001b566bd5"
       },
       {
         "path": "src/owner-access-api.js",
@@ -12198,7 +12213,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2414,
+    "authority_path_count": 2417,
     "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
