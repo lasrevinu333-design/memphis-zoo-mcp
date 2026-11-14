@@ -6195,7 +6195,7 @@
       {
         "path": "scripts/outlook-source-receipt-tests.mjs",
         "mode": "100644",
-        "object_id": "a73a33553a6e037a6d7c0b899de825bf60662678"
+        "object_id": "4f08d4e9a19039c80ca8c550b3f4d07a359dc2db"
       },
       {
         "path": "scripts/owner-actions-database-tests.mjs",
@@ -9435,7 +9435,7 @@
       {
         "path": "src/outlook-source-receipts.js",
         "mode": "100644",
-        "object_id": "75b99c6ea664dc0052f9ed815a3121001b566bd5"
+        "object_id": "5fbda177da857962445ab883f04e60a4c08d7112"
       },
       {
         "path": "src/owner-access-api.js",
