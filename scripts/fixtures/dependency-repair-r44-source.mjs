@@ -1,3 +1,4 @@
+import{restoreResourceObservationWorkflow}from'./resource-observation-r44-source.mjs';
 // Exact dependency successor; prior workflow/package oracles stay unchanged.
 import assert from 'node:assert/strict';import {readFileSync}from'node:fs';import{createHash}from'node:crypto';
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -11,6 +12,7 @@ export function restoreDependencyPackage(bytes){
  const prior=Buffer.from(JSON.stringify(p,null,2)+'\n');assert.equal(sha(prior),packageHashes[1]);return prior;
 }
 export function restoreDependencyWorkflow(source,name){
+ if(name==='foundation-security-gate.yml')source=restoreResourceObservationWorkflow(source);
  const pair=workflows[name];assert.ok(pair);assert.equal(sha(source),pair[0]);
  for(const [current,prior,path]of [[...packageHashes,'package.json'],[...lockHashes,'package-lock.json']]){const from=current+'  '+path;assert.equal(source.split(from).length,2);source=source.replace(from,prior+'  '+path);}
  assert.equal(sha(source),pair[1]);
