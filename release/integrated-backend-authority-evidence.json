@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "b8c38007f0d8be847af0790069bcd80ec9bfbd23"
+        "object_id": "cb0e2628265734c55d7bcc370db9901e6fadeeff"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -3715,7 +3715,7 @@
       {
         "path": "scripts/fixtures/basecamp-ci-input-successor.mjs",
         "mode": "100644",
-        "object_id": "bab183a0141391107d5c3cefa926ed81328d5ee3"
+        "object_id": "b2f99b07de9172d59635f0594560503e44f70a01"
       },
       {
         "path": "scripts/fixtures/cohort-places-feedback-database-regression.sql",
