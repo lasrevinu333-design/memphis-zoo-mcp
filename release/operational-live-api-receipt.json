@@ -3,20 +3,20 @@
   "service_id": "srv-d7fsvg57vvec73bhe2r0",
   "origin": "https://memphis-zoo-mcp.onrender.com",
   "receipt_source": "Existing Render connector exact deployment readback",
-  "original_receipt_sha256": "fba8b87a3ba8ab88d58ef1c5251b32a95283309ee373212e7ed590e21c2f65de",
-  "observed_at": "2026-11-14T07:40:51.786335+00:00",
+  "original_receipt_sha256": "e6314c79061bc7bc239d33ba4a894f0ce386365c96df6649a7a9c184666b5396",
+  "observed_at": "2026-11-14T09:11:27.342765+00:00",
   "deployment": {
     "commit": {
-      "createdAt": "2026-11-14T07:27:23Z",
-      "id": "2842841960d46fffa4041ce05a73a83b671961b5",
-      "message": "Bind backend evidence to qualified collector repair"
+      "createdAt": "2026-11-14T09:05:06Z",
+      "id": "5ec2afcb13c035e2019e193222d209add13ffc8c",
+      "message": "Bind backend evidence to explicit source identity repair"
     },
-    "createdAt": "2026-11-14T07:36:59.616144Z",
-    "finishedAt": "2026-11-14T07:37:46.228217Z",
-    "id": "dep-dbs0v6on74is738ic3g0",
-    "startedAt": "2026-11-14T07:36:59.584943Z",
+    "createdAt": "2026-11-14T09:09:15.412041Z",
+    "finishedAt": "2026-11-14T09:09:59.610532Z",
+    "id": "dep-dbs2aeu7bikc73edetj0",
+    "startedAt": "2026-11-14T09:09:15.378054Z",
     "status": "live",
     "trigger": "api",
-    "updatedAt": "2026-11-14T07:37:46.228421Z"
+    "updatedAt": "2026-11-14T09:09:59.610914Z"
   }
 }
