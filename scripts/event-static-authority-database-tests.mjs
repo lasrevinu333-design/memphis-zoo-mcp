@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Runtime regression proof. Requires one clean, owned, fully migrated local DB.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -15,9 +15,19 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container)
 }
 const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
 function sql(statement) {
-  return execFileSync("docker", ["exec", "-i", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database], {
-    input: statement, encoding: "utf8", timeout: 120000, maxBuffer: 16 * 1024 * 1024,
-  }).trim().split("\n").filter(Boolean).at(-1) || "";
+  try {
+    return execFileSync("docker", ["exec", "-i", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database], {
+      input: statement, encoding: "utf8", timeout: 120000, maxBuffer: 16 * 1024 * 1024,
+    }).trim().split("\n").filter(Boolean).at(-1) || "";
+  } catch (error) {
+    // Evidence only from this exact disposable fixture; never suppress the SQL failure.
+    const state=spawnSync('docker',['inspect','--format','{"state":{{json .State}},"memory_limit":{{json .HostConfig.Memory}},"memory_swap":{{json .HostConfig.MemorySwap}}}',container],{encoding:'utf8',timeout:10000,maxBuffer:16384});
+    console.error(JSON.stringify({fixture_failure_state:state.stdout?.trim()||null,inspect_exit:state.status}));
+    const logs=spawnSync('docker',['logs','--tail','80',container],{encoding:'utf8',timeout:10000,maxBuffer:131072});
+    const relevant=(String(logs.stdout||'')+'\n'+String(logs.stderr||'')).split('\n').filter(line=>/FATAL|PANIC|out of memory|terminated by signal|reinitializ|database system|segmentation|Killed process/i.test(line)).slice(-20).map(line=>line.slice(0,500));
+    console.error(JSON.stringify({fixture_server_diagnostics:relevant,logs_exit:logs.status,logs_error:logs.error?.code||null}));
+    throw error;
+  }
 }
 const managerId = "00000000-0000-4000-8000-000000000001";
 const stamp = randomUUID().replaceAll("-", "").slice(0, 10);
@@ -223,6 +233,7 @@ record("old_incumbent_never_inherits_replacement_eligibility", schedule(event, o
 // transaction; no official receipt, projection, or trigger is changed.
 const currentProjection = fixture.projectionIds[weekStart];
 const currentEnvelope = JSON.parse(sql(`select projection_envelope::text from public.weekly_schedule_compiled_projections where projection_id=${q(currentProjection)}::uuid;`));
+console.log(JSON.stringify({fixture_projection_envelope_utf8_bytes:Buffer.byteLength(JSON.stringify(currentEnvelope),"utf8")}));
 function challengeEnvelope(name, mutate) {
   const envelope = structuredClone(currentEnvelope);
   const entries = envelope.authority.projectionAvailability;
@@ -231,16 +242,26 @@ function challengeEnvelope(name, mutate) {
   mutate(entry, envelope);
   const projectionId = randomUUID(), commandId = randomUUID();
   const result = JSON.parse(sql(`begin;
-    insert into public.weekly_schedule_compiled_projections
-    select (jsonb_populate_record(null::public.weekly_schedule_compiled_projections,to_jsonb(p)||jsonb_build_object(
-      'projection_id',${q(projectionId)},'authority_digest',public.static_weekly_digest_jsonb(${q(JSON.stringify(envelope))}::jsonb),
-      'projection_envelope',${q(JSON.stringify(envelope))}::jsonb))).*
-    from public.weekly_schedule_compiled_projections p where projection_id=${q(currentProjection)}::uuid;
-    insert into public.weekly_schedule_command_receipts
-    select (jsonb_populate_record(null::public.weekly_schedule_command_receipts,to_jsonb(r)||jsonb_build_object(
-      'command_id',${q(commandId)},'idempotency_key',${q(`hostile-${name}-${stamp}`)},
-      'response_json',jsonb_build_object('revision',(select max((response_json->>'revision')::bigint)+1 from public.weekly_schedule_command_receipts),
-        'data',jsonb_build_object('projection_id',${q(projectionId)}))))).*
+    with hostile_envelope as materialized (select ${q(JSON.stringify(envelope))}::jsonb as value)
+    insert into public.weekly_schedule_compiled_projections (
+      projection_id, publication_id, version_id, week_start, week_end, exception_set_json,
+      exception_set_digest, compiler_version, objective_json, metrics_json, replay_digest,
+      authority_digest, receipt_json, projection_envelope, compiled_by_manager_id, compiled_at)
+    select ${q(projectionId)}::uuid, p.publication_id, p.version_id, p.week_start, p.week_end,
+      p.exception_set_json, p.exception_set_digest, p.compiler_version, p.objective_json,
+      p.metrics_json, p.replay_digest, public.static_weekly_digest_jsonb(h.value), p.receipt_json,
+      h.value, p.compiled_by_manager_id, p.compiled_at
+    from public.weekly_schedule_compiled_projections p cross join hostile_envelope h
+    where p.projection_id=${q(currentProjection)}::uuid;
+    insert into public.weekly_schedule_command_receipts (
+      command_id, actor_manager_id, actor_manager_name_snapshot, command_type, idempotency_key,
+      expected_revision, request_digest, request_canonical_json, response_json, response_digest,
+      content_digest, accepted_at)
+    select ${q(commandId)}::uuid, r.actor_manager_id, r.actor_manager_name_snapshot, r.command_type,
+      ${q(`hostile-${name}-${stamp}`)}, r.expected_revision, r.request_digest, r.request_canonical_json,
+      jsonb_build_object('revision',(select max((response_json->>'revision')::bigint)+1 from public.weekly_schedule_command_receipts),
+        'data',jsonb_build_object('projection_id',${q(projectionId)})),
+      r.response_digest, r.content_digest, r.accepted_at
     from public.weekly_schedule_command_receipts r where command_type='materialize_projection'
       and response_json#>>'{data,projection_id}'=${q(currentProjection)} limit 1;
     select jsonb_build_object('selected_current',exists(select 1 from public.static_weekly_v6_schedule_authority_state(${q(serviceDate)}::date)
