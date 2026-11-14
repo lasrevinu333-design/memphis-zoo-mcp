@@ -5205,7 +5205,7 @@
       {
         "path": "scripts/manager-on-duty-tests.mjs",
         "mode": "100644",
-        "object_id": "dee6de0c021ce1aadfb243e9e84d4546ea4d9ffe"
+        "object_id": "836753bd690cca85ab907cbcbcec2447fa964c48"
       },
       {
         "path": "scripts/manager-original-recovery-approval-tests.mjs",
@@ -6510,7 +6510,7 @@
       {
         "path": "scripts/public-dashboard-details-tests.mjs",
         "mode": "100644",
-        "object_id": "336afed50bae16d1b2bd0c93a3c6c1efe74549dc"
+        "object_id": "d8d29f1383f2f07b5116856de174a97138a28186"
       },
       {
         "path": "scripts/public-operations-viewer-tests.mjs",
@@ -8995,7 +8995,7 @@
       {
         "path": "src/manager-on-duty.js",
         "mode": "100644",
-        "object_id": "932da4a2e485409f4be91495e1f6021ba4b5cef8"
+        "object_id": "8fea9704a95842c8718ef6e8ea5effcf76a10daa"
       },
       {
         "path": "src/manager-original-inventory-separation.js",
