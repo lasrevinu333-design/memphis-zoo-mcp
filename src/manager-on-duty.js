@@ -7,7 +7,7 @@ const weekly=Object.freeze([
   person('Eric Operle','00000000-0000-4000-8000-000000000001'),
   person('Brandy Gull'),person('Haley Lejman'),
   person('Eric McKenney','6b0a218b-6a1b-4ba6-a44e-6867e4816bc9'),
-  person('Jennifer Sheffield'),person('Haley Lejman'),person('Josh'),
+  person('Jennifer Sheffield'),person('Haley Lejman'),person('Josh Fortney'),
 ]);
 const dated=Object.freeze({
   '2026-11-11':weekly[3], // Owner confirmation November 10.

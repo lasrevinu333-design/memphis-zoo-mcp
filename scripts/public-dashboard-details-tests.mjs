@@ -70,7 +70,7 @@ test('actual anonymous HTTP reads require no cookie or token; writes and manager
 
 test('public and manager MOD use the same Central-date rota without exposing credentials',async()=>{
  const {makeOperationsBoardHandler}=await import('../src/operations-board.js');
- for(const [instant,name] of [['2026-11-14T05:59:59Z','Haley Lejman'],['2026-11-14T06:00:00Z','Josh'],['2026-11-15T06:00:00Z','Eric Operle']]){
+ for(const [instant,name] of [['2026-11-14T05:59:59Z','Haley Lejman'],['2026-11-14T06:00:00Z','Josh Fortney'],['2026-11-15T06:00:00Z','Eric Operle']]){
   const at=new Date(instant),publicFeed=publicOperationsDetails(events,mail,at);let body,times=0;
   const res={setHeader(){},status(code){assert.equal(code,200);return this;},json(value){body=value;}};
   await makeOperationsBoardHandler({readEvents:async()=>events,now:()=>{times++;return at;}})({memphisAuth:{role:'ops_manager',manager_id:'fixture',credential_id:'fixture'}},res);
