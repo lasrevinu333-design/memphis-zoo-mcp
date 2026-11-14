@@ -3055,7 +3055,7 @@
       {
         "path": "scripts/current-owned-sql-ci-entry.py",
         "mode": "100644",
-        "object_id": "2f3820a4830de10384ebb4b56bd4ee35c2dc438e"
+        "object_id": "ad3616682300a4aa57a479c21a2dce1477d0420e"
       },
       {
         "path": "scripts/current-preservation-manager-sql-fixture.mjs",
@@ -3715,7 +3715,7 @@
       {
         "path": "scripts/fixtures/basecamp-ci-input-successor.mjs",
         "mode": "100644",
-        "object_id": "b2f99b07de9172d59635f0594560503e44f70a01"
+        "object_id": "ca2e9ac36a2e476490a27303d9bc61cd5c4b6b54"
       },
       {
         "path": "scripts/fixtures/cohort-places-feedback-database-regression.sql",
