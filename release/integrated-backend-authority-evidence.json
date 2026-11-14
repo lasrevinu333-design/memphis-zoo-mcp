@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "9c6b0bc6e40a38e647248e136eec52374b90d92e"
+        "object_id": "55d075058780d7633ac3c83547ddc7fc841ebec0"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "cb0e2628265734c55d7bcc370db9901e6fadeeff"
+        "object_id": "384c8bfce94c1410498297c47d247677258737fa"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -745,12 +745,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "50d09c1fc87f89e8ebcbd25c68d57fe6cf40bcf3"
+        "object_id": "358eae0dbbaf91c800f6b0856ac05db19143d9a5"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "1cd0def09d4c9bcba8c82edd7fc19f9f2787c923"
+        "object_id": "f95f04e5e6032055ed4b90d9d28d39bb5f922fa7"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -1131,6 +1131,16 @@
         "path": "release/dependency-and-release-correction-verification.json",
         "mode": "100644",
         "object_id": "6736f345436a4703b3568912779a915c506c181f"
+      },
+      {
+        "path": "release/dependency-repair-r44/predecessor-package-lock.json",
+        "mode": "100644",
+        "object_id": "50d09c1fc87f89e8ebcbd25c68d57fe6cf40bcf3"
+      },
+      {
+        "path": "release/dependency-repair-r44/predecessor-package.json",
+        "mode": "100644",
+        "object_id": "1cd0def09d4c9bcba8c82edd7fc19f9f2787c923"
       },
       {
         "path": "release/disaster-recovery-runtime-contract.json",
@@ -3715,7 +3725,7 @@
       {
         "path": "scripts/fixtures/basecamp-ci-input-successor.mjs",
         "mode": "100644",
-        "object_id": "ca2e9ac36a2e476490a27303d9bc61cd5c4b6b54"
+        "object_id": "71de6879ffd235c590a5e2779f0eae05cb2ad403"
       },
       {
         "path": "scripts/fixtures/cohort-places-feedback-database-regression.sql",
@@ -4226,6 +4236,11 @@
         "path": "scripts/fixtures/departure-r9-sql-wire.json",
         "mode": "100644",
         "object_id": "006203586c59bab8e4c92ac39183f74991c74ddb"
+      },
+      {
+        "path": "scripts/fixtures/dependency-repair-r44-source.mjs",
+        "mode": "100644",
+        "object_id": "d3898c72be3a7d327ec01d349a99b021ad0dd9b0"
       },
       {
         "path": "scripts/fixtures/derive-recorded-predecessor.mjs",
@@ -12228,7 +12243,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2420,
+    "authority_path_count": 2423,
     "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
