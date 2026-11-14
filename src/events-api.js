@@ -434,6 +434,19 @@ export async function listSharedEvents(runReadOnlySql) {
   return rows;
 }
 
+// Private source reconciliation reuses the canonical place/audience inputs,
+// including for ended events. IDs come only from validated protected bindings;
+// this is not an HTTP history search or a caller-supplied SQL surface.
+export async function listSourceBoundEvents(runReadOnlySql,eventIds){
+  if(!Array.isArray(eventIds)||!eventIds.length||eventIds.length>500
+    ||new Set(eventIds).size!==eventIds.length||eventIds.some(id=>!isUuid(id)))
+    throw Error('Complete bounded source event identities required.');
+  const rows=await runReadOnlySql(buildEventResponseSelectSql(
+    `e.id in (${eventIds.map(sqlLiteral).join(',')})`,'order by e.id limit 501'));
+  if(!Array.isArray(rows)||rows.length>500)throw Error('Complete bounded source event data unavailable.');
+  return rows;
+}
+
 const PUBLIC_EVENT_FIELDS = Object.freeze([
   "id",
   "event_name",

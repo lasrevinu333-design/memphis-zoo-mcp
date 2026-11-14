@@ -176,3 +176,4 @@ test('new opening and out-of-order closing notifications retain both timestamped
 // Run the new bounded source cases through the existing registered owning lane.
 await import("./school-exact-block-duplicate-tests.mjs");
 await import("./outlook-published-feed-tests.mjs");
+await import("./outlook-source-receipt-tests.mjs");

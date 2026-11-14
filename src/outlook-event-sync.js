@@ -3,6 +3,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {z} from 'zod';
 import {resolveSupabaseClient} from './supabase/client.js';
 import {readOutlookPublishedFeed,OUTLOOK_PUBLISHED_FEED_SCHEMA} from './outlook-published-feed.js';
+import {readOutlookSourceReceipts,OUTLOOK_SOURCE_RECEIPT_SCHEMA} from './outlook-source-receipts.js';
 
 // Connected-agent source observations, not Microsoft attestations. The existing
 // collector must read the original source and complete all pages before it may
@@ -28,9 +29,18 @@ const event=z.discriminatedUnion('event_scope',[
   eventFields.extend({event_scope:z.enum(['ZOO_WIDE','SINGLE_VENUE','MULTI_VENUE'])}),
 ]);
 const identity={source,source_event_key:z.string().min(5).max(400),event_id:uuid.optional(),expected_revision:z.number().int().positive().max(2147483647).optional()};
+const sourceReceiptSelector=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('school_attachment'),original_source_read:z.literal(true),
+    attachment_read_complete:z.literal(true),attachment_sha256:hash}).strict(),
+  z.object({kind:z.literal('event_notice'),original_source_read:z.literal(true),
+    message_id:z.string().min(8).max(1500).regex(/^[^\u0000-\u001f\u007f]+$/)}).strict(),
+  z.object({kind:z.literal('event_key'),original_source_read:z.literal(true),
+    source_event_key:z.string().min(5).max(400).regex(/^[^\u0000-\u001f\u007f]+$/)}).strict(),
+]);
 export const outlookSyncSchema=z.object({contract_version:z.literal(OUTLOOK_SYNC_CONTRACT),
   request:z.discriminatedUnion('action',[
-    z.object({action:z.literal('status'),observation:z.object({include_public_feed:z.literal(true).optional()}).strict()}).strict(),
+    z.object({action:z.literal('status'),observation:z.object({include_public_feed:z.literal(true).optional(),
+      source_receipt:sourceReceiptSelector.optional()}).strict()}).strict(),
     z.object({action:z.literal('apply'),observation:z.object({...identity,event}).strict()}).strict(),
     z.object({action:z.literal('cancel'),observation:z.object({...identity,event_id:uuid,expected_revision:z.number().int().positive(),
       source:source.extend({evidence_kind:z.literal('event_cancellation')}),reason:z.string().max(1000).optional()}).strict()}).strict(),
@@ -75,10 +85,11 @@ async function untilAborted(operation,signal){
   try{return await Promise.race([Promise.resolve().then(operation),aborted]);}
   finally{signal.removeEventListener('abort',cancel);}
 }
-export async function callOutlookEventSync(args,extra,{client,signal,publishedFeedReaders}={}){
+export async function callOutlookEventSync(args,extra,{client,signal,publishedFeedReaders,sourceReceiptReaders}={}){
   const requireOriginal=originalPrincipal(extra),checked=outlookSyncSchema.parse(args),{action,observation}=checked.request;
   // Own the internal reader references before the first awaited source call.
   const feedReaders=publishedFeedReaders?{...publishedFeedReaders}:{};
+  const receiptReaders=sourceReceiptReaders?{...sourceReceiptReaders}:{};
   if(Buffer.byteLength(JSON.stringify(observation))>65536)fail('outlook_sync_observation_limit');
   const service=resolveSupabaseClient(client),timeout=signal?AbortSignal.any([signal,AbortSignal.timeout(10000)]):AbortSignal.timeout(10000);
   const current=()=>{
@@ -91,15 +102,29 @@ export async function callOutlookEventSync(args,extra,{client,signal,publishedFe
   if(response?.error)fail(action==='status'?'outlook_sync_status_unavailable':'outlook_sync_write_unconfirmed');
   if(action==='status'){
     const observed=status(response?.data);current();
-    if(observation.include_public_feed!==true)return observed;
-    let published;
-    try{
-      published=await untilAborted(()=>readOutlookPublishedFeed({...feedReaders,client:service,signal:timeout,assertCurrent:current}),timeout);
-    }catch{
-      current();
-      return {...observed,public_feed:{schema:OUTLOOK_PUBLISHED_FEED_SCHEMA,state:'unavailable',reason:'published_source_unavailable'}};
+    const output={...observed};
+    if(observation.include_public_feed===true){
+      try{
+        output.public_feed=await untilAborted(()=>readOutlookPublishedFeed({...feedReaders,client:service,signal:timeout,assertCurrent:current}),timeout);
+      }catch{
+        current();output.public_feed={schema:OUTLOOK_PUBLISHED_FEED_SCHEMA,state:'unavailable',reason:'published_source_unavailable'};
+      }
     }
-    current();return {...observed,public_feed:published};
+    if(observation.source_receipt){
+      const validateEventObservation=(value,state)=>{
+        const actions=state==='APPLIED'?['apply']:state==='CANCELLED'?['cancel']
+          :state==='NEEDS_REVIEW'?['apply','cancel','review']:['apply','cancel'];
+        if(!actions.some(action=>outlookSyncSchema.safeParse({contract_version:OUTLOOK_SYNC_CONTRACT,
+          request:{action,observation:value}}).success))fail('outlook_sync_source_receipt_invalid');
+      };
+      try{
+        output.source_receipt=await untilAborted(()=>readOutlookSourceReceipts({...receiptReaders,
+          client:service,selector:observation.source_receipt,signal:timeout,assertCurrent:current,validateEventObservation}),timeout);
+      }catch{
+        current();output.source_receipt={schema:OUTLOOK_SOURCE_RECEIPT_SCHEMA,state:'unavailable',reason:'protected_source_receipt_unavailable'};
+      }
+    }
+    current();return output;
   }
   const checkpoint=action==='checkpoint',key=checkpoint?'custodial-outlook-events-v1/checkpoint':`custodial-outlook-events-v1/event/${observation.source_event_key}`;
   const message=checkpoint?`collector:${observation.run_id}`:observation.source.message_id;

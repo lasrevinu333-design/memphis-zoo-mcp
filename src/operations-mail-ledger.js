@@ -134,3 +134,35 @@ export async function readOperationsMailLedger({client,signal}={}){
     return projectOperationsMailRows(data);
   }catch{return missing('operations_mail_snapshot_invalid');}
 }
+
+// Private exact-document reconciliation, not a raw-ledger/search interface.
+// A forwarded copy can have a different message/attachment ID while carrying
+// the exact original workbook bytes. Return the stored original IDs so the
+// collector can fetch that original through Outlook; never assert that the
+// caller's copy is the same message or reproduce an import merely for proof.
+export async function readSchoolSourceReceipts({client,attachmentSha256,signal,assertCurrent}={}){
+  const current=()=>{if(signal?.aborted)fail('operations_mail_receipt_cancelled');assertCurrent?.();};
+  current();
+  if(!/^[a-f0-9]{64}$/.test(attachmentSha256)||!client?.from)fail('operations_mail_receipt_invalid');
+  const {data,error,count}=await client.from(TABLE).select(COLUMNS,{count:'exact'})
+    .like('source_event_key',`${PREFIX}school/%`)
+    .contains('source_payload',{schema:'custodial.operations-mail-record.v1',kind:'school',
+      observation:{attachment:{sha256:attachmentSha256}}})
+    .order('id').range(0,MAX_ROWS-1).abortSignal(signal).retry(false);
+  current();
+  if(error||!Number.isSafeInteger(count)||count<0||count>MAX_ROWS||!Array.isArray(data)
+    ||data.length!==count||Buffer.byteLength(JSON.stringify(data))>MAX_BYTES)fail('operations_mail_receipt_incomplete');
+  const seen=new Set();
+  return data.map(row=>{
+    const {kind,observation}=checkedRow(row);
+    if(kind!=='school'||observation.attachment.sha256!==attachmentSha256
+      ||!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(row.id)
+      ||seen.has(row.id.toLowerCase()))fail('operations_mail_receipt_binding_invalid');
+    seen.add(row.id.toLowerCase());
+    return {ledger_id:row.id,source_key:row.source_event_key,state:row.sync_status,
+      payload_sha256:row.payload_hash,imported_at:new Date(row.created_at).toISOString(),
+      source:{...observation.source},attachment:{...observation.attachment},
+      complete_for_dates:[...observation.complete_for_dates],
+      binding:'exact_raw_attachment_sha256',integrity:'canonical_payload_digest_verified'};
+  });
+}

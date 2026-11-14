@@ -18,7 +18,7 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     requires:['supabase'],inputs:Object.keys(operationsMailSyncSchema.shape),input_schema:z.toJSONSchema(operationsMailSyncSchema),
     contract_version:OPERATIONS_MAIL_SYNC_CONTRACT,adapter_schema_sha256:OPERATIONS_MAIL_SYNC_SCHEMA_SHA256,required_scopes:['mcp:read','mcp:write']},
   {name:'custodial_outlook_events_sync',safety:TOOL_SAFETY.SAFE_WRITE,status:'current',
-    description:'Private existing Outlook event writer with source-bound ledger readback; optional status include_public_feed reads the canonical safe published event/school projection. No raw ledger/source output, mailbox/scheduler activation or external mutation.',
+    description:'Private existing Outlook writer with source-bound readback; optional status include_public_feed reads safe current event/school projection, source_receipt reads bounded protected binding metadata for exact original message/document/established event key plus safe current/ended bound-event metadata. No raw ledger payload/mail/private notes, arbitrary queries, grants or mailbox/scheduler activation.',
     requires:['supabase'],inputs:Object.keys(outlookSyncSchema.shape),input_schema:z.toJSONSchema(outlookSyncSchema),
     contract_version:OUTLOOK_SYNC_CONTRACT,adapter_schema_sha256:OUTLOOK_SYNC_SCHEMA_SHA256,required_scopes:['mcp:read','mcp:write']},
   ...Object.entries(feedbackRelaySchemas).map(([verb, schema]) => ({
