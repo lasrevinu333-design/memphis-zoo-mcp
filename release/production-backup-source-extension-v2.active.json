@@ -11,9 +11,9 @@
     "migration_head": "20260920010000",
     "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
   },
-  "observed_ledger_count": 424,
-  "observed_ledger_head": "20261113225746",
-  "observed_catalog_fingerprint": "5a423172d0911422cff099200ba600e0fcd5d806e836745208d368afc61fa8af",
+  "observed_ledger_count": 425,
+  "observed_ledger_head": "20261114005000",
+  "observed_catalog_fingerprint": "819f49a7c344f973e409513355bd76156dd16379ff7dcf9f7b6a71d432febe0f",
   "ledger": [
     {
       "version": "20260514224806",
@@ -2982,9 +2982,16 @@
       "statement_sha256": [
         "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a"
       ]
+    },
+    {
+      "version": "20261114005000",
+      "name": "custodial_messenger_contact_directory_qualified",
+      "statement_sha256": [
+        "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82"
+      ]
     }
   ],
-  "ledger_sha256": "e316ee105ac1f8b0d82785b832e34356c785310340421fe17a763370006c2c47",
+  "ledger_sha256": "9717ff9a954ac7d7554cd43350cfcf65a0a454d60e838065fb4a34364337cc85",
   "historical_baseline": [
     {
       "version": "20260514224806",
@@ -5518,7 +5525,15 @@
       "source_location": "retained_installed",
       "source_file": "20261113225746_custodial_approved_manual_exact_shift_count_compatibility_qualified.sql",
       "sql_sha256": "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a"
+    },
+    {
+      "ledger_version": "20261114005000",
+      "ledger_name": "custodial_messenger_contact_directory_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261114005000_custodial_messenger_contact_directory_qualified.sql",
+      "sql_sha256": "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82"
     }
   ],
-  "source_bindings_sha256": "b93f1dcbbbabae796f6d90260e03f3b57e04d1006c4b908d471a9b1516d08c18"
+  "source_bindings_sha256": "1b2e54986b803d3efb90847af65186597472dee7aabed1831996994cd19fcd2c"
 }

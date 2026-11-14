@@ -83,7 +83,7 @@ const currentCases=[
 ];
 for(const [name,mutate]of currentCases)test('current 420 binding rejects '+name,()=>{const x=currentInput();mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
 
-const latest=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const latest=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.v80-424.active.json',import.meta.url),'utf8'));
 const latestCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.v80-424.candidate.json',import.meta.url),'utf8'));
 test('current exact 424 boundary preserves all 420 rows and 190 sources, adding only four qualified migrations',()=>{
  assert.equal(validateBackupLedgerDeclarationV2(latest),true);assert.equal(validateBackupLedgerDeclarationV2(latestCandidate),true);assert.deepEqual({...latest,activation_status:'candidate'},latestCandidate);
@@ -98,8 +98,36 @@ test('424 synthetic fixture capture and archive verification preserve both previ
  assert.equal(bindBackupSchemaExtension(currentInput(latest)).captured_ledger_count,424);
 });
 for(const [name,mutate]of [
- ['unreviewed 425',x=>x.declaration.observed_ledger_count=425],['intermediate 423',x=>x.declaration.observed_ledger_count=423],['old head',x=>x.declaration.observed_ledger_head=current.observed_ledger_head],
+ ['425 count on 424 contents',x=>x.declaration.observed_ledger_count=425],['intermediate 423',x=>x.declaration.observed_ledger_count=423],['old head',x=>x.declaration.observed_ledger_head=current.observed_ledger_head],
  ['changed departure SQL',x=>x.migrationLedger[420].statements[0]+='\n'],['changed timing SQL',x=>x.migrationLedger[421].statements[0]+='\n'],['changed phone SQL',x=>x.migrationLedger[422].statements[0]+='\n'],['changed count SQL',x=>x.migrationLedger[423].statements[0]+='\n'],
  ['missing new binding',x=>x.declaration.source_bindings.pop()],['old source pin',x=>x.declaration.source_bindings_sha256=current.source_bindings_sha256],['changed retained source',x=>x.readSource=()=>Buffer.from('changed')],['extra statement',x=>x.migrationLedger[423].statements.push('select 1;')],
  ['catalog drift',x=>x.catalog.tables.push({schema_name:'public',table_name:'unexpected'})],['wrong release identity',x=>x.releaseIdentity.backend_commit='0'.repeat(40)],['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
 ])test('424 binding rejects '+name,()=>{const x=currentInput(latest);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
+
+const messenger=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const messengerCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.messenger425.candidate.json',import.meta.url),'utf8'));
+test('exact 425 declaration adds only the applied contact migration while preserving 424 and the deployed identity',()=>{
+ assert.equal(validateBackupLedgerDeclarationV2(messenger),true);assert.equal(validateBackupLedgerDeclarationV2(messengerCandidate),true);
+ assert.deepEqual({...messenger,activation_status:'candidate'},messengerCandidate);
+ assert.equal(messenger.observed_ledger_count,425);assert.equal(messenger.observed_ledger_head,'20261114005000');
+ assert.deepEqual(messenger.ledger.slice(0,424),latest.ledger);assert.deepEqual(messenger.source_bindings.slice(0,194),latest.source_bindings);
+ assert.deepEqual(messenger.deployed_release,latest.deployed_release);assert.deepEqual(messenger.historical_baseline,latest.historical_baseline);
+ assert.equal(messenger.source_bindings.length,195);assert.equal(messenger.observed_catalog_fingerprint,'819f49a7c344f973e409513355bd76156dd16379ff7dcf9f7b6a71d432febe0f');
+ assert.equal(messenger.ledger_sha256,'9717ff9a954ac7d7554cd43350cfcf65a0a454d60e838065fb4a34364337cc85');
+ assert.equal(messenger.source_bindings_sha256,'1b2e54986b803d3efb90847af65186597472dee7aabed1831996994cd19fcd2c');
+ assert.equal(messenger.source_bindings.at(-1).sql_sha256,'a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82');
+ for(const s of messenger.source_bindings)assert.equal(sha(source(s.source_file,s.source_location)),s.sql_sha256);
+});
+test('425 synthetic capture and archive verification keep all three prior finite formats valid',()=>{
+ for(const x of [input(),currentInput(),currentInput(latest),currentInput(messenger)])assert.equal(verifyArchivedSchemaExtension(archiveFor(x)),true);
+ assert.equal(bindBackupSchemaExtension(currentInput(messenger)).captured_ledger_count,425);
+});
+for(const [name,mutate]of [
+ ['unknown 426',x=>x.declaration.observed_ledger_count=426],['unknown 421',x=>x.declaration.observed_ledger_count=421],['unknown 422',x=>x.declaration.observed_ledger_count=422],['unknown 423',x=>x.declaration.observed_ledger_count=423],
+ ['old head',x=>x.declaration.observed_ledger_head=latest.observed_ledger_head],['changed contact SQL',x=>x.migrationLedger[424].statements[0]+='\n'],
+ ['missing contact binding',x=>x.declaration.source_bindings.pop()],['old source pin',x=>x.declaration.source_bindings_sha256=latest.source_bindings_sha256],
+ ['changed retained contact source',x=>{const prior=x.readSource;x.readSource=(file,where)=>file.startsWith('20261114005000')?Buffer.from('changed'):prior(file,where);}],
+ ['extra statement',x=>x.migrationLedger[424].statements.push('select 1;')],['changed earlier ledger',x=>x.migrationLedger[420].statements[0]+='\n'],
+ ['catalog drift',x=>x.catalog.functions.push({schema_name:'public',function_name:'unexpected'})],['wrong release identity',x=>x.releaseIdentity.frontend_commit='0'.repeat(40)],
+ ['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
+])test('425 binding rejects '+name,()=>{const x=currentInput(messenger);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});

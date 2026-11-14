@@ -1,0 +1,24 @@
+{
+  "schema": "custodial.backup-installed-source-addition.v1",
+  "replay_authorized": false,
+  "prior_ledger_count": 424,
+  "current_ledger_count": 425,
+  "deployed_release_identity_unchanged": true,
+  "prior_source_bindings_sha256": "b93f1dcbbbabae796f6d90260e03f3b57e04d1006c4b908d471a9b1516d08c18",
+  "source_bindings_sha256": "1b2e54986b803d3efb90847af65186597472dee7aabed1831996994cd19fcd2c",
+  "statement_source_bindings": [
+    {
+      "ledger_version": "20261114005000",
+      "ledger_name": "custodial_messenger_contact_directory_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261114005000_custodial_messenger_contact_directory_qualified.sql",
+      "sql_sha256": "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82",
+      "source_filename": "messenger-recipient-directory.r16.proposed.sql",
+      "source_raw_sha256": "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82",
+      "installed_sha256": "a65e6e8baff42fc5e1427b7c66f181c3f23ea5b17b671894f4bf94acc6093d82",
+      "transformation": "none",
+      "retained_path": "release/installed-source/20261114005000_custodial_messenger_contact_directory_qualified.sql"
+    }
+  ]
+}
