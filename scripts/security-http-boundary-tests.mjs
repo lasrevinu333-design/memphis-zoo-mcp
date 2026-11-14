@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
-import {setAllowedCorsOrigin,requireHealthDiagnostics,healthResponse,releaseMonitorAuthority} from '../src/security-http-boundaries.js';
+import {setAllowedCorsOrigin,requireHealthDiagnostics,healthResponse,releaseMonitorAuthority,isReleaseMonitorRequest} from '../src/security-http-boundaries.js';
 import {makeOpsAccessMiddleware,createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 const source=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
 const env={NODE_ENV:'test',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:randomBytes(32).toString('hex')};
@@ -14,7 +14,7 @@ const sign=now=>createOpsManagerSession({credentialId:row.credential_id,deviceId
 const token=sign(),expired=sign(new Date(Date.now()-3600000)),requireOpsManagerAuth=makeOpsAccessMiddleware({env,trustedDeviceStore:{find:async id=>id===row.credential_id?row:null}});
 const monitorToken="SYNTHETIC-RELEASE-OBSERVER-TOKEN-ONLY-0001";
 let probes=0,probeError=false,healthy=true;const routes=[];
-const context=vm.createContext({app:{get:(path,...stack)=>routes.push({paths:Array.isArray(path)?path:[path],stack})},requireOpsManagerAuth,requireHealthDiagnostics,healthResponse,releaseMonitorAuthority,setAllowedCorsOrigin,Buffer,timingSafeEqual,
+const context=vm.createContext({app:{get:(path,...stack)=>routes.push({paths:Array.isArray(path)?path:[path],stack})},requireOpsManagerAuth,requireHealthDiagnostics,healthResponse,releaseMonitorAuthority,isReleaseMonitorRequest,setAllowedCorsOrigin,Buffer,timingSafeEqual,
  CORS_ORIGINS_SET:new Set(['https://allowed.invalid']),setPublicDashboardCors(){},configuredReleaseCanaryDeviceId:()=> 'SYNTHETIC-CANARY-PRIVATE',releaseCanaryConfigurationRequired:()=>true,
  runReadOnlySql:async()=>{probes++;if(probeError)throw Error('SYNTHETIC-RAW-SECRET');return [{database_reachable:healthy,transaction_read_only:true,dedicated_reader_member:true,reader_role_restricted:true,sessions_table:true,messages_table:true,notification_outbox_table:true,message_audit_table:true,exact_finish_rpc:true,manager_messaging_rpc:true,worker_claim_rpc:true,notification_backlog:7}];},
  runRpc:async()=>false,offlineAuthoritySecret:()=> 'SYNTHETIC-NO-PROVIDER',getDeviceCredentialSecretReadiness:async()=>({ready:true,private_count:9}),supabaseAdmin:null,process:{env:{MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN:monitorToken}},
@@ -29,7 +29,7 @@ evaluate('app.get(["/health", "/health/dependencies"]', 'app.get("/admin-api/hea
 evaluate('app.get("/dashboard-api/canary"', 'app.get("/dashboard-api/current-attendance"');
 evaluate('app.get("/scan-api/authority-health"', '// Fixed original readback only.');
 function response(){return {statusCode:200,headers:{},status(n){this.statusCode=n;return this;},json(value){this.body=JSON.parse(JSON.stringify(value));return this;},setHeader(k,v){this.headers[k.toLowerCase()]=v;},removeHeader(k){delete this.headers[k.toLowerCase()];},vary(k){this.headers.vary=[...new Set([...(this.headers.vary||'').split(/,\s*/).filter(Boolean),k])].join(', ');}};}
-async function request(path,auth){const route=routes.find(r=>r.paths.includes(path));assert.ok(route);const headers=auth?{authorization:'Bearer '+auth}:{};const req={path,url:path,originalUrl:path,method:'GET',headers,get:k=>headers[k.toLowerCase()]||'',header:k=>headers[k.toLowerCase()]||''},res=response();for(const fn of route.stack){let next=false;await fn(req,res,()=>{next=true;});if(!next)break;}return res;}
+async function request(path,auth){const route=routes.find(r=>r.paths.some(candidate=>candidate.toLowerCase().replace(/\/+$/,'')===path.toLowerCase().replace(/\/+$/,'')));assert.ok(route);const headers=auth?{authorization:'Bearer '+auth}:{};const req={path,url:path,originalUrl:path,method:'GET',headers,get:k=>headers[k.toLowerCase()]||'',header:k=>headers[k.toLowerCase()]||''},res=response();for(const fn of route.stack){let next=false;await fn(req,res,()=>{next=true;});if(!next)break;}return res;}
 const checks=[];const pass=s=>{checks.push(s);console.log('PASS '+s);};
 for(const origin of [undefined,'https://unapproved.invalid','null','https://allowed.invalid.evil']){const res=response();res.setHeader('Access-Control-Allow-Origin','https://stale.invalid');res.setHeader('Access-Control-Allow-Credentials','true');res.vary('Accept-Encoding');context.setCorsOrigin(res,{headers:origin?{origin}:{}});assert.equal(res.headers['access-control-allow-origin'],undefined);assert.equal(res.headers['access-control-allow-credentials'],undefined);assert.equal(res.headers.vary,'Accept-Encoding, Origin');}pass('actual CORS helper omits absent/disallowed origins and removes stale grants while preserving Vary');
 {const res=response();context.setCorsOrigin(res,{headers:{origin:'https://allowed.invalid'}});assert.equal(res.headers['access-control-allow-origin'],'https://allowed.invalid');assert.equal(res.headers['access-control-allow-credentials'],'true');}pass('allowed incoming origin is echoed exactly');
@@ -58,3 +58,9 @@ for(const path of ['/health/dependencies','/dashboard-api/canary','/scan-api/aut
 }
 pass('observer does not become a manager or unlock original manager routes');
 console.log('PASS release monitor fixed GET diagnostics; no credential, grant, database or production changes');
+
+for(const path of ['/ADMIN-API/RELEASE-MONITOR/DEPENDENCIES/','/Admin-Api/Release-Monitor/Authority/']){
+ const r=await request(path,monitorToken);assert.equal(r.statusCode,200);assert.equal(r.headers['cache-control'],'private, no-store');
+ assert.ok(!JSON.stringify(r.body).includes('SYNTHETIC-CANARY-PRIVATE'));assert.equal(r.body.device_credential_secret,undefined);assert.equal(r.body.data?.private_authority,undefined);
+}
+pass('case and trailing-slash monitor aliases preserve reduced authenticated projections');

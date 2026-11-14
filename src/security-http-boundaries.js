@@ -1,6 +1,10 @@
+// Match the same case/trailing-slash variants admitted by Express's GET route.
+export function isReleaseMonitorRequest(req){
+  return /^\/admin-api\/release-monitor\/(?:dependencies|authority|dashboard-canary)\/?$/i.test(String(req?.path||''));
+}
 // Public readiness needs the status, not dependency, canary, or release details.
 export function healthResponse(req, diagnostics) {
-  if(req.path === '/admin-api/release-monitor/dependencies')return {
+  if(isReleaseMonitorRequest(req))return {
     ok:diagnostics.ok===true,process_alive:diagnostics.process_alive===true,
     backend_commit_sha:diagnostics.backend_commit_sha,read_authority_ready:diagnostics.read_authority_ready,
     database_reachable:diagnostics.database_reachable,required_schema_present:diagnostics.required_schema_present,

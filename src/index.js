@@ -11,7 +11,7 @@ import { installManagerHeldEventCorrectionRoutes } from "./manager-held-event-co
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
-import { setAllowedCorsOrigin, requireHealthDiagnostics, healthResponse, releaseMonitorAuthority } from "./security-http-boundaries.js";
+import { setAllowedCorsOrigin, requireHealthDiagnostics, healthResponse, releaseMonitorAuthority, isReleaseMonitorRequest } from "./security-http-boundaries.js";
 import { createGeneralJsonMiddleware, createGeneralUrlencodedMiddleware } from "./request-json-parser.js";
 import { parse as parseAttendanceDocument } from "parse5";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -3048,7 +3048,7 @@ app.get("/admin-api/release-monitor/dashboard-canary", requireReleaseSchemaIdent
 async function serveDashboardCanary(_req, res) {
   res.setHeader('Cache-Control','private, no-store');
   try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
-  catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: _req.path==='/admin-api/release-monitor/dashboard-canary'?"Dashboard canary failed":error.message || "Dashboard canary failed" }); }
+  catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: isReleaseMonitorRequest(_req)?"Dashboard canary failed":error.message || "Dashboard canary failed" }); }
 }
 app.get("/dashboard-api/current-attendance", async (_req, res) => {
   try {
@@ -3269,10 +3269,10 @@ async function serveAuthorityHealth(_req, res) {
     res.status(ok ? 200 : 503).json({
       ok,
       data: {
-        ...(_req.path==='/admin-api/release-monitor/authority'?releaseMonitorAuthority(data):data),
+        ...(isReleaseMonitorRequest(_req)?releaseMonitorAuthority(data):data),
         release_canary: {
           configured: Boolean(canaryDeviceId),
-          ...(_req.path==='/admin-api/release-monitor/authority'?{}:{device_identifier:canaryDeviceId}),
+          ...(isReleaseMonitorRequest(_req)?{}:{device_identifier:canaryDeviceId}),
           control_initialized: canaryControlInitialized,
           paused: canaryPaused,
         },
