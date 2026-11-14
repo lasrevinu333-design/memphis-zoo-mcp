@@ -100,16 +100,33 @@ jobs:
       - name: Authentication and integration contracts
         run: |
           set -euo pipefail
+          ci_sql_parent="/mnt/custodial-sql-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$ci_sql_parent"
+          test "$(stat -c %d /mnt)" != "$(stat -c %d /)"
+          if ! command -v bwrap; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends bubblewrap
+          fi
+          command -v bwrap
+          sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$ci_sql_parent"
           npm run --silent test:ci-workflows
           npm run --silent test:auth
           npm run --silent test:backup-source-binding
           node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs
           node scripts/manager-scheduler-http-tests.mjs
           node scripts/scheduler-reported-boundaries-tests.mjs
-          node scripts/manager-scheduler-database-tests.mjs
-          npm run --silent test:owner-access
+          python3 scripts/current-owned-sql-ci-entry.py --consumer manager --runtime "$ci_sql_parent/manager-runtime" --evidence "$RUNNER_TEMP/owned-manager-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          npm run --silent test:manager-auth
+          node scripts/map-owner-session-http-tests.mjs
+          node scripts/feedback-acknowledgment-auth-tests.mjs
+          node scripts/static-weekly-control-plane-tests.mjs
+          node scripts/static-weekly-control-plane-runtime-tests.mjs
+          python3 scripts/current-owned-sql-ci-entry.py --consumer owner --runtime "$ci_sql_parent/owner-runtime" --evidence "$RUNNER_TEMP/owned-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node scripts/release-attestation-path-tests.mjs
+          npm run --silent test:custodial-employee-phones
+          node scripts/proxy-address-regression-tests.mjs
           npm run --silent test:foundation-containment
-          npm run --silent test:readonly-database-authority
+          python3 scripts/current-owned-sql-ci-entry.py --consumer read-only --runtime "$ci_sql_parent/read-only-runtime" --evidence "$RUNNER_TEMP/owned-read-only-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           npm run --silent test:operations-leadership-mobile
           npm run --silent test:manager-notifications
           npm run --silent test:custodial-employee-phones

@@ -2,7 +2,7 @@ from pathlib import Path
 import json,hashlib,subprocess,shutil,os,sys
 import argparse
 parser=argparse.ArgumentParser(description='Explicit owned SQL CI fixture, never an app build, deployment, or production migration')
-parser.add_argument('--consumer',choices=['manager','taxonomy'],required=True)
+parser.add_argument('--consumer',choices=['manager','owner','read-only','taxonomy'],required=True)
 parser.add_argument('--runtime',required=True,help='new absolute owned directory on an existing secondary disk')
 parser.add_argument('--evidence',required=True,help='new absolute durable evidence directory')
 args=parser.parse_args()
@@ -14,7 +14,7 @@ for p in [T,E]:
 fs=subprocess.check_output(['stat','-f','-c','%T',str(T.parent)],text=True).strip()
 assert fs not in ['tmpfs','ramfs','overlayfs'] and T.parent.stat().st_dev!=Path('/').stat().st_dev,'Existing secondary disk required; no root/tmpfs fallback'
 count=310 if args.consumer=='taxonomy' else 308
-consumer='completion-taxonomy-database-tests.mjs' if count==310 else 'manager-scheduler-database-tests.mjs'
+consumer={'manager':'manager-scheduler-database-tests.mjs','owner':'owner-actions-database-tests.mjs','read-only':'read-only-database-authority-tests.mjs','taxonomy':'completion-taxonomy-database-tests.mjs'}[args.consumer]
 constructor='current-qualification-rebuild.py' if count==310 else 'current-candidate-rebuild.py'
 label=args.consumer
 S=T/'source';O=E.parent

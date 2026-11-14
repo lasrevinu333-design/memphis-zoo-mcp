@@ -1,4 +1,4 @@
-import {restoreBasecampCiWorkflow,verifyBasecampCiInputs} from './basecamp-ci-input-successor.mjs';
+import {restoreBasecampCiWorkflow,verifyBasecampCiInputs,currentBasecampCiRegressionView} from './basecamp-ci-input-successor.mjs';
 // Source-only CI lineage. The actual current workflow and current added tests
 // are checked before the immutable historical workflow contract is evaluated.
 import assert from 'node:assert/strict';
@@ -22,7 +22,7 @@ export function currentFoundationReviewedRegressionView(source){
  // The added current suites are executed and hash-bound above. This one view
  // keeps today's seven input pins for the older dedicated-step mutation tests.
  restoreCurrentFoundationProof(source);assert.equal(source.split(added).length,2);
- return source.replace(added,'');
+ return currentBasecampCiRegressionView(source).replace(added,'');
 }
 export function restoreCurrentRepairWorkflowProof(source){
  source=restoreBasecampCiWorkflow(source,'custodial-production-repair.yml');
