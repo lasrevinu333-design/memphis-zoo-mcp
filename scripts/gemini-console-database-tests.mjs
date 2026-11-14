@@ -92,4 +92,3 @@ assert.equal(await sql(`select count(*) from public.gemini_console_messages wher
 assert.equal(await sql(`select count(*) from public.gemini_console_messages where conversation_id='${ordinaryConversation}'::uuid and body=${literal("Fix it.")} and metadata_json->>'source'='direct_authenticated_user';`),"1");
 
 console.log(JSON.stringify({ok:true,concurrent_requests:10,logical_user_rows:1,logical_assistant_rows:1,replay_deduplicated:true,attachment_transaction:true,custodial_manager_authorization:true,controlled_worker_claim_backup_finish:true,ordinary_manager_denied:true,private_server_only_tables:true},null,2));
-}
