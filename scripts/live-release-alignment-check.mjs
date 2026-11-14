@@ -38,7 +38,7 @@ function readReadonlyExternalAttestation(path) {
 }
 
 async function fetchJson(url, label, headers = {}) {
-  const response = await fetch(url, { headers: { accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000) });
+  const response = await fetch(url, { redirect: "error", headers: { accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
   return response.json();
 }
@@ -55,9 +55,17 @@ const frontendReleaseUrl = requiredEnv("FRONTEND_RELEASE_MANIFEST_URL");
 const frontendDeploymentUrl = requiredEnv("FRONTEND_DEPLOYMENT_MANIFEST_URL");
 const schemaToken = requiredEnv("LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN");
 const identityUrl = String(process.env.BACKEND_SCHEMA_IDENTITY_URL || new URL("/admin-api/release-schema-identity", backendUrl).toString());
-const healthUrl = String(process.env.BACKEND_HEALTH_URL || new URL("/health", backendUrl).toString());
-const authorityHealthUrl = String(process.env.BACKEND_AUTHORITY_HEALTH_URL || new URL("/scan-api/authority-health", backendUrl).toString());
-const dashboardCanaryUrl = new URL("/dashboard-api/canary", backendUrl).toString();
+const healthUrl = String(process.env.BACKEND_HEALTH_URL || new URL("/admin-api/release-monitor/dependencies", backendUrl).toString());
+const authorityHealthUrl = String(process.env.BACKEND_AUTHORITY_HEALTH_URL || new URL("/admin-api/release-monitor/authority", backendUrl).toString());
+const dashboardCanaryUrl = new URL("/admin-api/release-monitor/dashboard-canary", backendUrl).toString();
+// Existing machine observer token is confined to fixed same-origin GET diagnostics.
+for(const [url,path] of [[healthUrl,'/admin-api/release-monitor/dependencies'],[authorityHealthUrl,'/admin-api/release-monitor/authority'],[dashboardCanaryUrl,'/admin-api/release-monitor/dashboard-canary']]) {
+  const target=new URL(url),base=new URL(backendUrl);
+  assert.equal(target.origin,base.origin,'Monitor credentials cannot leave the canonical backend origin');
+  assert.equal(target.pathname,path,'Monitor requires the protected release-observer diagnostic route');
+  assert.equal(target.username+target.password+target.search+target.hash,'','Monitor URL must not contain credentials, query or fragment');
+}
+const monitorHeaders={authorization:`Bearer ${schemaToken}`};
 const schedulerReadyUrl = requiredEnv("STATIC_WEEKLY_CONTROL_PLANE_READY_URL");
 
 const [frontend, deployment, backend, observed, healthProbe, authorityHealth, schedulerReady, dashboardCanary] = await Promise.all([
@@ -65,10 +73,10 @@ const [frontend, deployment, backend, observed, healthProbe, authorityHealth, sc
   fetchJson(frontendDeploymentUrl, "frontend deployment manifest"),
   fetchJson(backendUrl, "backend release manifest"),
   fetchJson(identityUrl, "authenticated production schema identity", { authorization: `Bearer ${schemaToken}` }),
-  fetchTimedJson(healthUrl, "backend dependency health"),
-  fetchJson(authorityHealthUrl, "canonical custodial authority health"),
+  fetchTimedJson(healthUrl, "backend dependency health", monitorHeaders),
+  fetchJson(authorityHealthUrl, "canonical custodial authority health", monitorHeaders),
   fetchJson(schedulerReadyUrl, "static weekly scheduler readiness"),
-  fetchJson(dashboardCanaryUrl, "actual application-reader Dashboard execution"),
+  fetchJson(dashboardCanaryUrl, "actual application-reader Dashboard execution", monitorHeaders),
 ]);
 const health = healthProbe.json;
 assertDashboardReleaseCompatibility({ canary: dashboardCanary, health, releaseId: attestation.release_id, appVersion: backend.backend?.app_version, backendCommitSha: attestation.backend_commit_sha });

@@ -29,6 +29,7 @@ const row = { id: message, thread_id: thread, sender_user_id: foreign, sender_di
 const runReadOnlySql = async (sql) => {
   observed.push(sql);
   if (sql.includes('public.msg_get_user_by_device')) return [{ msg_user_id: viewer, role: 'employee', display_name: 'Employee' }];
+  if(sql.includes('from public.devices d join public.employees e'))return [{device_pk:'66666666-6666-4666-8666-666666666666',device_id:'KIOSK_02',employee_id:'77777777-7777-4777-8777-777777777777',assignment_epoch:'1',user_id:viewer}];
   if (sql.includes('from public.msg_messages m')) {
     return [{ ...row, sender_role: sql.includes('sender.role as sender_role') ? 'bot' : undefined }];
   }
@@ -36,7 +37,11 @@ const runReadOnlySql = async (sql) => {
 };
 const app = express();
 app.use('/messaging-api', createMessagingRouter({ runReadOnlySql, runRpc: async () => { throw new Error('unexpected write'); },
-  requireDeviceAccess: (_req, _res, next) => next(), appVersion: 'test', releaseId: 'test', contractVersion: 'test' }));
+  requireDeviceAccess: (req, res, next) => {
+    if(String(req.query.device_id||'')!=='KIOSK_02')return res.status(401).json({ok:false,error:'Synthetic device authentication denied'});
+    const device={canonical_device_pk:'66666666-6666-4666-8666-666666666666',canonical_device_id:'KIOSK_02',assigned_employee_id:'77777777-7777-4777-8777-777777777777',assignment_epoch:1,device_active:true,employee_active:true};
+    req.memphisDevice=device;req.memphisDeviceAuth={ok:true,device,credentialed:false};next();
+  }, appVersion: 'test', releaseId: 'test', contractVersion: 'test' }));
 const server = await new Promise((resolve) => { const listener = app.listen(0, () => resolve(listener)); });
 try {
   const base = `http://127.0.0.1:${server.address().port}/messaging-api/thread/${thread}`;

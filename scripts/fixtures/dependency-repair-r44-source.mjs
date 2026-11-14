@@ -12,6 +12,7 @@ export function restoreDependencyPackage(bytes){
  const prior=Buffer.from(JSON.stringify(p,null,2)+'\n');assert.equal(sha(prior),packageHashes[1]);return prior;
 }
 export function restoreDependencyWorkflow(source,name){
+ if(name==='custodial-production-repair.yml'&&sha(source)==='73b2cbe4d240c6b9b6181b0cae28d15b2ff7be46863293f64293b0466786c77a')source=source.replace('run: node scripts/dependency-patched-uri-regression-tests.mjs','run: node scripts/dependency-uri-regression-tests.mjs');
  if(name==='foundation-security-gate.yml')source=restoreResourceObservationWorkflow(source);
  const pair=workflows[name];assert.ok(pair);assert.equal(sha(source),pair[0]);
  for(const [current,prior,path]of [[...packageHashes,'package.json'],[...lockHashes,'package-lock.json']]){const from=current+'  '+path;assert.equal(source.split(from).length,2);source=source.replace(from,prior+'  '+path);}

@@ -46,7 +46,7 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
       - name: Installed URI dependency regression
-        run: node scripts/dependency-uri-regression-tests.mjs
+        run: node scripts/dependency-patched-uri-regression-tests.mjs
       - name: Syntax
         shell: bash
         run: |

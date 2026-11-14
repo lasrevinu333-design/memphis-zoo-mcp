@@ -23,6 +23,8 @@ jobs:
           node-version: '22.23.4'
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Verify observer diagnostic contract
+        run: node scripts/release-monitor-contract-tests.mjs
       - name: Enforce exact integrated pair and observed production schema
         env:
           BACKEND_RELEASE_MANIFEST_URL: ${{ secrets.MEMPHIS_BACKEND_RELEASE_MANIFEST_URL }}

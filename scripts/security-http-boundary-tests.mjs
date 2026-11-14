@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-import {randomBytes,randomUUID} from 'node:crypto';
-import {setAllowedCorsOrigin,requireHealthDiagnostics,healthResponse} from '../src/security-http-boundaries.js';
+import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
+import {setAllowedCorsOrigin,requireHealthDiagnostics,healthResponse,releaseMonitorAuthority} from '../src/security-http-boundaries.js';
 import {makeOpsAccessMiddleware,createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 const source=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
 const env={NODE_ENV:'test',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:randomBytes(32).toString('hex')};
@@ -12,15 +12,18 @@ const manager={manager_id:randomUUID(),display_name:'Synthetic manager',roles:['
 const row={credential_id:randomUUID(),device_id:'synthetic-security-browser',manager_id:manager.manager_id,manager,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+3600000).toISOString(),max_access_level:'full_access',revoked_at:null};
 const sign=now=>createOpsManagerSession({credentialId:row.credential_id,deviceId:row.device_id,manager,accessLevel:'full_access',env,...(now?{now}:{})}).token;
 const token=sign(),expired=sign(new Date(Date.now()-3600000)),requireOpsManagerAuth=makeOpsAccessMiddleware({env,trustedDeviceStore:{find:async id=>id===row.credential_id?row:null}});
+const monitorToken="SYNTHETIC-RELEASE-OBSERVER-TOKEN-ONLY-0001";
 let probes=0,probeError=false,healthy=true;const routes=[];
-const context=vm.createContext({app:{get:(path,...stack)=>routes.push({paths:Array.isArray(path)?path:[path],stack})},requireOpsManagerAuth,requireHealthDiagnostics,healthResponse,setAllowedCorsOrigin,
+const context=vm.createContext({app:{get:(path,...stack)=>routes.push({paths:Array.isArray(path)?path:[path],stack})},requireOpsManagerAuth,requireHealthDiagnostics,healthResponse,releaseMonitorAuthority,setAllowedCorsOrigin,Buffer,timingSafeEqual,
  CORS_ORIGINS_SET:new Set(['https://allowed.invalid']),setPublicDashboardCors(){},configuredReleaseCanaryDeviceId:()=> 'SYNTHETIC-CANARY-PRIVATE',releaseCanaryConfigurationRequired:()=>true,
  runReadOnlySql:async()=>{probes++;if(probeError)throw Error('SYNTHETIC-RAW-SECRET');return [{database_reachable:healthy,transaction_read_only:true,dedicated_reader_member:true,reader_role_restricted:true,sessions_table:true,messages_table:true,notification_outbox_table:true,message_audit_table:true,exact_finish_rpc:true,manager_messaging_rpc:true,worker_claim_rpc:true,notification_backlog:7}];},
- runRpc:async()=>false,offlineAuthoritySecret:()=> 'SYNTHETIC-NO-PROVIDER',getDeviceCredentialSecretReadiness:async()=>({ready:true,private_count:9}),supabaseAdmin:null,process:{env:{}},
+ runRpc:async()=>false,offlineAuthoritySecret:()=> 'SYNTHETIC-NO-PROVIDER',getDeviceCredentialSecretReadiness:async()=>({ready:true,private_count:9}),supabaseAdmin:null,process:{env:{MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN:monitorToken}},
  buildHealthPayload:(area,extra)=>({area,release_id:'SYNTHETIC-RELEASE-PRIVATE',...extra}),buildReleaseManifest:()=>({schema:{fingerprint:'SYNTHETIC-SCHEMA-PRIVATE'}}),APP_VERSION:'test',RELEASE_ID:'test',
  runCanaryChecks:async()=>{probes++;return {ok:true,private_canary:true};},collectBackendAuthorityHealth:async()=>{probes++;return {ok:true,private_authority:true};},
  authorityHttpFailure:()=>({status:503,body:{ok:false,error:'private failure'}}),console:{error(){}},});
 function evaluate(start,end){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a);vm.runInContext(source.slice(a,b),context);}
+evaluate('function safeStringEqual(', '\nfunction releaseCanaryConfigurationRequired(');
+evaluate('function requireReleaseSchemaIdentityToken(', '\nlet _feedbackLinkSecretGenerated');
 evaluate('function setCorsOrigin(', '\nfunction setAdminApiCors(');
 evaluate('app.get(["/health", "/health/dependencies"]', 'app.get("/admin-api/health"');
 evaluate('app.get("/dashboard-api/canary"', 'app.get("/dashboard-api/current-attendance"');
@@ -40,3 +43,18 @@ const runtime=readFileSync(new URL('../src/auth/custodial-leadership-runtime.js'
 for(const path of ['/health/dependencies','/scan-api/authority-health','/status/deep']){assert.equal(allow({method:'GET',originalUrl:path}),true);assert.equal(allow({method:'POST',originalUrl:path}),false);}pass('exact cohort diagnostics GET scope retains mutation denial');
 const notifications=readFileSync(new URL('../src/manager-notifications.js',import.meta.url),'utf8');assert.match(notifications,/app.get\("\/manager-notifications-api\/health", requireManager,/);assert.match(notifications,/Access-Control-Allow-Headers[^\n]+X-CSRF-Token/);pass('notification diagnostics uses current manager auth and preflight permits browser CSRF');
 console.log(JSON.stringify({suite:'security-http-boundaries',status:'PASS',checks:checks.length,noNetwork:true,noDatabase:true}));
+
+healthy=true;probeError=false;
+for(const path of ['/admin-api/release-monitor/dependencies','/admin-api/release-monitor/authority','/admin-api/release-monitor/dashboard-canary']){
+  for(const auth of [undefined,'invalid',token,expired]){const before=probes,r=await request(path,auth);assert.equal(r.statusCode,401);assert.equal(probes,before);}
+  const r=await request(path,monitorToken);assert.equal(r.statusCode,200);assert.equal(r.headers['cache-control'],'private, no-store');
+  assert.ok(!JSON.stringify(r.body).includes('SYNTHETIC-CANARY-PRIVATE'));
+  if(path.endsWith('/dependencies')){assert.equal(r.body.read_authority_ready,true);assert.equal(r.body.device_credential_secret,undefined);assert.equal(r.body.schema_fingerprint,undefined);}
+  if(path.endsWith('/authority'))assert.equal(r.body.data.private_authority,undefined);
+  pass('existing machine token reads only fixed protected '+path+'; missing/wrong/manager tokens denied before probes');
+}
+for(const path of ['/health/dependencies','/dashboard-api/canary','/scan-api/authority-health']){
+ const before=probes,r=await request(path,monitorToken);assert.equal(r.statusCode,401);assert.equal(probes,before);
+}
+pass('observer does not become a manager or unlock original manager routes');
+console.log('PASS release monitor fixed GET diagnostics; no credential, grant, database or production changes');

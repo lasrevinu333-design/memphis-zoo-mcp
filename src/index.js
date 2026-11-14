@@ -11,7 +11,7 @@ import { installManagerHeldEventCorrectionRoutes } from "./manager-held-event-co
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
-import { setAllowedCorsOrigin, requireHealthDiagnostics, healthResponse } from "./security-http-boundaries.js";
+import { setAllowedCorsOrigin, requireHealthDiagnostics, healthResponse, releaseMonitorAuthority } from "./security-http-boundaries.js";
 import { createGeneralJsonMiddleware, createGeneralUrlencodedMiddleware } from "./request-json-parser.js";
 import { parse as parseAttendanceDocument } from "parse5";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -2592,7 +2592,10 @@ app.get("/scheduler-runtime-config", (req, res) => {
     res.status(503).json({ ok: false, data: { configured: false, public_url: null }, error: error.message });
   }
 });
-app.get(["/health", "/health/dependencies"], requireHealthDiagnostics(requireOpsManagerAuth), async (req, res) => {
+app.get(["/health", "/health/dependencies"], requireHealthDiagnostics(requireOpsManagerAuth), serveHealthDependencies);
+app.get("/admin-api/release-monitor/dependencies", requireReleaseSchemaIdentityToken, serveHealthDependencies);
+async function serveHealthDependencies(req, res) {
+  res.setHeader('Cache-Control','private, no-store');
   setPublicDashboardCors(res, req);
   try {
     const canaryDeviceId = configuredReleaseCanaryDeviceId();
@@ -2680,7 +2683,7 @@ app.get(["/health", "/health/dependencies"], requireHealthDiagnostics(requireOps
       error: "Dependency verification failed.",
     })));
   }
-});
+}
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.post("/admin-api/release-canary-rollback", requireOpsManagerWrite, async (req, res) => {
   try {
@@ -3040,10 +3043,13 @@ app.post("/dashboard-api/system-feedback/:feedbackId/status", requireOpsManagerW
 app.post("/dashboard-api/system-feedback/:feedbackId/triage-status", feedbackTriageStatusHandler({readOriginalReceipt:(args,req)=>req.memphisAuth?.auth_mode==='custodial_leadership_pin'
   ?createCustodialLeadershipRecordBridge({env:process.env})(req,'feedback_triage_status',{request_id:args.p_request,feedback_id:args.p_feedback,status:args.p_action,expected_version:args.p_expected_version,expected_manager_id:args.p_manager,expected_credential_id:args.p_credential})
   :runRpc("custodial_feedback_triage_receipt",args),requireOpsManagerWrite}));
-app.get("/dashboard-api/canary", requireOpsManagerAuth, async (_req, res) => {
+app.get("/dashboard-api/canary", requireOpsManagerAuth, serveDashboardCanary);
+app.get("/admin-api/release-monitor/dashboard-canary", requireReleaseSchemaIdentityToken, serveDashboardCanary);
+async function serveDashboardCanary(_req, res) {
+  res.setHeader('Cache-Control','private, no-store');
   try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
-  catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }
-});
+  catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: _req.path==='/admin-api/release-monitor/dashboard-canary'?"Dashboard canary failed":error.message || "Dashboard canary failed" }); }
+}
 app.get("/dashboard-api/current-attendance", async (_req, res) => {
   try {
     const stored = await loadStoredAttendance();
@@ -3241,7 +3247,10 @@ app.get("/scan-api/health", (_req, res) => {
     },
   }));
 });
-app.get("/scan-api/authority-health", requireOpsManagerAuth, async (_req, res) => {
+app.get("/scan-api/authority-health", requireOpsManagerAuth, serveAuthorityHealth);
+app.get("/admin-api/release-monitor/authority", requireReleaseSchemaIdentityToken, serveAuthorityHealth);
+async function serveAuthorityHealth(_req, res) {
+  res.setHeader('Cache-Control','private, no-store');
   try {
     const canaryDeviceId = configuredReleaseCanaryDeviceId();
     let canaryPaused = null;
@@ -3260,10 +3269,10 @@ app.get("/scan-api/authority-health", requireOpsManagerAuth, async (_req, res) =
     res.status(ok ? 200 : 503).json({
       ok,
       data: {
-        ...data,
+        ...(_req.path==='/admin-api/release-monitor/authority'?releaseMonitorAuthority(data):data),
         release_canary: {
           configured: Boolean(canaryDeviceId),
-          device_identifier: canaryDeviceId,
+          ...(_req.path==='/admin-api/release-monitor/authority'?{}:{device_identifier:canaryDeviceId}),
           control_initialized: canaryControlInitialized,
           paused: canaryPaused,
         },
@@ -3273,7 +3282,7 @@ app.get("/scan-api/authority-health", requireOpsManagerAuth, async (_req, res) =
     const failure = authorityHttpFailure(error, "Offline authority health is unavailable.");
     res.status(failure.status).json(failure.body);
   }
-});
+}
 // Fixed original readback only. Normal native authentication is repeated
 // around the fixed SQL reader; no browser callback or returned JSON is auth.
 app.post(SCAN_COMPLETION_READBACK_PATH, parseScanAuthorityJsonBeforeAuthentication,

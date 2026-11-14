@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {resolve} from 'node:path';
 import vm from 'node:vm';
 import express from 'express';
 import {createOpsManagerSession,makeOpsAccessMiddleware} from '../src/auth/shared-access-auth.js';
@@ -59,7 +60,15 @@ await test('exact main mount, real signed/current-manager auth, loopback HTTP an
   await t.test('untrusted device header cannot change authenticated canonical context',async()=>{const r=await fetch(url,{headers:{...headers,'X-Device-Id':'untrusted-header'}});assert.equal(r.status,200);const p=await r.json();assert.equal(p.meta.manager_id,principal.manager_id);assert.equal(p.meta.credential_id,principal.credential_id);assert.equal(p.data.work[0].session.deviceIdentifier,'SYNTHETIC_DEVICE');});
   if(!process.argv.includes('--auth-fixture-only')){
   await t.test('delegated readonly manager gets exact contract, not geographic admission',async()=>{const response=await fetch(url,{headers});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'private, no-store');const p=await response.json();assert.equal(p.meta.contract,'gps-map-context.v1');assert.equal(p.meta.manager_id,principal.manager_id);assert.equal(p.data.controls,null);assert.equal(p.data.work[0].session.employeeId,id(4));});
-  await t.test('exact existing frontend path source consumes loopback-backed contract',async()=>{const require=createRequire(import.meta.url);const pathSource=require('../../frontend/custodial-gps-path-source.js');let outgoing;const data=await pathSource.read({headers,fetchImpl:async(u,o)=>{outgoing=u;assert.equal(o.method,'GET');assert.equal(o.cache,'no-store');return fetch(url,o);}});assert.equal(outgoing,'https://memphis-zoo-mcp.onrender.com/dashboard-api/gps-map-context');assert.equal(data.controls,null);assert.equal(data.geographic_registration,'unverified_controls_missing');assert.equal(data.work.length,1);});
+  await t.test('exact existing frontend path source consumes loopback-backed contract',async()=>{const require=createRequire(import.meta.url);assert.ok(process.env.CUSTODIAL_FRONTEND_ROOT,'CUSTODIAL_FRONTEND_ROOT must explicitly name the paired frontend checkout');
+   const pathSource=require(resolve(process.env.CUSTODIAL_FRONTEND_ROOT,'custodial-gps-path-source.js'));const outgoing=[];let updated;const updateReady=new Promise(resolve=>updated=resolve);
+   const data=await pathSource.read({headers,onUpdate:updated,fetchImpl:async(u,o)=>{outgoing.push(u);assert.equal(o.method,'GET');assert.equal(o.cache,'no-store');
+    if(u===pathSource.API)return fetch(url,o);
+    assert.equal(u,pathSource.PHONE_API);return {ok:true,status:200,json:async()=>({ok:true,meta:{contract:'custodial.assigned-phone-location.v1',generated_at:'2026-10-09T16:10:00Z'},data:{phones:[{deviceId:'SYNTHETIC_DEVICE'}]}})};
+   }});
+   const historyView=data.historyPending?await updateReady:data;
+   assert.deepEqual(outgoing.sort(),[pathSource.API,pathSource.PHONE_API].sort());assert.equal(data.phones.length,1);assert.equal(data.phones[0].deviceId,'SYNTHETIC_DEVICE');
+   assert.equal(historyView.historyUnavailable,false);assert.equal(historyView.work.length,1);});
   await t.test('forged query and POST do not reach reader',async()=>{const before=reads;assert.equal((await fetch(url+'?controls=forged',{headers})).status,422);assert.equal((await fetch(url,{headers,method:'POST'})).status,404);assert.equal(reads,before);});
   await t.test('partial rows cannot become HTTP success or frontend data',async()=>{fixtureResult={...complete(),row_limit_truncated:true};const r=await fetch(url,{headers});assert.equal(r.status,503);assert.equal((await r.json()).data,undefined);fixtureResult=complete();});
   await t.test('private SQL error is redacted',async()=>{fixtureError=new Error('PRIVATE SQL DETAIL');const r=await fetch(url,{headers});assert.equal(r.status,503);assert.doesNotMatch(await r.text(),/PRIVATE SQL DETAIL/);fixtureError=null;});

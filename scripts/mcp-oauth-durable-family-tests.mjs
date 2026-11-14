@@ -114,7 +114,8 @@ export async function runDurableOAuthHttpModelTests(){
     const afterRestore=await exchange((await newCode()).code);check(afterRestore.status,200,'normal new-generation authorization');
     await currentA.verifyAccessToken(afterRestore.body.access_token);checks++;
     const config=currentA.config;
-    const legacySource=await readFile(new URL('../../before.mcp-self-contained-oauth.js',import.meta.url),'utf8');
+    const legacySource=await readFile(new URL('./fixtures/mcp-oauth-legacy-pre-ledger.js.txt',import.meta.url),'utf8');
+    assert.equal(createHash('sha256').update(legacySource).digest('hex'),'da95cfd55ae28bdccb4f167f451005f9b9c83460c5744494eda3510936f58ea0','genuine retained pre-ledger OAuth fixture must remain exact');
     const legacy=await import('data:text/javascript;base64,'+Buffer.from(legacySource.replace('import express from "express";',
       `import express from ${JSON.stringify(import.meta.resolve('express'))};`)+'\nexport {issueTokenPair,issueAuthorizationCode};').toString('base64'));
     const legacyPair=legacy.issueTokenPair(config,{clientId,scope:'mcp:read'},Math.floor(Date.now()/1000));
