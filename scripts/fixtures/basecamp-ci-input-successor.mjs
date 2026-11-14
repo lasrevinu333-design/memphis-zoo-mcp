@@ -1,3 +1,4 @@
+import {restoreDependencyPackage,restoreDependencyWorkflow} from './dependency-repair-r44-source.mjs';
 // Exact test-wiring successor only. Historical workflow oracles stay intact.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -13,11 +14,13 @@ export function currentBasecampCiRegressionView(source){
  return source;
 }
 export function restoreBasecampCiWorkflow(source,name){
+ source=restoreDependencyWorkflow(source,name);
  const pair=workflows[name];assert.ok(pair);assert.equal(sha(source),pair[0],'exact Basecamp CI successor workflow');
  const from=currentPackage+'  package.json';assert.equal(source.split(from).length,2);
  let prior=source.replace(from,previousPackage+'  package.json');if(name==='foundation-security-gate.yml')prior=currentBasecampCiRegressionView(prior);assert.equal(sha(prior),pair[1]);return prior;
 }
 export function verifyBasecampCiPackage(bytes){
+ bytes=restoreDependencyPackage(bytes);
  assert.equal(sha(bytes),currentPackage,'current package is exact reviewed Basecamp test wiring');
  const p=JSON.parse(bytes),scripts=p.scripts;
  assert.equal(scripts['test:basecamp-birthday'],'node --test scripts/basecamp-birthday-work-tests.mjs');
@@ -46,7 +49,7 @@ export function verifyBasecampCiInputs(root){
  for(const change of [p=>{p.scripts['test:reviewed-source-regressions']='true';},p=>{delete p.scripts['test:basecamp-birthday'];},p=>{p.dependencies={};}]){
   const p=JSON.parse(bytes);change(p);assert.throws(()=>verifyBasecampCiPackage(Buffer.from(JSON.stringify(p,null,2)+'\n')));
  }
- console.log(JSON.stringify({suite:'basecamp-ci-input-successor',status:'PASS',rejected:3,dependency_changes:false,historical_oracles_preserved:true}));
+ console.log(JSON.stringify({suite:'basecamp-ci-input-successor',status:'PASS',rejected:3,dependency_changes:true,dependency_successor:'r44',historical_oracles_preserved:true}));
 }
 
 // Historical inventory views retain the entire prior verifier, including every
