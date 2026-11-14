@@ -1,5 +1,12 @@
 # Private school and Spiceworks import seam
 
+School normalization recognizes an exact repeated complete booking block only
+within the same source day/section. It retains every original input row and
+checks the source subtotal including those repeated raw rows, then counts each
+booking/date once in planned visitor load. A changed or incomplete repetition,
+or one crossing a source section boundary, still requires reconciliation. This
+does not authorize deleting rows from an attachment or editing a source workbook.
+
 `custodial_outlook_operations_import` is a typed private MCP tool, registered by the existing canonical server only when privileged tools are included. It uses the current connector-token or scoped self-contained OAuth principal (`mcp:read` + `mcp:write`). Sender/mailbox strings and an agent's evidence flags are **not Microsoft authentication or independent provider attestation**. The existing admitted collector must read the original source through its normal connected Outlook access. This source preparation does not activate that collector, install credentials, create an API to ChatGPT connectors, or grant public/staff ingestion access.
 
 Contract `custodial.operations-mail-sync-adapter.v1` has one strict `request`, discriminated by `kind` (`spiceworks` or `school`). The tool accepts structured source facts, not mail bodies, signatures, recipients, generic SQL, guessed schedules, scan-issue deletions or external ticket commands. An agent must explicitly acknowledge original-message reading. Spiceworks requires unquoted current notification fields; school requires the whole original attachment and independently established complete replacement-date scope. These are caller assertions; the adapter does not pretend to verify the mailbox or attachment bytes itself.

@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {z} from 'zod';
 import {resolveSupabaseClient} from './supabase/client.js';
+import {readOutlookPublishedFeed,OUTLOOK_PUBLISHED_FEED_SCHEMA} from './outlook-published-feed.js';
 
 // Connected-agent source observations, not Microsoft attestations. The existing
 // collector must read the original source and complete all pages before it may
@@ -29,7 +30,7 @@ const event=z.discriminatedUnion('event_scope',[
 const identity={source,source_event_key:z.string().min(5).max(400),event_id:uuid.optional(),expected_revision:z.number().int().positive().max(2147483647).optional()};
 export const outlookSyncSchema=z.object({contract_version:z.literal(OUTLOOK_SYNC_CONTRACT),
   request:z.discriminatedUnion('action',[
-    z.object({action:z.literal('status'),observation:z.object({}).strict()}).strict(),
+    z.object({action:z.literal('status'),observation:z.object({include_public_feed:z.literal(true).optional()}).strict()}).strict(),
     z.object({action:z.literal('apply'),observation:z.object({...identity,event}).strict()}).strict(),
     z.object({action:z.literal('cancel'),observation:z.object({...identity,event_id:uuid,expected_revision:z.number().int().positive(),
       source:source.extend({evidence_kind:z.literal('event_cancellation')}),reason:z.string().max(1000).optional()}).strict()}).strict(),
@@ -67,8 +68,17 @@ function status(value){
   for(const key of ['cursor','checkpoint_at','last_import_at'])if(value[key]!==null&&(!instant.safeParse(value[key]).success))fail('outlook_sync_status_invalid');
   return {schema:value.schema,writer_ready:true,mailbox:value.mailbox,cursor:value.cursor,checkpoint_at:value.checkpoint_at,last_import_at:value.last_import_at};
 }
-export async function callOutlookEventSync(args,extra,{client,signal}={}){
+async function untilAborted(operation,signal){
+  if(signal.aborted)throw Error('outlook_sync_cancelled');
+  let cancel;
+  const aborted=new Promise((_,reject)=>{cancel=()=>reject(Error('outlook_sync_cancelled'));signal.addEventListener('abort',cancel,{once:true});});
+  try{return await Promise.race([Promise.resolve().then(operation),aborted]);}
+  finally{signal.removeEventListener('abort',cancel);}
+}
+export async function callOutlookEventSync(args,extra,{client,signal,publishedFeedReaders}={}){
   const requireOriginal=originalPrincipal(extra),checked=outlookSyncSchema.parse(args),{action,observation}=checked.request;
+  // Own the internal reader references before the first awaited source call.
+  const feedReaders=publishedFeedReaders?{...publishedFeedReaders}:{};
   if(Buffer.byteLength(JSON.stringify(observation))>65536)fail('outlook_sync_observation_limit');
   const service=resolveSupabaseClient(client),timeout=signal?AbortSignal.any([signal,AbortSignal.timeout(10000)]):AbortSignal.timeout(10000);
   const current=()=>{
@@ -79,7 +89,18 @@ export async function callOutlookEventSync(args,extra,{client,signal}={}){
   try{current();response=await service.rpc('custodial_outlook_event_sync_v1',{p_action:action,p_observation:observation}).abortSignal(timeout).retry(false);current();}
   catch{fail(action==='status'?'outlook_sync_status_unavailable':'outlook_sync_write_unconfirmed');}
   if(response?.error)fail(action==='status'?'outlook_sync_status_unavailable':'outlook_sync_write_unconfirmed');
-  if(action==='status'){const observed=status(response?.data);current();return observed;}
+  if(action==='status'){
+    const observed=status(response?.data);current();
+    if(observation.include_public_feed!==true)return observed;
+    let published;
+    try{
+      published=await untilAborted(()=>readOutlookPublishedFeed({...feedReaders,client:service,signal:timeout,assertCurrent:current}),timeout);
+    }catch{
+      current();
+      return {...observed,public_feed:{schema:OUTLOOK_PUBLISHED_FEED_SCHEMA,state:'unavailable',reason:'published_source_unavailable'}};
+    }
+    current();return {...observed,public_feed:published};
+  }
   const checkpoint=action==='checkpoint',key=checkpoint?'custodial-outlook-events-v1/checkpoint':`custodial-outlook-events-v1/event/${observation.source_event_key}`;
   const message=checkpoint?`collector:${observation.run_id}`:observation.source.message_id;
   let saved;

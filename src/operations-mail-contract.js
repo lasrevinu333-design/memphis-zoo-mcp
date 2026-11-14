@@ -96,20 +96,36 @@ export function projectSchoolAttachment({headers,rows,source:inputSource,attachm
   const provenance={...mail,attachment_id:attachment.id,attachment_sha256:attachment.sha256};
   if (date_system!=='1900'||JSON.stringify(headers)!==JSON.stringify(SCHOOL_HEADERS)
     ||!Array.isArray(rows)||rows.length>5000) fail('school_attachment_format_invalid');
-  const groups=new Map();let current=null,sectionTotal=0,sectionItems=0;
+  const groups=new Map(),blocks=new Map();
+  let current=null,currentRows=[],currentKey=null,currentSection=0,section=0,sectionTotal=0,sectionItems=0;
+  // Compare complete source blocks, not just an order's first row or totals.
+  // Exact repeated blocks in one day/section describe one booking. Retain all
+  // raw quantities for the source subtotal check while projecting it once.
+  // Changed or cross-section repetitions still require source reconciliation.
+  const finishCurrent=()=>{
+    if(!current)return;
+    const raw=JSON.stringify(currentRows),prior=blocks.get(currentKey);
+    if(prior){
+      if(prior.section!==currentSection||prior.raw!==raw)fail('duplicate_school_order_block');
+    }else{
+      blocks.set(currentKey,{section:currentSection,raw});groups.set(currentKey,current);
+    }
+    current=null;currentRows=[];currentKey=null;
+  };
   for (const row of rows) {
     if (!Array.isArray(row)||row.length>7) fail('school_row_invalid');
     const [id,name,buses,product,date,time,qty]=row;
-    if (row.every(v=>v==null||v==='')) {current=null;continue;}
-    if (/^(?:MON(?:DAY)?|TUE(?:S|SDAY)?|WED(?:NESDAY)?|THU(?:RS|RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?|TOTAL)$/i.test(String(id||name||''))) {current=null;sectionTotal=0;sectionItems=0;continue;}
+    if (row.every(v=>v==null||v==='')) {finishCurrent();continue;}
+    if (/^(?:MON(?:DAY)?|TUE(?:S|SDAY)?|WED(?:NESDAY)?|THU(?:RS|RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?|TOTAL)$/i.test(String(id||name||''))) {finishCurrent();section++;sectionTotal=0;sectionItems=0;continue;}
     if([id,name,buses,product,date,time].every(v=>v==null||v==='')){
+      finishCurrent();
       if(!sectionItems||!Number.isSafeInteger(qty)||qty!==sectionTotal)fail('school_subtotal_mismatch');
-      current=null;sectionTotal=0;sectionItems=0;continue;
+      section++;sectionTotal=0;sectionItems=0;continue;
     }
     if (id!=null&&id!=='') {
+      finishCurrent();
       if (!/^[1-9]\d*$/.test(String(id))||!clean(name)||!(buses==null||buses===''||(Number.isSafeInteger(buses)&&buses>=0))) fail('school_order_invalid');
       const visit=excelDate(date),arrival=time==null||time===''?null:excelTime(time,visit),key=`${id}:${visit}`;
-      if (groups.has(key)) fail('duplicate_school_order_block');
       // Validate the visit date even when arrival is absent. This noon
       // conversion is admission only, never a projected departure/cutoff.
       chicagoInstant(visit,'12:00');
@@ -120,17 +136,19 @@ export function projectSchoolAttachment({headers,rows,source:inputSource,attachm
         departure_source:null,status:start===null?'REVIEW_REQUIRED':'SCHEDULED',
         issue:start===null?'Arrival not provided.':null,
         students:0,chaperones:0,teachers:0,unclassified:0,buses:buses===''||buses==null?null:buses,
-        provenance,notes:null};groups.set(key,current);
+        provenance,notes:null};currentKey=key;currentSection=section;currentRows=[];
     } else if (!current || [name,buses].some(v=>v!=null&&v!=='')
       ||(date!=null&&date!==''&&excelDate(date)!==current.date)
       ||(time!=null&&time!==''&&chicagoInstant(current.date,excelTime(time,current.date))!==current.arrival_at)) fail('school_continuation_identity_invalid');
     if (!current||!Number.isSafeInteger(qty)||qty<0||!clean(product)) fail('school_quantity_invalid');
+    currentRows.push(row.slice());
     sectionTotal+=qty;sectionItems++;if(!Number.isSafeInteger(sectionTotal))fail('school_quantity_overflow');
     const key=/^Field Trip (?:Elem Student 1-5|High Student 9-12|Middle Student 6-8|College Student|PreK and Kindergarten)$/.test(product)?'students'
       :product==='Field Trip Paid Chaperone'?'chaperones':product==='Field Trip Teacher'?'teachers':'unclassified';
     current[key]+=qty;
     if (!Number.isSafeInteger(current[key])) fail('school_quantity_overflow');
   }
+  finishCurrent();
   return [...groups.values()].map(group=>{const adults=group.chaperones+group.teachers,total=group.students+adults+group.unclassified;
     if(!Number.isSafeInteger(total))fail('school_quantity_overflow');return{...group,adults,total};});
 }

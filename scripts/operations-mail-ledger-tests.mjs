@@ -172,3 +172,7 @@ test('new opening and out-of-order closing notifications retain both timestamped
  await assert.rejects(f.save('spiceworks',ticket('quoted',at,['> opened a new ticket.'])),/no_authoritative_ticket_change/);
  assert.doesNotMatch(JSON.stringify(out.spiceworks_activity),/message_id|change_lines|content_sha256/);
 });
+
+// Run the new bounded source cases through the existing registered owning lane.
+await import("./school-exact-block-duplicate-tests.mjs");
+await import("./outlook-published-feed-tests.mjs");
