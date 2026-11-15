@@ -1,10 +1,11 @@
-// Only the exact owner-approved runner routing successor may be projected for
-// historical workflow contracts. This grants no SQL or runtime admission;
-// every actual step, resource/storage guard and image/checksum remains intact.
+// Only these exact routing, evidence-output, historical-source caller and CI
+// wall-budget successors may be projected for historical workflow contracts.
+// This grants no SQL/runtime admission. Original checks, per-test limits,
+// resource/storage guards and image/checksums remain required.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 const sha=value=>createHash('sha256').update(value).digest('hex');
-const current='3b62d6e4e0376e3b9902918a268baba95d8274e57b492c82d1bb4a5fd46e18d6';
+const current='a5eb568175b0fa170d8f41fa70d175aa565861ca081c666c052e24bcba3001e7';
 const previous='7d3b6cd5e5f8992f625e0ea12a3432c83099f8bb4c8192c494362552bd3ae61e';
 const routing="    runs-on: ${{ github.event_name == 'push' && github.actor == 'lasrevinu333-design' && github.ref == 'refs/heads/codex/mod-full-name-20261114' && 'custodial-foundation-isolated' || 'ubuntu-24.04' }}";
 const evidence='          node scripts/scheduler-reported-boundaries-tests.mjs "$RUNNER_TEMP/scheduler-reported-boundaries-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"';
@@ -15,7 +16,8 @@ export function restoreFoundationPcRunnerWorkflow(source,name){
  assert.equal(source.split(routing).length,2);
  assert.equal(source.split(evidence).length,2);
  assert.equal(source.split(canonical304).length,2);
- const prior=source.replace(routing,'    runs-on: ubuntu-24.04').replace(evidence,'          node scripts/scheduler-reported-boundaries-tests.mjs').replace(canonical304,canonical304Prior);
+ assert.equal(source.split('    timeout-minutes: 60').length,2);
+ const prior=source.replace(routing,'    runs-on: ubuntu-24.04').replace(evidence,'          node scripts/scheduler-reported-boundaries-tests.mjs').replace(canonical304,canonical304Prior).replace('    timeout-minutes: 60','    timeout-minutes: 35');
  assert.equal(sha(prior),previous,'entire genuine prior Foundation workflow preserved');
  return prior;
 }
