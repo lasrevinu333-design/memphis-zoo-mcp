@@ -156,7 +156,7 @@ jobs:
           TMPDIR="$ci_sql_parent" node --max-old-space-size=384 scripts/run-sealed-canonical304-fixture.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
           # This starts only disposable worker-owned PostgreSQL containers and
           # includes the real independent-session concurrency/restart suite.
-          npm run --silent test:static-weekly-scheduler:database
+          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs
           npm run --silent test:integrated-backend-authority-suite-order
           npm run --silent test:integrated-backend-authority-release-provenance
           npm run --silent test:release-closure
