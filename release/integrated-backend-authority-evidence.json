@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "db5b319e6fa4f4d4bc428c8b9ea3791f5b56707d"
+        "object_id": "4f93da9c1dae067e53e5439f2b5d2465f2ef1611"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -4295,7 +4295,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "c04a223807cc088621ede9e13a0c2804accc1254"
+        "object_id": "2e84b63a97438940a8b5337e702726c3cd07e12d"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -7341,6 +7341,11 @@
         "path": "scripts/run-sealed-canonical304-fixture.mjs",
         "mode": "100644",
         "object_id": "9ad0f39cfe8d8fde0e119e80d4d8710e3901d2a8"
+      },
+      {
+        "path": "scripts/run-sealed-legacy-scheduler-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "84bd669dd973a5eab1157446e926538d3ea43df3"
       },
       {
         "path": "scripts/run-specialized-lunch-receipt-database-tests.mjs",
@@ -12703,7 +12708,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2515,
+    "authority_path_count": 2516,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
