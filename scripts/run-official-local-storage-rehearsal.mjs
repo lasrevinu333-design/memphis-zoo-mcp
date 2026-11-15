@@ -134,9 +134,9 @@ const insist = (value,message) => { if(!value) throw new Error(message); };
 // One fixed dependency, authenticated before import. The exact URL preserves
 // the host factory's WeakMap instance; the provider receives an owned0400 copy.
 const diagnosticHelperUrl=new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url);
-const diagnosticHelperSha256='9910c5a126aac672231be8f4bc1877d717a2d98d0ae4b3fc2df41d17e77ae5c6';
+const diagnosticHelperSha256='300412912930e80fd8bc0ed4a7c84186cbaa27155360224fe3a7c53e9ddfbb1c';
 const diagnosticHelperBytes=readFileSync(diagnosticHelperUrl);
-insist(diagnosticHelperBytes.length===4316 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
+insist(diagnosticHelperBytes.length===4423 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
 const {readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import(diagnosticHelperUrl.href);
 insist(readFileSync(diagnosticHelperUrl).equals(diagnosticHelperBytes),'Fixed diagnostic helper changed.');
 export function stageOwnedStorageWorker(mount){

@@ -201,6 +201,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  }
  const ledgerRaw=source.inventory['inventory/migration-ledger.json'],ledger=inventory('migration-ledger.json');
  assert.ok(Array.isArray(ledger));
+ initializerStage='RESTORE_MIGRATION_LEDGER';
  const migrations=await query(`insert into supabase_migrations.schema_migrations(version,name,statements)
   select r.version,r.name,r.statements
   from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
@@ -212,6 +213,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  // port keeps Source/native owner/xid/two-fence checks around EVERY await;
  // it neither shadows db.query nor grants later effect authority.
  const cronRaw=source.inventory['inventory/cron-jobs.json'],cron=inventory('cron-jobs.json');assert.ok(Array.isArray(cron));
+ initializerStage='RESTORE_CRON';
  const sourceDatabase=source.sourceBinding.summary.database_snapshot?.database_name;
  assert.equal(typeof sourceDatabase,'string');assert.ok(sourceDatabase.length>0&&!sourceDatabase.includes('\0'));
  assert.ok(Buffer.byteLength(sourceDatabase,'utf8')<=63);
@@ -232,6 +234,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  assert.ok(isDeepStrictEqual(verifiedCron.expected,expectedCron),'Original mapped cron inventory differs');
  assert.equal(verifiedCron.differences.length,0,'Original verified cron state differs');
  const cronExpectedRaw=JSON.stringify(expectedCron); // Closed TEXT/boolean/safe port fields; BIGINT IDs remain TEXT.
+ initializerStage='RESTORE_RELEASES';
  const releaseOriginals='['+source.releaseRows.join(',')+']';
  const released=await query(`insert into public.release_deployment_manifest
   select r.* from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
@@ -243,6 +246,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
     '{definition_sha256}',$2::jsonb->(image->>'object_identity')->'definition_sha256')::json
    else image end image,ordinality from original)`;
  const args=['['+source.registryRows.join(',')+']',JSON.stringify(source.registrySource)];
+ initializerStage='RESTORE_REGISTRY';
  const inserted=await query(expected+` insert into public.custodial_release_authority_restore_inventory
   select r.* from expected e cross join lateral ${metadataRecord('custodial_release_authority_restore_inventory','e.image')} r order by e.ordinality`,args);
  assert.equal(inserted.rowCount,source.registryRows.length);
@@ -250,6 +254,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   left join public.custodial_release_authority_restore_inventory t on t.inventory_id=(e.image->>'inventory_id')::uuid
   where t.inventory_id is null or to_jsonb(t) is distinct from to_jsonb(${metadataRecord('custodial_release_authority_restore_inventory','e.image')})`,args)).rows;
  assert.deepEqual(compared,[{n:0}]);
+ initializerStage='VERIFY_RESTORED_METADATA';
  const metadataCounts=(await query(`select
   (select count(*)::int from public.release_deployment_manifest) releases,
   (select count(*)::int from public.custodial_release_authority_restore_inventory) registry,

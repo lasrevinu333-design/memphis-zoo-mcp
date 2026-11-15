@@ -1,4 +1,5 @@
 import {recordImmutableFreshFailure,readImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
+import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.
 import test from 'node:test';
@@ -14,6 +15,19 @@ const profiles=[
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('metadata refusal stage survives the actual closed diagnostic and evidence chain without SQL or row payloads',()=>{
+ for(const stage of ['RESTORE_METADATA','RESTORE_MIGRATION_LEDGER','RESTORE_CRON','RESTORE_RELEASES','RESTORE_REGISTRY','VERIFY_RESTORED_METADATA']){
+  const error=Object.assign(new Error('PRIVATE SQL AND ROW VALUES MUST NOT ESCAPE'),{code:'42501'});
+  recordImmutableFreshFailure(error,{initializer_stage:stage,initializer_operation:'EXECUTE_QUERY',source_statement:'01'});
+  const diagnostic=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);
+  assert.equal(diagnostic.initializer_stage,stage);assert.equal(diagnostic.sql_state,'42501');assert.equal(diagnostic.source_statement,undefined);
+  assert.deepEqual(projectPrivateRestoreDiagnostic(diagnostic),diagnostic);
+  const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[diagnostic]})));
+  assert.deepEqual(receipt.restore_diagnostics,[diagnostic]);assert.doesNotMatch(JSON.stringify(receipt),/PRIVATE SQL|ROW VALUES|message|stack/);
+ }
+ const unknown=Object.assign(new Error('SECRET'),{code:'42501'});recordImmutableFreshFailure(unknown,{initializer_stage:'ARBITRARY SQL'});
+ assert.deepEqual(readImmutableFreshFailure(unknown),{});
+});
 function initializerFixture(profile,mode){
  let calls=0,withdrawn=false;
  const archive=Object.freeze({}),source=Object.freeze({inventory:{
