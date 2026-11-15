@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "55d075058780d7633ac3c83547ddc7fc841ebec0"
+        "object_id": "422642a27f66979c920970573827fd3ba49ef52a"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -195,7 +195,7 @@
       {
         "path": ".github/workflows/production-availability-monitor.yml",
         "mode": "100644",
-        "object_id": "2a568bfaef1d03b83e5a37dae7c59051752c3182"
+        "object_id": "3b15516ff9f6cdc83bd9c726f4aa7a32d1072ed1"
       },
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
@@ -2528,6 +2528,11 @@
         "object_id": "c0fa6c4eb590a940957dc611c4ba7b001144c0fb"
       },
       {
+        "path": "scripts/ai-weather-presence-tests.mjs",
+        "mode": "100644",
+        "object_id": "a40ee43a358d148675047edd441aafb206ecb32e"
+      },
+      {
         "path": "scripts/apply-abandoned-mutation-lease-reconciliation.mjs",
         "mode": "100644",
         "object_id": "04fa0c9c28c8d40e7339aa3e172316411fe84c7a"
@@ -2775,12 +2780,12 @@
       {
         "path": "scripts/backup-capture-lineage-tests.mjs",
         "mode": "100644",
-        "object_id": "1939999e25922696eba266b8075a10732d4f6e12"
+        "object_id": "244487e6db04ad8cb78e69355a75bdd9fcb76ef1"
       },
       {
         "path": "scripts/backup-capture-lineage.mjs",
         "mode": "100644",
-        "object_id": "d6996f94394bc38e68db7fb27a16b739c5a90f45"
+        "object_id": "a0a3491929c688cb2dc0b1f2aefb70d3804d6bc6"
       },
       {
         "path": "scripts/backup-release-schema-binding-tests.mjs",
@@ -3301,6 +3306,11 @@
         "path": "scripts/demo-leadership-blank-schedule-tests.mjs",
         "mode": "100644",
         "object_id": "69d8efb77576d8aeeb64b110e60340a279f28d10"
+      },
+      {
+        "path": "scripts/dependency-patched-uri-regression-tests.mjs",
+        "mode": "100644",
+        "object_id": "ed562f3c4957c7c0938af18f88f1c4391909f883"
       },
       {
         "path": "scripts/dependency-uri-regression-tests.mjs",
@@ -4240,7 +4250,7 @@
       {
         "path": "scripts/fixtures/dependency-repair-r44-source.mjs",
         "mode": "100644",
-        "object_id": "88041fcc315960d25d14032cadfd1c87339657a2"
+        "object_id": "5070483a23a305105ac61d0d0bb77624c1898b1f"
       },
       {
         "path": "scripts/fixtures/derive-recorded-predecessor.mjs",
@@ -4401,6 +4411,11 @@
         "path": "scripts/fixtures/manual-live-roster-20261030.json",
         "mode": "100644",
         "object_id": "d642c3eb4d4af9504682298b66b2290bbf36aa88"
+      },
+      {
+        "path": "scripts/fixtures/mcp-oauth-legacy-pre-ledger.js.txt",
+        "mode": "100644",
+        "object_id": "44cd52c88fb45eb5f51dc72353f1347b9c938666"
       },
       {
         "path": "scripts/fixtures/native-alert-wire-fixture.mjs",
@@ -4908,6 +4923,31 @@
         "object_id": "092bfaf0ff724dd9ef0c2db6bd73d96a18baa92f"
       },
       {
+        "path": "scripts/gemini-attachment-concurrency-tests.mjs",
+        "mode": "100644",
+        "object_id": "fb36d21c80ed6c8aacee04e9e2a002e815574aad"
+      },
+      {
+        "path": "scripts/gemini-attachment-delete-tests.mjs",
+        "mode": "100644",
+        "object_id": "399c1e4f8718e853c351de89101392b0482bf4c2"
+      },
+      {
+        "path": "scripts/gemini-attachment-upload-lease-tests.mjs",
+        "mode": "100644",
+        "object_id": "ac616ea4f7e28efe7fcb27b92e5c9e1caf7c533e"
+      },
+      {
+        "path": "scripts/gemini-attachment-upload-sdk-tests.mjs",
+        "mode": "100644",
+        "object_id": "4d6294670eef413e1b717f6667342b045a8c994b"
+      },
+      {
+        "path": "scripts/gemini-attachment-upload-tests.mjs",
+        "mode": "100644",
+        "object_id": "7d462d4804fd6772647ac6072438059658e8c9e5"
+      },
+      {
         "path": "scripts/gemini-console-database-tests.mjs",
         "mode": "100644",
         "object_id": "e20a91738739c09d6c88d7d5c2b71fe403b8caa1"
@@ -4916,6 +4956,16 @@
         "path": "scripts/gemini-console-foundation-tests.mjs",
         "mode": "100644",
         "object_id": "97ffd00f6fd8dda9fe96331c527b184979005d76"
+      },
+      {
+        "path": "scripts/gemini-conversation-lease-tests.mjs",
+        "mode": "100644",
+        "object_id": "4d9165203ce825d42d865c1f07119d39dcbbe58d"
+      },
+      {
+        "path": "scripts/gemini-original-upload-recovery-tests.mjs",
+        "mode": "100644",
+        "object_id": "a7cd71a8d04df4eb12ab0ca1d8e1e39ef41153e6"
       },
       {
         "path": "scripts/generate-october-transition-candidate.mjs",
@@ -4938,6 +4988,26 @@
         "object_id": "e403c5317610742982bd80c5fe71fde2a6cb6606"
       },
       {
+        "path": "scripts/github-content-search-budget-tests.mjs",
+        "mode": "100644",
+        "object_id": "a1caf6ae2a1a2849f89981fcceac02f60cf1bec8"
+      },
+      {
+        "path": "scripts/github-literal-replacement-tests.mjs",
+        "mode": "100644",
+        "object_id": "a0928dfd9fd879e7814337a334446fc507a785aa"
+      },
+      {
+        "path": "scripts/github-read-completeness-tests.mjs",
+        "mode": "100644",
+        "object_id": "99edef2d05b869a0030a0a5e6177f7cb9efc28a4"
+      },
+      {
+        "path": "scripts/github-restore-bytes-tests.mjs",
+        "mode": "100644",
+        "object_id": "14e7d52cc894ac94f78f91cbcedc4eec2e64304f"
+      },
+      {
         "path": "scripts/gps-authority-boundary-database-tests.mjs",
         "mode": "100644",
         "object_id": "27dd9b6fb65c9431ab37b4c4c41119b7a4f56d37"
@@ -4950,7 +5020,7 @@
       {
         "path": "scripts/gps-map-context-route-tests.mjs",
         "mode": "100644",
-        "object_id": "15ba8212ee335d1bc617283c32ddad3c83b3066e"
+        "object_id": "19193ebd80756afcc5771016ad66cbd8b3c3f5fb"
       },
       {
         "path": "scripts/gps-map-lane-history-tests.mjs",
@@ -5135,7 +5205,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "5efae833901e033d080bcb2f252c9b385d96df1b"
+        "object_id": "77eb2a25196d6d3d5719d631fb5d5a95fef14ea1"
       },
       {
         "path": "scripts/local-enrollment-retention-sql-tests.mjs",
@@ -5310,7 +5380,7 @@
       {
         "path": "scripts/mcp-oauth-durable-family-tests.mjs",
         "mode": "100644",
-        "object_id": "6c5990cbc50c0183531f05567bcd48926e9c783b"
+        "object_id": "7facfbe9ffba315f5e518887868f4b88098df5db"
       },
       {
         "path": "scripts/mcp-retained-outlook-registration-contract-tests.mjs",
@@ -5395,7 +5465,7 @@
       {
         "path": "scripts/memphis-provenance-boundary-tests.mjs",
         "mode": "100644",
-        "object_id": "7ae88637378ff23eceea6622777290f154a6b0ee"
+        "object_id": "2684918d9e6493d89dac0e81dbe806becec2ca64"
       },
       {
         "path": "scripts/messaging-broadcast-idempotency-tests.mjs",
@@ -6798,6 +6868,11 @@
         "object_id": "78b5a440e2c0db84772f7a0ac51b46d1ef09e911"
       },
       {
+        "path": "scripts/release-monitor-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "962e0969fd51f4789c679206a0d266dd2a651afe"
+      },
+      {
         "path": "scripts/release-pair-consumer-regression-tests.mjs",
         "mode": "100644",
         "object_id": "5e457ebf63a71f33d0636d02d5ced31a3a66f0e6"
@@ -7155,7 +7230,7 @@
       {
         "path": "scripts/security-http-boundary-tests.mjs",
         "mode": "100644",
-        "object_id": "6c7ccc8729f1366d29f998eeb805fcc431ce8712"
+        "object_id": "e88440db174647f030859f7bd18de1a015725c72"
       },
       {
         "path": "scripts/separation-auth-admission-source-tests.mjs",
@@ -8545,7 +8620,7 @@
       {
         "path": "src/ai/memphis-ai-weather.js",
         "mode": "100644",
-        "object_id": "c83b33f4b70353a31d30afeb5d4c881173d382ea"
+        "object_id": "be81d27ad314eba0446739d0c5b3fc14c4f0a46d"
       },
       {
         "path": "src/ai/memphis-ai-weekly.js",
@@ -8920,7 +8995,7 @@
       {
         "path": "src/gemini-console-api.js",
         "mode": "100644",
-        "object_id": "a4183bc18f033165b5567bdbd1efa19e7ad61ddf"
+        "object_id": "17d29960c1d37842a180cb6956097c42403834cc"
       },
       {
         "path": "src/gemini-controlled-worker.js",
@@ -8940,17 +9015,17 @@
       {
         "path": "src/github/client.js",
         "mode": "100644",
-        "object_id": "00eb8891b0358422b6677df43192be47dff2a3bc"
+        "object_id": "87a2c7d95551368b3c61dbaa6aac15ed044af8cc"
       },
       {
         "path": "src/github/patch.js",
         "mode": "100644",
-        "object_id": "d08df74609c11c734697e1c00583d03cd4f041c2"
+        "object_id": "d479c8f1b1fa10dc85a592075a9922a25ee6a812"
       },
       {
         "path": "src/github/read.js",
         "mode": "100644",
-        "object_id": "967fe2eb255983d4287a390f4f32a23b1c248c88"
+        "object_id": "2ab3ac70e5f0f01db330c723d0f864af4605e958"
       },
       {
         "path": "src/github/search.js",
@@ -8960,7 +9035,7 @@
       {
         "path": "src/github/write.js",
         "mode": "100644",
-        "object_id": "a9bf05b14ec65357f493a7e9c0b7440e4b597ff4"
+        "object_id": "c85ea9a2eacbc99a6d4e3eaeff3e2ccefb79dce5"
       },
       {
         "path": "src/gps-map-context-route.js",
@@ -8980,7 +9055,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "922bad24e38b635563c6b8dea1eb6091cc6d6c02"
+        "object_id": "00fe7007b3d916475231b0f62e6bcf8250084145"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -9115,7 +9190,7 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "9423cb759f71ca3a45e61733de1bc66fa663083a"
+        "object_id": "b2bd05fad52f8cdcf014c931002cf34f1b8cb748"
       },
       {
         "path": "src/messaging-original-outcome.js",
@@ -9130,7 +9205,7 @@
       {
         "path": "src/messenger-recipient-directory.js",
         "mode": "100644",
-        "object_id": "afd317eb1bc2af7e2856956ce2045bfe11b69196"
+        "object_id": "3ff36e8399c8936abcaf3a69e595e213adb8314f"
       },
       {
         "path": "src/native-alert-reservation.js",
@@ -9665,7 +9740,7 @@
       {
         "path": "src/security-http-boundaries.js",
         "mode": "100644",
-        "object_id": "d2202d2d87a2a490dfa6dbd5e043452f098ba525"
+        "object_id": "4544fe635035cbc79647ed0d09eb4c25dea852cb"
       },
       {
         "path": "src/services/index.js",
@@ -12248,7 +12323,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2424,
+    "authority_path_count": 2439,
     "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
