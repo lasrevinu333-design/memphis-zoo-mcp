@@ -1,4 +1,5 @@
 import {recordImmutableFreshFailure,readImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
+import './isolated-current-postgres-cron-setup-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.

@@ -16,6 +16,7 @@ import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-sourc
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
 import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
+import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -108,7 +109,7 @@ const targetCreationOperations=new Set(['CHECK_TARGET_ABSENCE','PULL_PINNED_POST
   'INSPECT_OWNED_NETWORK','VERIFY_OWNED_NETWORK']);
 export function targetCreationOperation(value){return targetCreationOperations.has(value)?value:null;}
 const privateSubprocessOperations=new Set(['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE',
-  'RESTORE_AUTHENTICATED_SCHEMA','RESTORE_PRIVATE_DATA_AND_STORAGE']);
+  'RESTORE_AUTHENTICATED_SCHEMA','RESTORE_VERIFIED_CRON_METADATA','RESTORE_PRIVATE_DATA_AND_STORAGE']);
 export function privateSubprocessOperation(value){return privateSubprocessOperations.has(value)?value:null;}
 // Used only for the exact pinned Docker pull failure. Labels describe observed
 // transport text, never authorize a retry, credential change or alternate image.
@@ -209,7 +210,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null;
+  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
@@ -241,7 +242,11 @@ export async function runPrivate(){
           stdout_bytes:stdoutBytes,stderr_bytes:stderrBytes,timed_out:timedOut,output_limit_exceeded:outputLimit,cancelled,spawn_error:spawnError};
         if(operationAtStart)creationProcess=Object.freeze({operation:operationAtStart,...diagnostic,
           ...(pinnedPull&&(code!==0||failed)?{docker_pull_failure:pullErrorTruncated?'UNKNOWN':classifyPinnedPostgresPullFailure(Buffer.concat(pullErrorChunks).toString('utf8'))}:{} )});
-        if(privateOperation&&(code!==0||failed))subprocessFailure??=Object.freeze({operation:privateOperation,...diagnostic});
+        if(privateOperation&&(code!==0||failed)){
+          let cronFailure=null;
+          if(privateOperation==='RESTORE_VERIFIED_CRON_METADATA'&&stdoutBytes<=2048)try{cronFailure=projectCronSetupFailure(JSON.parse(stdout.trim()));}catch{}
+          subprocessFailure??=Object.freeze({operation:privateOperation,...diagnostic,...(cronFailure?{cron_setup_failure:cronFailure}:{})});
+        }
       }
       if(code!==0||failed)no(new Error('Owned subprocess refused during '+phase));else yes(stdout.trim());});
   });
@@ -342,6 +347,15 @@ export async function runPrivate(){
     // Existing adapter replays authenticated schema unchanged. No hydration,
     // legacy restore-intent producer, forward migrations or reconciliation.
     await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000,diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'});
+    if(requireOwnerProfile().id==='immutable-private-current-postgres'){
+      phase='seed_verified_isolated_cron_metadata';await verifyTarget();
+      cronSetup=JSON.parse(await run(process.execPath,['scripts/seed-isolated-current-postgres-cron.mjs'],
+        {env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000,diagnosticOperation:'RESTORE_VERIFIED_CRON_METADATA'}));
+      assert.deepEqual(cronSetup,{schema:'custodial.isolated-current-postgres-cron-setup.v1',ok:true,
+        jobs:JSON.parse(bootstrapSource.inventory['inventory/cron-jobs.json']).length,rows_and_counter_verified:true,committed:true,
+        application_data_written:false,owners_or_grants_changed:false,cron_execution_enabled:false,production_written:false,restore_admission:false});
+      requireOwnerProfile();await verifyTarget();
+    }
     phase='private_original_restore_and_storage';await verifyTarget();
     result=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
     assertPrivateResult(result,source,envelope.intent);await verifyTarget();
@@ -375,7 +389,7 @@ export async function runPrivate(){
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
-      subprocess_failure:subprocessFailure,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
+      subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }

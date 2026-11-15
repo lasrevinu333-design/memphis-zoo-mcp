@@ -131,13 +131,34 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    'Fresh Source count membership/order/original transaction differs');
   assert.equal(values.row_count,'0','Fresh Source target contains original application DATA');
  }
+ // The owning backup-only driver may seed cron during its existing isolated
+ // schema-administrator setup. Admit no caller flag or inferred privilege:
+ // current-postgres Source + actual native loopback/disposable identity +
+ // exact signed rows AND counter, before the first original/control effect.
+ const parameters=Object.getOwnPropertyDescriptor(db,'connectionParameters')?.value;
+ const parameter=key=>parameters&&!types.isProxy(parameters)?Object.getOwnPropertyDescriptor(parameters,key)?.value:undefined;
+ const seededIsolatedCron=ownerProfile.id==='immutable-private-current-postgres'
+  && /^mz_schema_rebuild_[1-9][0-9]*$/.test(originalContext.database)
+  && ['127.0.0.1','localhost'].includes(parameter('host'))&&parameter('database')===originalContext.database;
+ let seededCron=null;
+ if(seededIsolatedCron){
+  initializerStage='VERIFY_ISOLATED_CRON_SETUP';
+  const execution=(await query("select current_setting('cron.launch_active_jobs',true) cron_execution")).rows;
+  assert.deepEqual(execution,[{cron_execution:'off'}],'Isolated cron execution must remain disabled');
+  seededCron=inventory('cron-jobs.json');assert.ok(Array.isArray(seededCron));
+  const sourceDatabase=source.sourceBinding.summary.database_snapshot?.database_name;
+  assert.equal(typeof sourceDatabase,'string');assert.ok(sourceDatabase.length>0);
+  const verified=await verifyRestoredCronJobs(Object.freeze({query}),seededCron,{sourceDatabase});
+  checkSource();await readContext();assert.equal(verified.target_database,originalContext.database);
+  assert.equal(verified.differences.length,0,'Exact signed isolated cron setup required before original effects');
+ }
  const before=(await query(`select (select count(*)::int from custodial_dr.restore_control) controls,
   (select count(*)::int from custodial_dr.restore_manifests) manifests,
   (select count(*)::int from custodial_dr.restore_events) events,
   (select count(*)::int from supabase_migrations.schema_migrations) migrations,
   (select count(*)::int from cron.job) jobs,
   to_regclass('custodial_dr.immutable_private_import_context')::text existing_import`)).rows[0];
- assert.deepEqual(before,{controls:0,manifests:0,events:0,migrations:0,jobs:0,existing_import:null});
+ assert.deepEqual(before,{controls:0,manifests:0,events:0,migrations:0,jobs:seededIsolatedCron?seededCron.length:0,existing_import:null});
  initializerStage='INITIALIZE_CONTROL';
  await query('insert into custodial_dr.restore_control(singleton) values(true)');
  initializerStage='RECONCILE_ARCHIVED_ACLS';
@@ -222,7 +243,8 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   from custodial_dr.restore_control where singleton`)).rows;
  assert.deepEqual(cronControl,[{generation:'0',mutations_paused:false,state:'READY',restore_id:null}]);
  const cronPort=Object.freeze({query});
- const restoredCron=await restoreCronJobs(cronPort,cron,{sourceDatabase});
+ const restoredCron=seededIsolatedCron?await verifyRestoredCronJobs(cronPort,cron,{sourceDatabase})
+  :await restoreCronJobs(cronPort,cron,{sourceDatabase});
  checkSource();await readContext();
  assert.equal(restoredCron.target_database,originalContext.database);
  const expectedCron=normalizedCronJobs(cron,{sourceDatabase,targetDatabase:originalContext.database});
