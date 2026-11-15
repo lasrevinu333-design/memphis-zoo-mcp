@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './fixture-cgroup-memory-tests.mjs';
 import {cpSync,existsSync,mkdirSync,mkdtempSync,readFileSync,renameSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,resolve} from 'node:path';

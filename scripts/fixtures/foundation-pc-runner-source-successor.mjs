@@ -16,6 +16,10 @@ const legacy='          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-s
 const legacyPrior='          npm run --silent test:static-weekly-scheduler:database';
 export function restoreFoundationPcRunnerWorkflow(source,name){
  if(name==='foundation-security-gate.yml'&&sha(source)==='4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7'){
+  // Exact current observer successor; frozen canonical304 driver/SQL unchanged.
+  assert.equal(sha(readFileSync(new URL('../run-sealed-canonical304-fixture.mjs',import.meta.url))),'42bee2609d2011741455b37cfe361819ccd04d78223b61628eef2778f6e5dbc7');
+  assert.equal(sha(readFileSync(new URL('../canonical304-kernel-resource-view.mjs',import.meta.url))),'590f68b21a2ae4bd555c85c5b3c0774082129ab91b361cef607fff8baee1a773');
+  assert.equal(sha(readFileSync(new URL('../fixture-cgroup-memory-contract.mjs',import.meta.url))),'6809f2075d489359a35af840db0bf09ae58a0995d6d3b93b6ab0e3fd352e8d86');
   assert.equal(sha(readFileSync(new URL('../run-retained-release-provenance-tests.mjs',import.meta.url))),
    '6f49f7bc0d09a984e17ea747683d5cc266896319e05bd98a1eeabc7669ec7f20');
   const from='          TMPDIR="$ci_sql_parent" node scripts/run-retained-release-provenance-tests.mjs\n';
