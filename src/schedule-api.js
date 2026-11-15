@@ -2972,7 +2972,25 @@ export function createScheduleRouter({
       || !["RECURRING_TERMINAL", "RECURRING_SCHEDULE", "LEGACY_REGISTERED", "UNAVAILABLE"].includes(result.mode)) {
       const error = new Error("The exact schedule delivery state is unavailable."); error.status = 503; throw error;
     }
-    return assertManualScheduleDeliveryOrigin(result);
+    try {
+      return assertManualScheduleDeliveryOrigin(result);
+    } catch (error) {
+      if (error?.code === 'manual_device_delivery_unavailable') {
+        const reasons = ['ORIGIN_SHAPE', 'ORIGIN_KIND', 'BINDING_ID', 'DELIVERY_MODE', 'TARGET_MISSING', 'TARGET_TYPE', 'OPERATION_MISMATCH'];
+        // Operational diagnostics contain only finite labels and booleans.
+        // No request, origin, target, identity or credential bytes are logged.
+        try {
+          console.warn(JSON.stringify({
+            event: 'custodial_schedule_delivery_refused',
+            reason: reasons.includes(error.deliveryDiagnostic) ? error.deliveryDiagnostic : 'UNCLASSIFIED',
+            target_present: result?.delivery?.target != null,
+            intent_present: result?.delivery?.intentId != null,
+            pending_target: result?.delivery?.applicationStatus === 'PENDING_TARGET_RECONCILIATION',
+          }));
+        } catch { /* A diagnostic sink failure must preserve the original refusal. */ }
+      }
+      throw error;
+    }
   }
 
   function toCsvValue(value) {

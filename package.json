@@ -51,7 +51,7 @@
     "test:custodial-u4-migration-convergence": "node scripts/custodial-u4-migration-convergence-tests.mjs",
     "test:static-weekly-scheduler:physical": "STATIC_WEEKLY_PHYSICAL_SCALE=1 node scripts/static-weekly-schedule-compiler-tests.mjs",
     "test:static-weekly-scheduler": "npm run --silent test:static-weekly-scheduler:fast && npm run --silent test:static-weekly-scheduler:database",
-    "test:staffing-continuity-v10": "node scripts/staffing-command-request-tests.mjs && node scripts/staffing-preparation-boundaries-tests.mjs && node scripts/staffing-candidate-set-tests.mjs && node scripts/staffing-week-preview-tests.mjs && node scripts/staffing-compiler-staging-tests.mjs && node scripts/staffing-command-control-plane-tests.mjs && node scripts/staffing-schedule-application-route-tests.mjs && node scripts/staffing-command-ledger-database-tests.mjs && node scripts/staffing-command-atomic-acceptance-database-tests.mjs",
+    "test:staffing-continuity-v10": "node scripts/staffing-command-request-tests.mjs && node scripts/staffing-preparation-boundaries-tests.mjs && node scripts/staffing-candidate-set-tests.mjs && node scripts/staffing-week-preview-tests.mjs && node scripts/staffing-compiler-staging-tests.mjs && node scripts/staffing-command-control-plane-tests.mjs && node scripts/staffing-schedule-application-route-tests.mjs && node scripts/manual-schedule-delivery-diagnostic-tests.mjs && node scripts/staffing-command-ledger-database-tests.mjs && node scripts/staffing-command-atomic-acceptance-database-tests.mjs",
     "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs",
     "test:sch2-publish": "node scripts/sch2-publish-route-tests.mjs",
     "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs",

@@ -7,9 +7,15 @@ const unavailable=()=>Object.assign(new Error('Exact manual schedule delivery au
 export function assertManualScheduleDeliveryOrigin(delivery){
  if(delivery?.authorityOrigin==null)return delivery; // Existing genuine named/recurring/terminal route is literal.
  const origin=delivery.authorityOrigin;
- if(!exact(origin,['kind','bindingId'])||!['MANUAL_INITIAL','RECURRING_CONFIRMATION'].includes(origin.kind)
-  ||!UUID.test(origin.bindingId??'')||delivery.mode!=='RECURRING_SCHEDULE'
-  ||delivery.delivery?.target?.targetType!=='SCHEDULE'||delivery.delivery.target.operationId!==origin.bindingId)throw unavailable();
+ // Finite internal reason only: never attach the rejected origin/target or
+ // any principal/credential value to an error or log.
+ const refuse=reason=>{throw Object.assign(unavailable(),{deliveryDiagnostic:reason});};
+ if(!exact(origin,['kind','bindingId']))refuse('ORIGIN_SHAPE');
+ if(!['MANUAL_INITIAL','RECURRING_CONFIRMATION'].includes(origin.kind))refuse('ORIGIN_KIND');
+ if(!UUID.test(origin.bindingId??''))refuse('BINDING_ID');
+ if(delivery.mode!=='RECURRING_SCHEDULE')refuse('DELIVERY_MODE');
+ if(delivery.delivery?.target?.targetType!=='SCHEDULE')refuse(delivery.delivery?.target==null?'TARGET_MISSING':'TARGET_TYPE');
+ if(delivery.delivery.target.operationId!==origin.bindingId)refuse('OPERATION_MISMATCH');
  return delivery;
 }
 export async function bindApprovedManualDeviceDelivery({query,managerId,publicationId,originalReceiptDigest}){
