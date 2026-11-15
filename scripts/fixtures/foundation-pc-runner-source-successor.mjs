@@ -4,6 +4,7 @@
 // resource/storage guards and image/checksums remain required.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const current='e1dc3b5a7dbc4d4ed350db52e314f3ed6fbe3e7ccded2d945aad454c07c2749b';
 const previous='7d3b6cd5e5f8992f625e0ea12a3432c83099f8bb4c8192c494362552bd3ae61e';
@@ -14,6 +15,16 @@ const canonical304Prior='          node --max-old-space-size=384 scripts/sealed-
 const legacy='          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs';
 const legacyPrior='          npm run --silent test:static-weekly-scheduler:database';
 export function restoreFoundationPcRunnerWorkflow(source,name){
+ if(name==='foundation-security-gate.yml'&&sha(source)==='e4c8aae8f2b440ebc706169387ebd11e81690faaab00cbb78d0d4f337d5c9bd9'){
+  // Verify the executable current caller before reproducing the retained
+  // workflow view. Both unchanged SQL orders remain in the original command.
+  assert.equal(sha(readFileSync(new URL('../run-sealed-legacy-scheduler-database-tests.mjs',import.meta.url))),
+   '0bd9b7c56e0424d76ab9322c3a6bfaebc5b1c5b19ec44c76d3b1c8cc75ec2108');
+  const from='          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs --integrated-suite-order\n';
+  assert.equal(source.split(from).length,2);
+  source=source.replace(from,'          npm run --silent test:integrated-backend-authority-suite-order\n');
+  assert.equal(sha(source),current,'complete prior workflow must be reproduced');
+ }
  if(name!=='foundation-security-gate.yml'||sha(source)!==current)return source;
  assert.equal(source.split(routing).length,2);
  assert.equal(source.split(evidence).length,2);
