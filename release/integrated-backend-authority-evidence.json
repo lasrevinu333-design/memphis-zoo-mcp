@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "2a81fc95df017f5b286bcafa90c399fae4d3a865"
+        "object_id": "e822e110c6d1a39984f162eed9c1cd412daae2aa"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -4295,7 +4295,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "07f3a168c8d4a234fcefaaa2aabf4f78b781f8b7"
+        "object_id": "e767051c7999eb106a66cf134c92e060df0918f2"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -4683,9 +4683,19 @@
         "object_id": "2a1cefc2541487da08cf1f6c4620947dcc56b17f"
       },
       {
+        "path": "scripts/fixtures/sealed-canonical304-source-fixture.mjs",
+        "mode": "100644",
+        "object_id": "52f41dbdac3eb608fb185a279b9b37cca8137f75"
+      },
+      {
         "path": "scripts/fixtures/sealed-repair/CANONICAL304_PLAN.json",
         "mode": "100644",
         "object_id": "04d60925c575d912732eefa7b6fa86f8718b0335"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/CANONICAL304_PREDECESSORS.json",
+        "mode": "100644",
+        "object_id": "ea921b3a28ffbe08ac7a35dc17d388328fb28b8b"
       },
       {
         "path": "scripts/fixtures/sealed-repair/F01_regression.sql",
@@ -4731,6 +4741,336 @@
         "path": "scripts/fixtures/sealed-repair/Q07_regression.sql",
         "mode": "100644",
         "object_id": "3975b5e28835619d27875d226846dba87e6f856d"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/release/sealed-repair-frontend-source/SOURCE_PAIR.json",
+        "mode": "100644",
+        "object_id": "37da2ea492fa66de97e2a4e68a07a3ce574c7f01"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/scripts/ci-fresh-only-replay.mjs",
+        "mode": "100644",
+        "object_id": "9c21493be033bbc2ac9e1086b44fc306352eced2"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/ai/memphis-ai-daily.js",
+        "mode": "100644",
+        "object_id": "1b8304d72382e8a883243df7c69d36e72e94532d"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/ai/memphis-ai-intent.js",
+        "mode": "100644",
+        "object_id": "573e8c360892c2f595e8e03ad72b2113ff47a375"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/ai/memphis-ai-weather.js",
+        "mode": "100644",
+        "object_id": "c83b33f4b70353a31d30afeb5d4c881173d382ea"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/approved-manual-coverall-workflow.js",
+        "mode": "100644",
+        "object_id": "81f0d5cd2b718f96512420f21200446f1daf724d"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/approved-manual-device-delivery.js",
+        "mode": "100644",
+        "object_id": "bb0b0c0cd01bfff38b3bea073cdbee0b211e4927"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/approved-manual-recurring-period.js",
+        "mode": "100644",
+        "object_id": "104199c110511781a0ecd34ec1c243c9ea713ad8"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/approved-manual-roster-transition.js",
+        "mode": "100644",
+        "object_id": "4bdc4c4925e19a3a90918477e968f5fbf2e12b31"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/approved-manual-week.js",
+        "mode": "100644",
+        "object_id": "4cc3cba28d50184287bbb374faf75cb28493cbdf"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/auth/custodial-leadership-record-operation.mjs",
+        "mode": "100644",
+        "object_id": "cddf123fbb91ec82154528268613e632631ad3c4"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/auth/custodial-leadership-runtime.js",
+        "mode": "100644",
+        "object_id": "1ce593c8c092ef32b5cf11f881a5b2c54cd1ff71"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/auth/device-credential-auth.js",
+        "mode": "100644",
+        "object_id": "2896965b4a3afa01d3cd2b981111e58a1038adf6"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/auth/shared-access-auth.js",
+        "mode": "100644",
+        "object_id": "d2d385cb30988c9dd8cc98d269588b28c6b58ef6"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/completion-taxonomy-manager.js",
+        "mode": "100644",
+        "object_id": "9c501e9ec8892b6e6ed17c17ee0c09d4bdce95d7"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/custodial-employee-admin.js",
+        "mode": "100644",
+        "object_id": "d50207a2eaa2157760b359dfa27bdd85f9657832"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/custodial-record-operations.mjs",
+        "mode": "100644",
+        "object_id": "2fea90b4d9a77247e577be3730cd51c3ff312d52"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/employee-home-time-facts.js",
+        "mode": "100644",
+        "object_id": "ba8ce6b9d86a4021ec6121dcef44b8b7a31203ed"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/employee-notifications.js",
+        "mode": "100644",
+        "object_id": "02f13d4e369c946f5470550468b8b3be4d3a0f77"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/employee-zoo-wide-coverage.js",
+        "mode": "100644",
+        "object_id": "27a84097ebacf78801f83b7782fda1241008d3a1"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/events-api.js",
+        "mode": "100644",
+        "object_id": "9a6efbe0e51f4431219ae471a8ddf7ab388ddde0"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/feedback-triage-status.js",
+        "mode": "100644",
+        "object_id": "99175c19ba93653deffeb6f860d215ff8c0a6a59"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/feedback-triage.js",
+        "mode": "100644",
+        "object_id": "26d2fd67a25ba80e41334442058ed2fa05911602"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/gemini-console-api.js",
+        "mode": "100644",
+        "object_id": "a4183bc18f033165b5567bdbd1efa19e7ad61ddf"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/github/client.js",
+        "mode": "100644",
+        "object_id": "00eb8891b0358422b6677df43192be47dff2a3bc"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/github/patch.js",
+        "mode": "100644",
+        "object_id": "d08df74609c11c734697e1c00583d03cd4f041c2"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/github/read.js",
+        "mode": "100644",
+        "object_id": "967fe2eb255983d4287a390f4f32a23b1c248c88"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/github/write.js",
+        "mode": "100644",
+        "object_id": "a9bf05b14ec65357f493a7e9c0b7440e4b597ff4"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/index.js",
+        "mode": "100644",
+        "object_id": "171492da927a8547c58161985a4d73a41a1c6e80"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/mcp/outlook-event-tools.js",
+        "mode": "100644",
+        "object_id": "ceecf88d0b48e92c7d241f0ea2d4a27278c3e1d2"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/mcp/register.js",
+        "mode": "100644",
+        "object_id": "e539abf8f361956624b2eef541890fbad891b812"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/mcp/tool-manifest.js",
+        "mode": "100644",
+        "object_id": "f6f8385ae0ea23fa3f08c734597786d0d2aff5d9"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/memphis-ai.js",
+        "mode": "100644",
+        "object_id": "f80d08f1883f17332c5d6c4869a6ee11c5bc547b"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/messaging-api.js",
+        "mode": "100644",
+        "object_id": "89c543ee7192f1e2eac6d4bef240c7891e96d720"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-event-dispatch.js",
+        "mode": "100644",
+        "object_id": "ae184ab521471337de659ddfd7c4639e2fd70c1a"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-location-lifecycle.js",
+        "mode": "100644",
+        "object_id": "dabf81900386d2fd864c23a29c8d46125ea42efa"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-message-dispatch.js",
+        "mode": "100644",
+        "object_id": "565f151060682c1243367dc0162b1678fe0d856f"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-provider-event-decisions.js",
+        "mode": "100644",
+        "object_id": "73e54442775859b60c8db3c58d5e90dc6372b9fc"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-provider-events.js",
+        "mode": "100644",
+        "object_id": "b6904b8377a5b70027931a7b41830c805d33c522"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-provider-inventory-payload.js",
+        "mode": "100644",
+        "object_id": "36084e99161bb47ed156fd88cfac6bcc3b110e92"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-attempt-lifecycle.js",
+        "mode": "100644",
+        "object_id": "6f0f1b80ecdb78db3410e9932a52723c53ad6c23"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-delivery-preparation.js",
+        "mode": "100644",
+        "object_id": "efd98f5c63bfcd7543243a8b0a1d1bb4402cde94"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-dispatch.js",
+        "mode": "100644",
+        "object_id": "40acd305ef84e18f3142ebde98dc4cbc00191ca2"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-payload.js",
+        "mode": "100644",
+        "object_id": "ab9f08953591c21a32be5d27568b9d810c9d1db4"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-source-discovery.js",
+        "mode": "100644",
+        "object_id": "4ea0e4d6d75c722b48f815f6708fd04532bd82f4"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-source-orchestration.js",
+        "mode": "100644",
+        "object_id": "0ec5c28424a24eb305d377a39a1cb138b07c7abc"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/native-schedule-source-producer.js",
+        "mode": "100644",
+        "object_id": "b7c8f64dfc714a06dd5af14ea2d724a4c7e085cb"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/operations-board.js",
+        "mode": "100644",
+        "object_id": "2630b4bffd9c75d41d1c717c7b64b7d7220d4aca"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/operations-mail-contract.js",
+        "mode": "100644",
+        "object_id": "e039dba3092355d5e65d23bf52e7bd58c8ae2c18"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/operations-mail-ledger.js",
+        "mode": "100644",
+        "object_id": "4c8c397b207a10e1cd68e40b8d4b362fd0a76e59"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/outlook-event-sync.js",
+        "mode": "100644",
+        "object_id": "2d627562122257030e50ccca60d4acbc0ad8d6c6"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/places-api.js",
+        "mode": "100644",
+        "object_id": "5b9e63ce450f3f1324ef52c602f74ac665437191"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/release-contract.js",
+        "mode": "100644",
+        "object_id": "b9d6fdd102a50855ec42189f899129720cdedf26"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/request-json-parser.js",
+        "mode": "100644",
+        "object_id": "b8ecad586175133864cb94bc76641a6a4dd30386"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/same-original-recovery-native-challenge-composition.js",
+        "mode": "100644",
+        "object_id": "49d4612180203dc2121b281b1a6c2cbc8a2dfe0c"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/schedule-api.js",
+        "mode": "100644",
+        "object_id": "11a746b34c75fc738a661315fec40c8f470883f7"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/security-http-boundaries.js",
+        "mode": "100644",
+        "object_id": "d2202d2d87a2a490dfa6dbd5e043452f098ba525"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-control-plane-runtime.js",
+        "mode": "100644",
+        "object_id": "e5ab88b4bcb6d2a683fba4a859222785eab1b4b3"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-control-plane.js",
+        "mode": "100644",
+        "object_id": "0b8d1b06bfe79637dfd09d160d142e3fe8259254"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-manager-operation.js",
+        "mode": "100644",
+        "object_id": "270da0b46ed47bcb315b20a68efeae8b1f19964b"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-recurring-phase-authority.js",
+        "mode": "100644",
+        "object_id": "7214e7f2190918f42c4debe1d228d9a583462548"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-recurring-staffing-adaptation.js",
+        "mode": "100644",
+        "object_id": "86ea95fd3f7f993cbaba9eeee44ff0b6bea960a7"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-schedule-model.js",
+        "mode": "100644",
+        "object_id": "3fa7c2ec96f5b19692b471d540e1bbe244ea55c3"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-schedule-program.js",
+        "mode": "100644",
+        "object_id": "a4a698f9c252b484a1bb74b8d1234cb1de50f987"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-shift-end-coverage.js",
+        "mode": "100644",
+        "object_id": "2d61b32ca4d5a3ccbcf320328888becf99a6a3f0"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/canonical304-predecessor/src/static-weekly-shift-end-derivation.js",
+        "mode": "100644",
+        "object_id": "3b230feac74ebe8b27d11946b1b2c5d2b15eaa5c"
       },
       {
         "path": "scripts/fixtures/sealed-repair/manual-repeat-memory-regression.sql",
@@ -6998,6 +7338,11 @@
         "object_id": "45ea09a751feb94c8a6de863bfe70587c7a9189c"
       },
       {
+        "path": "scripts/run-sealed-canonical304-fixture.mjs",
+        "mode": "100644",
+        "object_id": "b4a1b51acbff8be67e39367fdb9b0eba0b51cd0c"
+      },
+      {
         "path": "scripts/run-specialized-lunch-receipt-database-tests.mjs",
         "mode": "100644",
         "object_id": "b77d47312665d0809a796cc474fda06706a3c071"
@@ -7226,6 +7571,11 @@
         "path": "scripts/school-exact-block-duplicate-tests.mjs",
         "mode": "100644",
         "object_id": "70dc21f5be608aafeb485ff21cf89e38e492f702"
+      },
+      {
+        "path": "scripts/sealed-canonical304-source-fixture-tests.mjs",
+        "mode": "100644",
+        "object_id": "cdd06708732170a2efac323cab475367e8ab62fe"
       },
       {
         "path": "scripts/sealed-repair-canonical-database-tests.mjs",
@@ -12353,7 +12703,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2445,
+    "authority_path_count": 2515,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
