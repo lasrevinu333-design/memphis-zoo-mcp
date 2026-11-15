@@ -537,7 +537,23 @@ export function createGeminiConsoleRouter({
       req.restoreMutationLease?.assertActive?.();
       const removed = await supabase.storage.from(data.storage_bucket).remove([data.storage_path]);
       if (removed.error) throw removed.error;
-      await supabase.from("gemini_console_attachments").update({ status: "deleted", deleted_at: new Date().toISOString() }).eq("attachment_id", data.attachment_id);
+      // Storage and metadata are separate effects. A returned UPDATE error or
+      // missing intended row cannot acknowledge a completed deletion.
+      try {
+        req.restoreMutationLease?.assertActive?.();
+        const updated = await supabase.from("gemini_console_attachments")
+          .update({ status: "deleted", deleted_at: new Date().toISOString() })
+          .eq("attachment_id", data.attachment_id).eq("manager_id", actor.managerId).eq("status", "pending")
+          .select("attachment_id,status").maybeSingle();
+        if (updated.error || updated.data?.attachment_id !== data.attachment_id || updated.data.status !== "deleted") {
+          throw new Error("Attachment metadata transition is unconfirmed.");
+        }
+      } catch {
+        res.status(503).json({ ok: false, code: "attachment_deletion_unconfirmed",
+          error: "Attachment removal could not be confirmed. The original attachment details are retained for review.",
+          data: { attachment_id: data.attachment_id, storage_removal: "confirmed", metadata_transition: "unconfirmed" } });
+        return;
+      }
       res.status(200).json({ ok: true, data: { attachment_id: data.attachment_id, status: "deleted" } });
     } catch (error) { apiError(res, error, "Attachment removal failed."); }
   });

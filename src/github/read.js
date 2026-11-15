@@ -90,6 +90,12 @@ async function readFileBuffer({ github, repo, path, ref, contentResult }) {
     : decodeContent(contentResult.content);
 }
 
+function treeCompleteness(data) {
+  const known = typeof data?.truncated === "boolean";
+  const reasons = data?.truncated === true ? ["upstream_tree"] : known ? [] : ["upstream_completeness_unknown"];
+  return { reasons, upstream: known ? data.truncated : null };
+}
+
 export async function listDirectory({ github, repo, path = "", ref, recursive = false, maxEntries = 500 } = {}) {
   const target = resolveGithubTarget({ github, repo, ref });
   const searchQuery = parseSearchPath(path);
@@ -107,10 +113,11 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
       recursive: "true",
     });
 
+    const completeness = treeCompleteness(treeResponse.data);
+    const incomplete = new Set(completeness.reasons);
     const files = treeResponse.data.tree.filter((item) => item.type === "blob");
-    const pathEntries = files
-      .filter((item) => String(item.path || "").toLowerCase().includes(searchQuery.query))
-      .slice(0, limit)
+    const matchingPaths = files.filter((item) => String(item.path || "").toLowerCase().includes(searchQuery.query));
+    const pathEntries = matchingPaths.slice(0, limit)
       .map((item) => ({ path: item.path, type: "file", match_type: "path", size: item.size ?? null, sha: item.sha, url: item.url }));
 
     const contentEntries = [];
@@ -119,18 +126,28 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
     let scannedBytes = 0;
 
     if (searchQuery.includeContent) {
-      const candidates = files
-        .filter((item) => canSearchFileContent(item, searchLimits))
-        .slice(0, Math.min(limit, searchLimits.max_candidates));
+      const eligible = files.filter((item) => canSearchFileContent(item, searchLimits));
+      const candidateLimit = Math.min(limit, searchLimits.max_candidates);
+      const candidates = eligible.slice(0, candidateLimit);
+      if (eligible.length > candidateLimit) {
+        if (candidateLimit === limit) incomplete.add("max_entries");
+        if (candidateLimit === searchLimits.max_candidates) incomplete.add("max_candidates");
+      }
 
       for (const item of candidates) {
         const size = Number(item.size || 0);
-        if (scannedBytes + size > searchLimits.max_total_bytes) break;
+        if (scannedBytes + size > searchLimits.max_total_bytes) {
+          incomplete.add("max_total_bytes");
+          break;
+        }
         scannedCandidateCount += 1;
         scannedBytes += size;
 
         const contentResult = await getContentOrNull({ github, repo: target.repo, path: item.path, ref: target.ref });
-        if (!contentResult || Array.isArray(contentResult) || contentResult.type !== "file") continue;
+        if (!contentResult || Array.isArray(contentResult) || contentResult.type !== "file") {
+          incomplete.add("file_unavailable");
+          continue;
+        }
 
         const buffer = await readFileBuffer({ github, repo: target.repo, path: item.path, ref: target.ref, contentResult });
         if (looksBinary(buffer)) continue;
@@ -141,6 +158,7 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
       }
     }
 
+    if (!searchQuery.includeContent && matchingPaths.length > pathEntries.length) incomplete.add("max_entries");
     const entries = searchQuery.includeContent ? contentEntries : pathEntries;
     return {
       ok: true,
@@ -150,17 +168,21 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
       search: searchQuery.query,
       include_content: searchQuery.includeContent,
       recursive: true,
-      truncated: searchQuery.includeContent ? scannedCandidateCount >= searchLimits.max_candidates : entries.length >= limit,
+      truncated: incomplete.size > 0,
+      upstream_truncated: completeness.upstream,
+      incomplete_reasons: [...incomplete],
       count: entries.length,
       scanned_candidate_count: searchQuery.includeContent ? scannedCandidateCount : undefined,
       scanned_bytes: searchQuery.includeContent ? scannedBytes : undefined,
-      limits: searchQuery.includeContent ? searchLimits : { max_entries: limit },
+      limits: searchQuery.includeContent ? { ...searchLimits, max_entries: limit } : { max_entries: limit },
       entries,
     };
   }
 
   if (recursive) {
     const treeResponse = await github.octokit.rest.git.getTree({ owner: target.owner, repo: target.repo, tree_sha: target.ref, recursive: "true" });
+    const completeness = treeCompleteness(treeResponse.data);
+    const incomplete = new Set(completeness.reasons);
     const prefix = resolvedPath ? `${resolvedPath}/` : "";
     const matching = treeResponse.data.tree.filter((item) => !resolvedPath || item.path === resolvedPath || String(item.path || "").startsWith(prefix));
     const entries = matching.slice(0, limit).map((item) => ({
@@ -170,7 +192,12 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
       sha: item.sha,
       url: item.url,
     }));
-    return { ok: true, repo: `${target.owner}/${target.repo}`, ref: target.ref, path: resolvedPath, recursive: true, truncated: matching.length > entries.length, count: entries.length, total_matching: matching.length, limits: { max_entries: limit }, entries };
+    if (matching.length > entries.length) incomplete.add("max_entries");
+    return { ok: true, repo: `${target.owner}/${target.repo}`, ref: target.ref, path: resolvedPath, recursive: true,
+      truncated: incomplete.size > 0, upstream_truncated: completeness.upstream, incomplete_reasons: [...incomplete],
+      count: entries.length, total_matching: completeness.upstream === false ? matching.length : null,
+      observed_matching: matching.length, total_matching_exact: completeness.upstream === false,
+      limits: { max_entries: limit }, entries };
   }
 
   const response = await github.octokit.rest.repos.getContent({ owner: target.owner, repo: target.repo, path: resolvedPath, ref: target.ref });
