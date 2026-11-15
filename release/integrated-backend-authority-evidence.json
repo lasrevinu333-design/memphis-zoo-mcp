@@ -12323,13 +12323,18 @@
         "object_id": "8ebb948d250f92333ff11b73f8f04e67a98ed0a1"
       },
       {
+        "path": "supabase/migrations/20261115094558_manual_off_day_phone_targets.sql",
+        "mode": "100644",
+        "object_id": "0ec1c95bba6022a2e365274168140e700c17b592"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2440,
-    "migration_path_count": 317,
+    "authority_path_count": 2441,
+    "migration_path_count": 318,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -13290,6 +13295,9 @@
     },
     {
       "name": "20261113164433_approved_manual_exact_shift_count_compatibility.sql"
+    },
+    {
+      "name": "20261115094558_manual_off_day_phone_targets.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
