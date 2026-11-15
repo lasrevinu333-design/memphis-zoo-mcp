@@ -16,6 +16,21 @@ const profiles=[
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('existing original-import guard reason survives closed public metadata without exposing its raw cause',()=>{
+ const error=Object.assign(new Error('PRIVATE SQL CAUSE'),{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',sql_state:'55000',import_refusal:'Immutable import full target catalog mismatch'});
+ recordImmutableFreshFailure(error,{fresh_stage:'IMPORT_ORIGINAL_DATA'});
+ const value=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);
+ assert.equal(value.fresh_refusal,'IMPORT_FULL_TARGET_CATALOG_MISMATCH');assert.equal(value.sql_state,'55000');
+ assert.deepEqual(projectPrivateRestoreDiagnostic(value),value);
+ const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[value]})));
+ assert.equal(receipt.restore_diagnostics[0].fresh_refusal,'IMPORT_FULL_TARGET_CATALOG_MISMATCH');assert.doesNotMatch(JSON.stringify(receipt),/PRIVATE SQL|raw cause|message|stack/);
+ for(const patch of [{code:'other'},{sql_state:'42501'},{import_refusal:'PRIVATE SQL UNKNOWN'}]){
+  const changed=Object.assign(new Error('SECRET'),{code:error.code,sql_state:error.sql_state,import_refusal:error.import_refusal},patch);
+  assert.deepEqual(readImmutableFreshFailure(changed),{});
+ }
+ let traps=0;const getter={code:error.code,sql_state:error.sql_state};Object.defineProperty(getter,'import_refusal',{get(){traps++;return error.import_refusal;}});
+ assert.deepEqual(readImmutableFreshFailure(getter),{});assert.equal(traps,0);
+});
 test('metadata refusal stage survives the actual closed diagnostic and evidence chain without SQL or row payloads',()=>{
  for(const stage of ['RESTORE_METADATA','RESTORE_MIGRATION_LEDGER','RESTORE_CRON','RESTORE_RELEASES','RESTORE_REGISTRY','VERIFY_RESTORED_METADATA']){
   const error=Object.assign(new Error('PRIVATE SQL AND ROW VALUES MUST NOT ESCAPE'),{code:'42501'});
