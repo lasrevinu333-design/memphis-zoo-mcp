@@ -3,6 +3,7 @@
 // SQL, release or phone authority and never accept an unknown source hash.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {restoreFoundationPcRunnerWorkflow} from './foundation-pc-runner-source-successor.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 export const manualDeliveryPackagePins=Object.freeze({
  current:'fda67843739193dded328d2ff03a01559b15e6f1a835dd0a7ffd137ac58ace4d',
@@ -21,9 +22,11 @@ export function restoreManualDeliveryPackage(bytes){
  return prior;
 }
 export function isManualDeliveryWorkflow(source,name){
+ source=restoreFoundationPcRunnerWorkflow(source,name);
  return Object.hasOwn(workflows,name)&&sha(source)===workflows[name][0];
 }
 export function restoreManualDeliveryWorkflow(source,name){
+ source=restoreFoundationPcRunnerWorkflow(source,name);
  if(!isManualDeliveryWorkflow(source,name))return source;
  const from=manualDeliveryPackagePins.current+'  package.json';
  assert.equal(source.split(from).length,2);
