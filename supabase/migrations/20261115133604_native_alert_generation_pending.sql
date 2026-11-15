@@ -98,7 +98,7 @@ AS $function$
 declare j public.operational_notification_jobs%rowtype;i public.event_push_instances%rowtype;
  d public.devices%rowtype;c public.device_auth_credentials%rowtype;r public.employee_push_registrations%rowtype;
  g public.employee_native_push_generations%rowtype;at_time timestamptz;recipient uuid;epoch bigint;
- kind text;active_count integer;
+ kind text;active_count integer;pending_changed integer;
 begin
  perform public.custodial_begin_application_mutation();
  if p_job is null or p_lease is null then raise exception 'exact alert job lease required' using errcode='22023';end if;
@@ -164,6 +164,16 @@ begin
  -- A current phone may be waiting for its first native generation.
  -- This returns no token/expected tuple and cannot authorize preparation/send.
  if active_count=0 then
+  -- No provider attempt has been admitted. Release only this owned lease and
+  -- refund its claim once; retain its existing expiry as the next eligible time.
+  -- The cleared lease makes a duplicate/stale target call unable to refund again.
+  update public.operational_notification_jobs q
+   set status='pending',attempts=greatest(0,q.attempts-1),
+    available_at=greatest(q.available_at,j.leased_until),
+    leased_at=null,leased_until=null,lease_token=null,worker_id=null,updated_at=at_time
+   where q.job_id=j.job_id and q.status='leased' and q.lease_token=p_lease;
+  get diagnostics pending_changed=row_count;
+  if pending_changed<>1 then raise exception 'native_alert_pending_lease_changed' using errcode='40001';end if;
   return jsonb_build_object('current',false,'reason','native_alert_generation_pending');end if;
  if active_count<>1
   or g.generation_id is null or g.registration_id is distinct from r.registration_id
@@ -187,7 +197,7 @@ BEGIN
  SELECT jsonb_agg(to_jsonb(t) ORDER BY t.oid) INTO before_triggers FROM pg_trigger t
   WHERE t.tgrelid='public.custodial_release_authority_restore_inventory'::regclass;
  IF public.static_weekly_digest_text(old_definition) IS DISTINCT FROM 'd9a688f1cbac206f44f6315ebe6d67d901db8c7373624bbe52cd53ca45952802'
-  OR public.static_weekly_digest_text(new_definition) IS DISTINCT FROM 'c80474e9e13c59fe68b125a1e4bd6affbe78a19550037cf3e3d237b565daa8f7'
+  OR public.static_weekly_digest_text(new_definition) IS DISTINCT FROM '2a55f3d5132c433dc14536fb859597b4fe8ae5017c0605b70db495838c281c8f'
  THEN RAISE EXCEPTION 'Native alert pending source constants differ';END IF;
  SELECT pg_get_functiondef(p.oid),to_jsonb(p)-'prosrc' INTO STRICT actual,before_metadata FROM pg_proc p WHERE p.oid=target;
  IF actual IS DISTINCT FROM old_definition OR pg_get_userbyid((before_metadata->>'proowner')::oid)<>'postgres'
