@@ -750,7 +750,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "f95f04e5e6032055ed4b90d9d28d39bb5f922fa7"
+        "object_id": "765c8de65eeb34ec06087cdbbb384cf4640619da"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -5348,6 +5348,11 @@
         "object_id": "37d2d885734111b6558ea8344c7229b3622e828e"
       },
       {
+        "path": "scripts/manual-schedule-delivery-diagnostic-tests.mjs",
+        "mode": "100644",
+        "object_id": "79893f2d1e82c41e76d6c251f5d792c3dbb43996"
+      },
+      {
         "path": "scripts/map-manager-identity-tests.mjs",
         "mode": "100644",
         "object_id": "a458a723127aee41e368592d3e75505272384f84"
@@ -8675,7 +8680,7 @@
       {
         "path": "src/approved-manual-device-delivery.js",
         "mode": "100644",
-        "object_id": "bb0b0c0cd01bfff38b3bea073cdbee0b211e4927"
+        "object_id": "40e4bcf70493418ee3c74bdef0e17d9e91eda60a"
       },
       {
         "path": "src/approved-manual-employment-admission.js",
@@ -9710,7 +9715,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "84f79d54e3f9c8dfde13aed7d671d5480a35ce83"
+        "object_id": "3a1ea4486c4640e3f9c5196f69a6adf0865bb14a"
       },
       {
         "path": "src/schedule-component-weight-authority.js",
@@ -12323,7 +12328,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2439,
+    "authority_path_count": 2440,
     "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
