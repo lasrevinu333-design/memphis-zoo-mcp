@@ -108,12 +108,15 @@ export function decodeContent(base64Content) {
 }
 
 export function normalizeRawContentToBuffer(value) {
-  if (Buffer.isBuffer(value)) return value;
-  if (value instanceof ArrayBuffer) return Buffer.from(value);
-  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
-  if (typeof value === "string") return Buffer.from(value, "utf8");
-  if (value == null) return Buffer.alloc(0);
-  return Buffer.from(JSON.stringify(value), "utf8");
+  // Own the exact response bytes; absent or coerced envelopes are not files.
+  if (Buffer.isBuffer(value)) return Buffer.from(value);
+  if (value instanceof ArrayBuffer) return Buffer.from(new Uint8Array(value));
+  if (ArrayBuffer.isView(value)) return Buffer.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+  if (typeof value === "string") {
+    const bytes = Buffer.from(value, "utf8");
+    if (bytes.toString("utf8") === value) return bytes;
+  }
+  throw new Error("GitHub raw file response does not contain validated file bytes.");
 }
 
 export function looksBinary(buffer) {
@@ -158,5 +161,5 @@ export async function getRawFileBuffer({ github, repo, path, ref }) {
     },
   });
 
-  return normalizeRawContentToBuffer(response.data);
+  return normalizeRawContentToBuffer(response?.data);
 }

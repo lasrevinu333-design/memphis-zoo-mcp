@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { isUtf8 } from "node:buffer";
 import {
   GITHUB_CONTENT_API_HARD_MAX_BYTES,
   GITHUB_STABLE_WRITE_MAX_BYTES,
@@ -798,24 +800,31 @@ export async function restoreFileFromRef({
     ref: source,
   });
 
-  const oldContent = await existingTextForWrite({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-    existing,
-  });
-
-  const restoredContent = sourceBuffer.toString("utf8");
-  const size = assertWriteSize(restoredContent, resolvedPath);
-  const preview = stableFullPreview({
-    oldText: oldContent,
-    newText: restoredContent,
-    path: resolvedPath,
-    extra: {
-      source_ref: source,
-    },
-  });
+  const oldBuffer = typeof existing.content === "string" && existing.encoding === "base64"
+    && existing.size <= 1_000_000 && (existing.content || existing.size === 0)
+    ? decodeContent(existing.content)
+    : await getRawFileBuffer({ github, repo: target.repo, path: resolvedPath, ref: targetBranch });
+  if (Number.isSafeInteger(existing.size) && existing.size >= 0 && oldBuffer.length !== existing.size) {
+    throw new Error("Current file byte receipt differs from its declared size.");
+  }
+  const size = { bytes: sourceBuffer.length, limit: writeMaxBytes() };
+  if (size.bytes > size.limit) {
+    throw new Error(`File write is too large for stable operation. Path: ${resolvedPath}. Size: ${size.bytes} bytes. Limit: ${size.limit} bytes.`);
+  }
+  const changed = !oldBuffer.equals(sourceBuffer);
+  const textual = isUtf8(oldBuffer) && isUtf8(sourceBuffer) && !oldBuffer.includes(0) && !sourceBuffer.includes(0);
+  const preview = textual ? stableFullPreview({
+    oldText: oldBuffer.toString("utf8"), newText: sourceBuffer.toString("utf8"), path: resolvedPath,
+    extra: { source_ref: source },
+  }) : {
+    ok: true, changed, binary: true, path: resolvedPath, source_ref: source,
+    summary: { changed, old_bytes: oldBuffer.length, new_bytes: sourceBuffer.length },
+    diff: changed ? "Binary file bytes differ; no text diff is generated." : "Binary file bytes are identical.",
+    diff_truncated: false,
+    preview_bytes: { old_bytes: oldBuffer.length, new_bytes: sourceBuffer.length, max_preview_bytes: previewMaxBytes() },
+    old_sha256: createHash("sha256").update(oldBuffer).digest("hex"),
+    new_sha256: createHash("sha256").update(sourceBuffer).digest("hex"),
+  };
 
   if (!preview.changed) {
     return {
@@ -854,7 +863,7 @@ export async function restoreFileFromRef({
     repo: target.repo,
     path: resolvedPath,
     message: finalCommitMessage,
-    content: encodeContent(restoredContent),
+    content: sourceBuffer.toString("base64"),
     sha: shaForUpdate,
     branch: targetBranch,
   });
