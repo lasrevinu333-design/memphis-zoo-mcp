@@ -120,7 +120,7 @@ jobs:
           npm run --silent test:backup-source-binding
           node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs
           node scripts/manager-scheduler-http-tests.mjs
-          node scripts/scheduler-reported-boundaries-tests.mjs
+          node scripts/scheduler-reported-boundaries-tests.mjs "$RUNNER_TEMP/scheduler-reported-boundaries-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
           python3 scripts/current-owned-sql-ci-entry.py --consumer manager --runtime "$ci_sql_parent/manager-runtime" --evidence "$RUNNER_TEMP/owned-manager-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           npm run --silent test:manager-auth
           node scripts/map-owner-session-http-tests.mjs
