@@ -1,7 +1,7 @@
 // New-conversation presentation only. Existing inboxes, messages, identities,
 // thread membership and authorization remain unchanged.
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value);
-export const messengerDisplayName=value=>String(value||'').replace(/\s*\(shared PIN(?:; self-asserted)?\)\s*$/i,'').trim();
+export const messengerDisplayName=value=>String(value||'').replace(/[ \t]*\(shared PIN(?:; self-asserted)?\)/gi,'').trim();
 export function recipientDirectory(rows,links,currentUserId){
   const byId=new Map(links.map(link=>[String(link.id),link]));
   const account=link=>uuid(link?.custodial_claimed_account_id)&&uuid(link?.custodial_cohort_manager_id)

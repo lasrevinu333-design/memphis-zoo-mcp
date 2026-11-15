@@ -6,7 +6,7 @@ import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
 import { createOriginalMessageActions } from "./messaging-original-outcome.js";
-import { recipientDirectory } from "./messenger-recipient-directory.js";
+import { recipientDirectory, messengerDisplayName } from "./messenger-recipient-directory.js";
 import { createMessagingReadOwners } from "./messaging-read-owner.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, leadershipMessagingBridge, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
@@ -238,7 +238,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
 
   function messagingRoleTitle(row = {}) {
-    const explicit = String(row.role_title || row.job_title || "").trim();
+    const explicit = messengerDisplayName(row.role_title || row.job_title || "");
     if (explicit) return explicit;
     const role = String(row.role || "").trim().toLowerCase();
     if (role === "bot") return "Memphis";
@@ -305,7 +305,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       }
       const identity = {...row,user_id:row.msg_user_id,manager_id:managerId,
         canonical_device_id:managerSession.device_id,identity_source:'current_self_asserted_cohort_account',
-        role_title:'Custodial leadership (shared PIN)',read_only:false};
+        role_title:'Custodial leadership',read_only:false};
       context.identity = identity;
       return identity;
     }
