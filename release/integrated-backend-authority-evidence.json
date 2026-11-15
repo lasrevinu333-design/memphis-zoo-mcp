@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "422642a27f66979c920970573827fd3ba49ef52a"
+        "object_id": "c9b923a27c5b6cb695cbfdfd9faafed0e7c46e75"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "bb3dfad37623ab8ee5c0ea7483f7ece2fbc91d57"
+        "object_id": "665418d193492a00ef96bda44c33f05d22c437d7"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -3735,7 +3735,7 @@
       {
         "path": "scripts/fixtures/basecamp-ci-input-successor.mjs",
         "mode": "100644",
-        "object_id": "a5d9bfd1638143ea8395f69deb7f4a5684d0e924"
+        "object_id": "51c02a01d0be822802fe92000fc62c51ef732f20"
       },
       {
         "path": "scripts/fixtures/cohort-places-feedback-database-regression.sql",
@@ -4250,7 +4250,7 @@
       {
         "path": "scripts/fixtures/dependency-repair-r44-source.mjs",
         "mode": "100644",
-        "object_id": "5070483a23a305105ac61d0d0bb77624c1898b1f"
+        "object_id": "0e30d920b6d78dd0b5404db51316fde329facfef"
       },
       {
         "path": "scripts/fixtures/derive-recorded-predecessor.mjs",
@@ -4406,6 +4406,11 @@
         "path": "scripts/fixtures/local-enrollment-retention-database-regression.sql",
         "mode": "100644",
         "object_id": "6d81e186f1ca4bfc4b605ef481d6cab95fd74b72"
+      },
+      {
+        "path": "scripts/fixtures/manual-delivery-ci-input-successor.mjs",
+        "mode": "100644",
+        "object_id": "d35430f2361c53c3b75554c6d30684b46ba95723"
       },
       {
         "path": "scripts/fixtures/manual-live-roster-20261030.json",
@@ -4615,7 +4620,7 @@
       {
         "path": "scripts/fixtures/reminder-timing-source-successor.mjs",
         "mode": "100644",
-        "object_id": "082ac40e901a1220785ab733fbee50c9ef44aace"
+        "object_id": "3a1a38f6e15983dfcd5d5ba9e9810884fbc6d73e"
       },
       {
         "path": "scripts/fixtures/resource-observation-r44-source.mjs",
@@ -12333,7 +12338,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2441,
+    "authority_path_count": 2442,
     "migration_path_count": 318,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
