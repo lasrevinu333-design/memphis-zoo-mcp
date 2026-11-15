@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "665418d193492a00ef96bda44c33f05d22c437d7"
+        "object_id": "53940c02e8c511f80dcb84ed64009969eeb89dc7"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -4293,6 +4293,11 @@
         "object_id": "03eaf4a0dcb2598b32b4f4d6390a8b5e106ad37b"
       },
       {
+        "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
+        "mode": "100644",
+        "object_id": "b1c2da0ddc741f43acf56ed5db75e3c338b33080"
+      },
+      {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
         "mode": "100644",
         "object_id": "68c444da3db7474ab5a2741f697b17616c1ed961"
@@ -4410,7 +4415,7 @@
       {
         "path": "scripts/fixtures/manual-delivery-ci-input-successor.mjs",
         "mode": "100644",
-        "object_id": "d35430f2361c53c3b75554c6d30684b46ba95723"
+        "object_id": "175296f4b037f900c24578cdf736247e557d5fd9"
       },
       {
         "path": "scripts/fixtures/manual-live-roster-20261030.json",
@@ -12338,7 +12343,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2442,
+    "authority_path_count": 2443,
     "migration_path_count": 318,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
