@@ -8,7 +8,8 @@ function fixture({tree=files,truncated=false,omit=false,missing=false}={}){
   reads++;if(missing)throw Object.assign(Error('synthetic missing'),{status:404});
   return{data:{type:'file',path,size:3,content:Buffer.from('hit').toString('base64')}};
  };
- const g={owner:'synthetic',defaultRepo:'allowed',allowedRepos:['allowed'],branch:'main',octokit:{rest:{git:{getTree},repos:{getContent}}}};
+ const getBlob=async({file_sha})=>{reads++;if(missing)throw Object.assign(Error('synthetic missing'),{status:404});return{data:{sha:file_sha,size:3,encoding:'base64',content:Buffer.from('hit').toString('base64')}};};
+ const g={owner:'synthetic',defaultRepo:'allowed',allowedRepos:['allowed'],branch:'main',octokit:{rest:{git:{getTree,getBlob},repos:{getContent}}}};
  return{g,get reads(){return reads}};
 }
 async function limited(env,fn){const prior=new Map(Object.keys(env).map(k=>[k,process.env[k]]));try{Object.assign(process.env,env);return await fn();}finally{for(const[k,v]of prior)v===undefined?delete process.env[k]:process.env[k]=v;}}

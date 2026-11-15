@@ -141,15 +141,39 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
           break;
         }
         scannedCandidateCount += 1;
-        scannedBytes += size;
-
-        const contentResult = await getContentOrNull({ github, repo: target.repo, path: item.path, ref: target.ref });
-        if (!contentResult || Array.isArray(contentResult) || contentResult.type !== "file") {
+        if (typeof item.sha !== "string" || !item.sha) {
+          incomplete.add("content_identity_unconfirmed");
+          continue;
+        }
+        // Contents reads at a branch can move independently of this tree, even
+        // between metadata and a raw fallback. Fetch the exact immutable blob.
+        let blob;
+        try {
+          const response = await github.octokit.rest.git.getBlob({
+            owner: target.owner, repo: target.repo, file_sha: item.sha,
+          });
+          blob = response.data;
+        } catch (error) {
+          if (error?.status !== 404) throw error;
+        }
+        if (!blob || blob.encoding !== "base64" || typeof blob.content !== "string") {
           incomplete.add("file_unavailable");
           continue;
         }
-
-        const buffer = await readFileBuffer({ github, repo: target.repo, path: item.path, ref: target.ref, contentResult });
+        const buffer = decodeContent(blob.content);
+        // Account received bytes even when a provider response is inconsistent;
+        // never search/return an over-budget body; stop at the total byte cap.
+        scannedBytes += buffer.length;
+        if (buffer.length > searchLimits.max_file_bytes) incomplete.add("max_file_bytes");
+        if (scannedBytes > searchLimits.max_total_bytes) {
+          incomplete.add("max_total_bytes");
+          break;
+        }
+        if (buffer.length > searchLimits.max_file_bytes) continue;
+        if (blob.sha !== item.sha || blob.size !== buffer.length || size !== buffer.length) {
+          incomplete.add("content_identity_unconfirmed");
+          continue;
+        }
         if (looksBinary(buffer)) continue;
 
         const matches = findLineMatches(buffer.toString("utf8"), searchQuery.query);

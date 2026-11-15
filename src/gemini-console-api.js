@@ -111,6 +111,56 @@ function apiError(res, error, fallback = "Gemini Console request failed.") {
   res.status(status).json({ ok: false, error: status >= 500 ? fallback : message });
 }
 
+async function deletePendingAttachment(supabase, item, assertActive) {
+  let reservation = "unconfirmed", storageRemoval = "not_attempted";
+  try {
+    assertActive();
+    // One owning SQL UPDATE competes with begin-turn's pending -> attached
+    // UPDATE. Its returned row must prove retirement before Storage is touched.
+    // deleted_at stays null until physical removal is confirmed. On ambiguity
+    // retain this tombstone and original metadata; never reattach or retry.
+    const reserved = await supabase.from("gemini_console_attachments")
+      .update({ status: "deleted", deleted_at: null })
+      .eq("attachment_id", item.attachment_id).eq("manager_id", item.manager_id)
+      .eq("status", "pending").is("message_id", null)
+      .eq("storage_bucket", item.storage_bucket).eq("storage_path", item.storage_path)
+      .select("*").maybeSingle();
+    const row = reserved.data;
+    if (reserved.error || !row || row.attachment_id !== item.attachment_id
+      || row.manager_id !== item.manager_id || row.status !== "deleted"
+      || row.message_id !== null || row.deleted_at !== null
+      || row.storage_bucket !== item.storage_bucket || row.storage_path !== item.storage_path) {
+      throw new Error("Attachment deletion ownership is unconfirmed.");
+    }
+    reservation = "confirmed";
+    assertActive();
+    storageRemoval = "unconfirmed";
+    const removed = await supabase.storage.from(row.storage_bucket).remove([row.storage_path]);
+    if (removed.error) throw removed.error;
+    storageRemoval = "confirmed";
+    assertActive();
+    const deletedAt = new Date().toISOString();
+    const updated = await supabase.from("gemini_console_attachments")
+      .update({ deleted_at: deletedAt })
+      .eq("attachment_id", row.attachment_id).eq("manager_id", row.manager_id)
+      .eq("status", "deleted").is("message_id", null).is("deleted_at", null)
+      .eq("storage_bucket", row.storage_bucket).eq("storage_path", row.storage_path)
+      .select("attachment_id,status,deleted_at").maybeSingle();
+    if (updated.error || updated.data?.attachment_id !== row.attachment_id
+      || updated.data.status !== "deleted" || typeof updated.data.deleted_at !== "string"
+      || Date.parse(updated.data.deleted_at) !== Date.parse(deletedAt)) {
+      throw new Error("Attachment removal receipt is unconfirmed.");
+    }
+    return { attachment_id: row.attachment_id, status: "deleted" };
+  } catch {
+    throw Object.assign(new Error("Attachment removal could not be confirmed. The original attachment details are retained for review."), {
+      status: 503, code: "attachment_deletion_unconfirmed",
+      data: { attachment_id: item.attachment_id, deletion_reservation: reservation,
+        storage_removal: storageRemoval, metadata_transition: "unconfirmed" },
+    });
+  }
+}
+
 function sendEvent(res, event, data = {}) {
   if (res.writableEnded || res.destroyed) return;
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -534,28 +584,15 @@ export function createGeminiConsoleRouter({
       const { data, error } = await supabase.from("gemini_console_attachments").select("*").eq("attachment_id", req.params.attachmentId).eq("manager_id", actor.managerId).eq("status", "pending").maybeSingle();
       if (error) throw error;
       if (!data) throw Object.assign(new Error("Pending attachment not found."), { status: 404 });
-      req.restoreMutationLease?.assertActive?.();
-      const removed = await supabase.storage.from(data.storage_bucket).remove([data.storage_path]);
-      if (removed.error) throw removed.error;
-      // Storage and metadata are separate effects. A returned UPDATE error or
-      // missing intended row cannot acknowledge a completed deletion.
-      try {
-        req.restoreMutationLease?.assertActive?.();
-        const updated = await supabase.from("gemini_console_attachments")
-          .update({ status: "deleted", deleted_at: new Date().toISOString() })
-          .eq("attachment_id", data.attachment_id).eq("manager_id", actor.managerId).eq("status", "pending")
-          .select("attachment_id,status").maybeSingle();
-        if (updated.error || updated.data?.attachment_id !== data.attachment_id || updated.data.status !== "deleted") {
-          throw new Error("Attachment metadata transition is unconfirmed.");
-        }
-      } catch {
-        res.status(503).json({ ok: false, code: "attachment_deletion_unconfirmed",
-          error: "Attachment removal could not be confirmed. The original attachment details are retained for review.",
-          data: { attachment_id: data.attachment_id, storage_removal: "confirmed", metadata_transition: "unconfirmed" } });
-        return;
+      const deleted = await deletePendingAttachment(supabase, data, () => req.restoreMutationLease?.assertActive?.());
+      res.status(200).json({ ok: true, data: deleted });
+    } catch (error) {
+      if (error?.code === "attachment_deletion_unconfirmed") {
+        res.status(503).json({ ok: false, code: error.code, error: error.message, data: error.data });
+      } else {
+        apiError(res, error, "Attachment removal failed.");
       }
-      res.status(200).json({ ok: true, data: { attachment_id: data.attachment_id, status: "deleted" } });
-    } catch (error) { apiError(res, error, "Attachment removal failed."); }
+    }
   });
 
   // Read the original user/assistant and current named credential in ONE
@@ -773,13 +810,12 @@ export function createGeminiConsoleRouter({
       serviceName: "memphis-zoo-gemini-console-cleanup",
       operation: async ({ assertActive }) => {
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data, error } = await supabase.from("gemini_console_attachments").select("attachment_id,storage_bucket,storage_path").eq("status", "pending").lt("created_at", cutoff).limit(100);
+        const { data, error } = await supabase.from("gemini_console_attachments").select("*").eq("status", "pending").lt("created_at", cutoff).limit(100);
         if (error) throw error;
         for (const item of data || []) {
           assertActive();
-          const removed = await supabase.storage.from(item.storage_bucket).remove([item.storage_path]);
-          if (removed.error) continue;
-          await supabase.from("gemini_console_attachments").update({ status: "deleted", deleted_at: new Date().toISOString() }).eq("attachment_id", item.attachment_id).eq("status", "pending");
+          try { await deletePendingAttachment(supabase, item, assertActive); }
+          catch { assertActive(); }
         }
         assertActive();
         const stale = new Date(Date.now() - 5 * 60 * 1000).toISOString();
