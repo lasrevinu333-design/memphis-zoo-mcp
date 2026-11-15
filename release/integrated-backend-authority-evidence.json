@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "53940c02e8c511f80dcb84ed64009969eeb89dc7"
+        "object_id": "2a81fc95df017f5b286bcafa90c399fae4d3a865"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -4295,7 +4295,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "b1c2da0ddc741f43acf56ed5db75e3c338b33080"
+        "object_id": "07f3a168c8d4a234fcefaaa2aabf4f78b781f8b7"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -4625,7 +4625,7 @@
       {
         "path": "scripts/fixtures/reminder-timing-source-successor.mjs",
         "mode": "100644",
-        "object_id": "3a1a38f6e15983dfcd5d5ba9e9810884fbc6d73e"
+        "object_id": "2b4f334c53436226c3210ebf67cee66372a2bc66"
       },
       {
         "path": "scripts/fixtures/resource-observation-r44-source.mjs",
@@ -5650,7 +5650,7 @@
       {
         "path": "scripts/native-event-dispatch-tests.mjs",
         "mode": "100644",
-        "object_id": "2dc44f367cfe55038f99df839c3546d44e428a07"
+        "object_id": "8bf9860957f2e961070cc3e422131decc129868e"
       },
       {
         "path": "scripts/native-location-dispatch-contract-tests.mjs",
@@ -5690,7 +5690,7 @@
       {
         "path": "scripts/native-message-dispatch-tests.mjs",
         "mode": "100644",
-        "object_id": "dfbc9727fedc40d7544e2b68b994309e7ae22405"
+        "object_id": "ec9ec8d43e16ea031ec6dc60b7311894086625eb"
       },
       {
         "path": "scripts/native-notification-receipt-tests.mjs",
@@ -9245,7 +9245,7 @@
       {
         "path": "src/native-event-dispatch.js",
         "mode": "100644",
-        "object_id": "ae184ab521471337de659ddfd7c4639e2fd70c1a"
+        "object_id": "aaf67b86553bb4b6ce8713a236c3ca9e0701f72a"
       },
       {
         "path": "src/native-local-enrollment-retention.js",
@@ -9285,7 +9285,7 @@
       {
         "path": "src/native-message-dispatch.js",
         "mode": "100644",
-        "object_id": "565f151060682c1243367dc0162b1678fe0d856f"
+        "object_id": "6de0e963bc9c181482d392a18803df5dfb95294e"
       },
       {
         "path": "src/native-notification-receipt.js",
@@ -12343,13 +12343,18 @@
         "object_id": "0ec1c95bba6022a2e365274168140e700c17b592"
       },
       {
+        "path": "supabase/migrations/20261115133604_native_alert_generation_pending.sql",
+        "mode": "100644",
+        "object_id": "89483594c92093f5b3573394a1558090465b2031"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2444,
-    "migration_path_count": 318,
+    "authority_path_count": 2445,
+    "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -13313,6 +13318,9 @@
     },
     {
       "name": "20261115094558_manual_off_day_phone_targets.sql"
+    },
+    {
+      "name": "20261115133604_native_alert_generation_pending.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
