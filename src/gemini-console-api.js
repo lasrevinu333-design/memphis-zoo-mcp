@@ -531,7 +531,9 @@ export function createGeminiConsoleRouter({
   });
 
   router.post("/conversations/:conversationId/attachments", async (req, res) => {
-    let uploadedPath = "";
+    const lease = req.restoreMutationLease;
+    const assertActive = () => lease?.assertActive?.();
+    let attachmentId = "", storageUpload = "not_attempted", metadataInsert = "not_attempted";
     try {
       const actor = actorFrom(req);
       await conversationFor(actor, req.params.conversationId);
@@ -541,11 +543,15 @@ export function createGeminiConsoleRouter({
       let buffer;
       try { buffer = Buffer.from(String(req.body?.data_base64 || ""), "base64"); } catch { buffer = Buffer.alloc(0); }
       const validated = validateGeminiAttachment({ filename: req.body?.filename, declaredMime: req.body?.mime_type, buffer });
-      const attachmentId = randomUUID();
-      uploadedPath = `${actor.managerId}/${req.params.conversationId}/${attachmentId}/${validated.filename}`;
-      req.restoreMutationLease?.assertActive?.();
+      attachmentId = randomUUID();
+      const uploadedPath = `${actor.managerId}/${req.params.conversationId}/${attachmentId}/${validated.filename}`;
+      assertActive();
+      storageUpload = "unconfirmed";
       const upload = await supabase.storage.from(BUCKET).upload(uploadedPath, buffer, { contentType: validated.mimeType, upsert: false, cacheControl: "0" });
       if (upload.error) throw upload.error;
+      storageUpload = "confirmed";
+      assertActive();
+      metadataInsert = "unconfirmed";
       const { data, error } = await supabase.from("gemini_console_attachments").insert({
         attachment_id: attachmentId, conversation_id: req.params.conversationId, manager_id: actor.managerId,
         storage_bucket: BUCKET, storage_path: uploadedPath, original_filename: validated.filename,
@@ -553,10 +559,23 @@ export function createGeminiConsoleRouter({
         sha256: validated.sha256, metadata_json: { uploaded_via: "trusted_manager_api" },
       }).select("attachment_id,original_filename,mime_type,size_bytes,sha256,status,created_at").single();
       if (error) throw error;
+      if (!data || data.attachment_id !== attachmentId) throw new Error("Original attachment metadata receipt is unconfirmed.");
+      metadataInsert = "confirmed";
+      assertActive();
       res.status(201).json({ ok: true, data });
     } catch (error) {
-      if (uploadedPath) await supabase.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
       if (/duplicate|unique/i.test(String(error?.message || ""))) error.status = 409;
+      // An error reply does not prove a Storage/metadata write did not commit.
+      // Retain the original ID and bytes for reconciliation. In particular, a
+      // lost lease cannot authorize trailing compensation, and an uncertain
+      // INSERT cannot authorize destruction of a now-pending/claimed object.
+      if (storageUpload !== "not_attempted") {
+        res.status(Number(error?.status) === 409 ? 409 : 503).json({ ok: false, code: "attachment_upload_unconfirmed", retryable: false,
+          error: "Attachment upload could not be confirmed. Check this conversation before trying again.",
+          data: { attachment_id: attachmentId, storage_upload: storageUpload, metadata_insert: metadataInsert,
+            storage_removal: "not_attempted" } });
+        return;
+      }
       apiError(res, error, "Attachment upload failed.");
     }
   });
