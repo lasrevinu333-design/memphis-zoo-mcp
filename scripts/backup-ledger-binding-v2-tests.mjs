@@ -1,3 +1,4 @@
+import './backup-launcher-source-binding-tests.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {createHash} from 'node:crypto';
 import {bindBackupSchemaExtension,verifyArchivedSchemaExtension} from './backup-release-schema-binding.mjs';
 import {ledgerMetadataDigest,validateBackupLedgerDeclarationV2} from './backup-ledger-binding-v2.mjs';
