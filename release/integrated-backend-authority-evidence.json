@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "86a2025c50ab3ff446e50063e20f164075134cda"
+        "object_id": "db5b319e6fa4f4d4bc428c8b9ea3791f5b56707d"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -4295,7 +4295,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "79fce2b78497575a4757dd40de1bf6389656d424"
+        "object_id": "c04a223807cc088621ede9e13a0c2804accc1254"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -7340,7 +7340,7 @@
       {
         "path": "scripts/run-sealed-canonical304-fixture.mjs",
         "mode": "100644",
-        "object_id": "bec0c8a245fa82b053832a8739dd98c7ca0082b1"
+        "object_id": "9ad0f39cfe8d8fde0e119e80d4d8710e3901d2a8"
       },
       {
         "path": "scripts/run-specialized-lunch-receipt-database-tests.mjs",
