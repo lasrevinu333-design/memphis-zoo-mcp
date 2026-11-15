@@ -32,7 +32,7 @@ const contextSql=`select current_user actor,session_user session_actor,current_d
 const schemas=new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']);
 const quote=v=>{assert.equal(typeof v,'string');assert.ok(v.length>0&&!v.includes('\0')&&Buffer.byteLength(v)<=63);return '"'+v.replaceAll('"','""')+'"';};
 export async function seedIsolatedCurrentPostgresCron({verifiedArchive,connectionString,runId}){
- let stage='SOURCE',db,active=false,committed=false,failure,latch,identity,result;
+ let stage='SOURCE',db,active=false,committed=false,readback=false,failure,latch,identity,readbackIdentity,result;
  const source=await prepareVerifiedImmutableBootstrapSource(verifiedArchive);
  const current=()=>{assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
   assert.deepEqual(readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive),{id:'immutable-private-current-postgres',actor:'postgres'});
@@ -54,9 +54,12 @@ export async function seedIsolatedCurrentPostgresCron({verifiedArchive,connectio
    assert.equal(pg.Client.prototype.query,nativeQuery);const r=await Reflect.apply(nativeQuery,db,[sql,args]);current();return r;};
   const context=async()=>{const r=await raw(contextSql);assert.equal(r.rowCount,1);const c=r.rows[0];
    assert.equal(c.actor,'supabase_admin');assert.equal(c.session_actor,c.actor);assert.equal(c.database,expected);assert.equal(c.database_owner,'postgres');
-   assert.equal(c.readonly,'off');assert.equal(c.replication,'origin');assert.equal(c.cron_execution,'off');assert.equal(c.administrator,true);
+   assert.equal(c.readonly,readback?'on':'off');assert.equal(c.replication,'origin');assert.equal(c.cron_execution,'off');assert.equal(c.administrator,true);
    assert.match(c.database_oid,/^[1-9][0-9]*$/);assert.ok(Number.isSafeInteger(c.pid)&&c.pid>0);assert.match(c.xid,/^[1-9][0-9]*$/);
-   if(identity)assert.deepEqual({...c,xid:committed?identity.xid:c.xid},identity,'Owned cron setup connection/transaction changed');else identity=Object.freeze({...c});return c;};
+   if(readback){
+    assert.deepEqual({...c,xid:identity.xid,readonly:identity.readonly},identity,'Owned cron readback connection changed');
+    if(readbackIdentity)assert.deepEqual(c,readbackIdentity,'Cron readback left its original read-only transaction');else readbackIdentity=Object.freeze({...c});
+   }else if(identity)assert.deepEqual(c,identity,'Owned cron setup connection/transaction changed');else identity=Object.freeze({...c});return c;};
   stage='BEGIN';await raw('begin');active=true;await raw("set local search_path=pg_catalog;set local statement_timeout='30s';set local lock_timeout='5s'");
   stage='IDENTITY';await context();
   const query=async(sql,args=[])=>{await context();const r=await raw(sql,args);await context();return r;};
@@ -73,7 +76,10 @@ export async function seedIsolatedCurrentPostgresCron({verifiedArchive,connectio
   const port=Object.freeze({query});stage='RESTORE_CRON';const restored=await restoreCronJobs(port,cron,{sourceDatabase});assert.equal(restored.differences.length,0);
   stage='VERIFY_CRON';const verified=await verifyRestoredCronJobs(port,cron,{sourceDatabase});assert.equal(verified.differences.length,0);
   stage='COMMIT';await raw('commit');active=false;committed=true;
-  stage='READBACK';await context();const after=await verifyRestoredCronJobs(port,cron,{sourceDatabase});assert.equal(after.differences.length,0);
+  stage='READBACK';await raw('begin isolation level repeatable read read only');active=true;readback=true;
+  await context();const after=await verifyRestoredCronJobs(port,cron,{sourceDatabase});assert.equal(after.differences.length,0);
+  // Read-only completion is one ROLLBACK, never a retry after an uncertain end.
+  active=false;await raw('rollback');
   result={schema:'custodial.isolated-current-postgres-cron-setup.v1',ok:true,jobs:cron.length,rows_and_counter_verified:true,
    committed:true,application_data_written:false,owners_or_grants_changed:false,cron_execution_enabled:false,production_written:false,restore_admission:false};
  }catch(error){failure=error;}

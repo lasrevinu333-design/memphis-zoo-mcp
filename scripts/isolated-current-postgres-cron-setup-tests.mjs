@@ -10,7 +10,7 @@ const source=readFileSync(new URL('./seed-isolated-current-postgres-cron.mjs',im
 const body=source.slice(source.indexOf('export async function seedIsolatedCurrentPostgresCron'),source.indexOf('\nif(process.argv[1]')).replace('export async function','async function');
 const contextSql=source.match(/const contextSql=`([\s\S]*?)`;/)[1];
 function fixture(mode='ok'){
- const calls=[],archive={},state={connected:0,ended:0,restored:0,verified:0,withdrawn:false,committed:false};
+ const calls=[],archive={},state={connected:0,ended:0,restored:0,verified:0,withdrawn:false,committed:false,readOnly:false,readbackContexts:0};
  const cron=[{jobid:'5',schedule:'* * * * *',command:'PRIVATE COMMAND',database:'postgres',username:'postgres',nodename:'localhost',nodeport:5432,active:true,jobname:'PRIVATE NAME'}];
  const original={inventory:{'inventory/original-relations.json':JSON.stringify([{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}]),'inventory/cron-jobs.json':JSON.stringify(cron)},sourceBinding:{summary:{database_snapshot:{database_name:'postgres'}}}};
  const error=()=>Object.assign(new Error('PRIVATE SQL ROW AND SECRET'),{code:'08006'});
@@ -18,10 +18,12 @@ function fixture(mode='ok'){
   constructor(options){super();this.connectionParameters={host:'127.0.0.1',database:'mz_schema_rebuild_123'};calls.push('construct');}
   async connect(){assert.equal(this.listenerCount('error'),1);state.connected++;if(mode==='connect')throw error();}
   async query(sql,args=[]){calls.push(sql);
+   if(sql==='begin isolation level repeatable read read only')state.readOnly=true;
    if(sql===contextSql){if(mode==='idle'){this.emit('error',error());}
     if(mode==='withdraw')state.withdrawn=true;
+    if(state.readOnly)state.readbackContexts++;
     return{rowCount:1,rows:[{actor:mode==='actor'?'postgres':'supabase_admin',session_actor:'supabase_admin',database:'mz_schema_rebuild_123',database_oid:'4',database_owner:'postgres',
-     pid:mode==='identity'&&state.restored?999:22,xid:state.committed?'102':'101',readonly:'off',replication:mode==='replication'?'replica':'origin',cron_execution:mode==='execution'?'on':'off',administrator:mode!=='administrator'}]};}
+     pid:mode==='identity'&&state.restored?999:22,xid:mode==='readback_drift'&&state.readbackContexts>1?'103':state.committed?'102':'101',readonly:state.readOnly?'on':'off',replication:mode==='replication'?'replica':'origin',cron_execution:mode==='execution'?'on':'off',administrator:mode!=='administrator'}]};}
    if(sql.startsWith('select bool_and'))return{rows:[{empty:mode!=='application_rows'}]};
    if(sql.startsWith('select (select count'))return{rows:[{jobs:mode==='existing_jobs'?1:0,migrations:mode==='existing_ledger'?1:0,controls:0,manifests:0,events:0,leases:mode==='lease'?1:0,existing_import:null}]};
    if(sql==='commit'){if(mode==='commit')throw error();state.committed=true;}
@@ -46,7 +48,8 @@ test('isolated cron setup owns its native connection and keeps original applicat
  const f=fixture();const result=await f.run();assert.equal(result.ok,true);assert.equal(result.rows_and_counter_verified,true);assert.equal(result.jobs,1);
  assert.equal(result.application_data_written,false);assert.equal(result.owners_or_grants_changed,false);assert.equal(result.restore_admission,false);
  assert.equal(f.state.connected,1);assert.equal(f.state.ended,1);assert.equal(f.state.restored,1);assert.equal(f.state.verified,2);
- assert.equal(f.calls.filter(s=>s==='commit').length,1);assert.equal(f.calls.includes('rollback'),false);
+ assert.equal(f.calls.filter(s=>s==='commit').length,1);assert.equal(f.calls.filter(s=>s==='rollback').length,1);
+ assert.ok(f.calls.indexOf('begin isolation level repeatable read read only')>f.calls.indexOf('commit'));
  assert.ok(f.calls.indexOf('begin')<f.calls.indexOf(contextSql));assert.ok(f.calls.some(s=>s.startsWith('select bool_and')));
  assert.ok(f.calls.indexOf('commit')>f.calls.indexOf('insert into cron.job values ($1)'));
  assert.ok(!f.calls.some(s=>/^(?:grant|revoke|alter role|set role|set session authorization)/i.test(s)));
@@ -59,7 +62,7 @@ for(const mode of ['actor','replication','execution','administrator','applicatio
 for(const [name,changes]of [['remote',{connectionString:'postgresql://supabase_admin:postgres@example.invalid/mz_schema_rebuild_123'}],
  ['production',{connectionString:'postgresql://supabase_admin:postgres@127.0.0.1/postgres'}],['wrong run',{runId:'124'}],['wrong actor URL',{connectionString:'postgresql://postgres:postgres@127.0.0.1/mz_schema_rebuild_123'}]])
  test('cron setup rejects '+name+' without connecting',async()=>{const f=fixture();await assert.rejects(f.run(changes));assert.equal(f.state.connected,0);assert.equal(f.state.restored,0);});
-for(const mode of ['identity','counter','commit','readback','end'])test('cron '+mode+' failure is never a successful or retried setup',async()=>{
+for(const mode of ['identity','counter','commit','readback','readback_drift','end'])test('cron '+mode+' failure is never a successful or retried setup',async()=>{
  const f=fixture(mode);await assert.rejects(f.run(),error=>{const result=Object.getOwnPropertyDescriptor(error,'cron_setup_failure')?.value;
   assert.equal(result.ok,false);assert.equal(result.private_payload_exported,false);assert.equal(result.production_written,false);
   assert.doesNotMatch(JSON.stringify(result),/PRIVATE|SECRET|COMMAND|password/);return true;});
