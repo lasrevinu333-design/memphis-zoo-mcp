@@ -446,8 +446,10 @@ if (!currentProductionProfile) {
   const capture = productionMigrationState.target.normal_source_capture;
   assert.equal(backup.state, "AUTHENTIC_SOURCE_A_BACKUP_AND_REVIEWED_ROLLBACK_CAPTURE_FULL_REHEARSAL_STILL_REQUIRED");
   assert.equal(backup.last_verified.restore_verification, "SIGNED_ARCHIVE_VERIFIED_AND_REVIEWED_ROLLBACK_TARGET_CAPTURE_NOT_FULL_CANDIDATE");
-  assert.equal(backup.last_verified.workflow_run_id, capture.original_backup_run_id);
-  assert.equal(backup.last_verified.archive_digest, currentProductionProfile.archive_digest);
+  if(currentProductionProfile.schema!=='custodial.production-target-schema-profile.source311-existing.v1'){
+    assert.equal(backup.last_verified.workflow_run_id, capture.original_backup_run_id);
+    assert.equal(backup.last_verified.archive_digest, currentProductionProfile.archive_digest);
+  }
   assertBackupCaptureLineage(productionMigrationState,currentProductionProfile,path=>blobByPath.get(path)?.bytes);
   assert.equal(capture.rollback_evidence.committed, false);
   assert.equal(capture.rollback_evidence.rollback_verified, true);

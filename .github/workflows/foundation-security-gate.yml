@@ -158,7 +158,7 @@ jobs:
           # includes the real independent-session concurrency/restart suite.
           TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs
           TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs --integrated-suite-order
-          npm run --silent test:integrated-backend-authority-release-provenance
+          TMPDIR="$ci_sql_parent" node scripts/run-retained-release-provenance-tests.mjs
           npm run --silent test:release-closure
           npm run --silent test:final-closure-database-isolated
           npm run --silent test:release-migration-authorization

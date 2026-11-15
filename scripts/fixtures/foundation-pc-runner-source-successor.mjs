@@ -15,6 +15,14 @@ const canonical304Prior='          node --max-old-space-size=384 scripts/sealed-
 const legacy='          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs';
 const legacyPrior='          npm run --silent test:static-weekly-scheduler:database';
 export function restoreFoundationPcRunnerWorkflow(source,name){
+ if(name==='foundation-security-gate.yml'&&sha(source)==='4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7'){
+  assert.equal(sha(readFileSync(new URL('../run-retained-release-provenance-tests.mjs',import.meta.url))),
+   '6f49f7bc0d09a984e17ea747683d5cc266896319e05bd98a1eeabc7669ec7f20');
+  const from='          TMPDIR="$ci_sql_parent" node scripts/run-retained-release-provenance-tests.mjs\n';
+  assert.equal(source.split(from).length,2);
+  source=source.replace(from,'          npm run --silent test:integrated-backend-authority-release-provenance\n');
+  assert.equal(sha(source),'e4c8aae8f2b440ebc706169387ebd11e81690faaab00cbb78d0d4f337d5c9bd9');
+ }
  if(name==='foundation-security-gate.yml'&&sha(source)==='e4c8aae8f2b440ebc706169387ebd11e81690faaab00cbb78d0d4f337d5c9bd9'){
   // Verify the executable current caller before reproducing the retained
   // workflow view. Both unchanged SQL orders remain in the original command.
