@@ -8,6 +8,12 @@ import {id,sha} from './fixtures/native-message-dispatch-fixture.mjs';
 import {qualifiedAlertDispatcher} from './fixtures/qualified-alert-dispatcher.mjs';
 const run=f=>deliverNativeEventJob(f),names=f=>f.calls.map(x=>x.name);
 const permit=f=>f.finalize(buildNativeAlertCandidate(f.prepared,{eventBody:f.eventBody}));
+test('initial native generation wait retains Event without a final permit or provider effect',async()=>{
+ const f=eventFixture({targetTransform:()=>({current:false,reason:'native_alert_generation_pending'})}),before=structuredClone(f.job);
+ await assert.rejects(()=>run(f),e=>e.code==='native_alert_generation_pending'&&e.terminal===false&&e.deferFinish===true);
+ assert.equal(f.requests.length,0);assert.equal(names(f).includes('custodial_native_alert_prepare'),false);
+ assert.equal(names(f).includes('custodial_native_alert_finalize'),false);assert.deepEqual(f.job,before);
+});
 test('actual Event worker produces closed data-only source-bound wire and excludes private notes',async()=>{
  const f=eventFixture(),before=structuredClone(f.job),worker=await qualifiedAlertDispatcher(f);
  const result=await worker.deliverClaimedJob(f.job);assert.equal(result.native_event,true);assert.deepEqual(f.job,before);

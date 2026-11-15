@@ -35,6 +35,7 @@ async function target(db,job){
  const result=await db.rpc('custodial_native_alert_target',{p_job:job.job_id,p_lease:job.lease_token});
  if(result.error)throw fail('native_message_target_pending');
  const v=result.data;
+ if(exact(v,['current','reason'])&&v.current===false&&v.reason==='native_alert_generation_pending')throw fail(v.reason);
  if(exact(v,['current','reason'])&&v.current===false&&['native_alert_job_superseded','native_alert_kind_unavailable','native_alert_recipient_superseded'].includes(v.reason))throw fail(v.reason,true);
  if(!exact(v,['current','kind','token','expected'])||v.current!==true||v.kind!=='MESSAGE'
   ||typeof v.token!=='string'||Buffer.byteLength(v.token)<20||Buffer.byteLength(v.token)>4096)invalid();

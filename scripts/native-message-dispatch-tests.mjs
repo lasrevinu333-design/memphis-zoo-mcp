@@ -73,6 +73,12 @@ test('actual target reassignment is a terminal no-send disposition',async()=>{
  const f=messageFixture({targetTransform:()=>({current:false,reason:'native_alert_recipient_superseded'})});
  await assert.rejects(()=>run(f),e=>e.terminal===true);assert.equal(f.requests.length,0);
 });
+test('initial native generation wait retains the original without preparation or provider dispatch',async()=>{
+ const f=messageFixture({targetTransform:()=>({current:false,reason:'native_alert_generation_pending'})}),before=structuredClone(f.job);
+ await assert.rejects(()=>run(f),e=>e.code==='native_alert_generation_pending'&&e.terminal===false&&e.deferFinish===true);
+ assert.equal(f.requests.length,0);assert.equal(names(f).includes('custodial_native_alert_prepare'),false);
+ assert.equal(names(f).includes('custodial_native_alert_finalize'),false);assert.deepEqual(f.job,before);
+});
 for(const reason of ['message_deleted','membership_removed','message_acknowledged','message_source_changed'])test('source refusal '+reason+' cannot dispatch',async()=>{
  const f=messageFixture({prepareTransform:()=>({current:false,reason})});await expectError(f,'native_message_qualification_pending');
  assert.equal(f.requests.length,0);assert.equal(names(f).includes('custodial_native_alert_finalize'),false);

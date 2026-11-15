@@ -31,9 +31,10 @@ export function historicalMigrationNames(root,names){
  // the forward overlay; never claim the historical constructor executed it.
  // The qualified off-day repair is a forward source overlay as well. Bind
  // its exact bytes before retaining the historical315/311 fixture selection;
- // this does not execute or qualify a318-migration database construction.
+ // this does not execute or qualify a319-migration database construction.
  const overlay=[...document.added.filter(r=>r.path.startsWith('supabase/migrations/')),
-  {path:'supabase/migrations/20261115094558_manual_off_day_phone_targets.sql',current_sha256:'148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a'}];
+  {path:'supabase/migrations/20261115094558_manual_off_day_phone_targets.sql',current_sha256:'148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a'},
+  {path:'supabase/migrations/20261115133604_native_alert_generation_pending.sql',current_sha256:'4b182e45b7e78d460d57d2a948da920c288fe0b29d34671069a395eb5c7db0cb'}];
  for(const row of overlay){const file=resolve(root,row.path);assert.equal(lstatSync(file).isSymbolicLink(),false);assert.equal(sha(readFileSync(file)),row.current_sha256);}
  const extra=new Set(overlay.map(r=>r.path.slice('supabase/migrations/'.length)));
  assert.ok([...extra].every(n=>names.includes(n)),'all exact forward overlay members required');
