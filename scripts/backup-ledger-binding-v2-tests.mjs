@@ -132,7 +132,7 @@ for(const [name,mutate]of [
  ['inactive candidate',x=>x.declaration.activation_status='candidate'],['application upgrade flag',x=>x.declaration.application_upgrade_claimed=true],['mutation flag',x=>x.declaration.production_mutation_authorized=true],
 ])test('425 binding rejects '+name,()=>{const x=currentInput(messenger);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
 
-const basecamp=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const basecamp=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.basecamp426.active.json',import.meta.url),'utf8'));
 const basecampCandidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.basecamp426.candidate.json',import.meta.url),'utf8'));
 test('exact426 adds only the installed Basecamp source and preserves all425metadata/sources and runtime identity',()=>{
  assert.equal(validateBackupLedgerDeclarationV2(basecamp),true);assert.equal(validateBackupLedgerDeclarationV2(basecampCandidate),true);
@@ -165,4 +165,35 @@ test('426provenance is exact source-only addition with no private absolute paths
  assert.doesNotMatch(text,/\/mnt\/|\/home\/|evidence\/|live-catalog|live-source/);assert.equal(p.replay_authorized,false);assert.equal(p.prior_ledger_count,425);assert.equal(p.current_ledger_count,426);
  assert.equal(p.deployed_release_identity_unchanged,true);assert.equal(p.prior_source_bindings_sha256,messenger.source_bindings_sha256);assert.equal(p.source_bindings_sha256,basecamp.source_bindings_sha256);
  assert.equal(p.statement_source_bindings.length,1);const row=p.statement_source_bindings[0];assert.equal(row.retained_path,'release/installed-source/'+s.source_file);assert.equal(row.installed_sha256,s.sql_sha256);assert.equal(row.transformation,'none');assert.equal(sha(source(s.source_file,s.source_location)),row.source_raw_sha256);
+});
+
+const native428=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const native428Candidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.native428.candidate.json',import.meta.url),'utf8'));
+test('exact428 preserves every426 ledger/source/member/runtime byte and binds only the two installed native repairs',()=>{
+ assert.equal(validateBackupLedgerDeclarationV2(native428),true);assert.equal(validateBackupLedgerDeclarationV2(native428Candidate),true);
+ assert.deepEqual({...native428,activation_status:'candidate'},native428Candidate);assert.equal(native428.observed_ledger_count,428);
+ assert.deepEqual(native428.ledger.slice(0,426),basecamp.ledger);assert.deepEqual(native428.source_bindings.slice(0,196),basecamp.source_bindings);
+ assert.deepEqual(native428.deployed_release,basecamp.deployed_release);assert.deepEqual(native428.historical_baseline,basecamp.historical_baseline);
+ assert.equal(native428.source_bindings.length,198);assert.equal(native428.ledger_sha256,'c0bbf827afc1f73338cbed414b2e83b82e5525802cc1cbef35c219dcc4f9ae14');
+ assert.equal(native428.source_bindings_sha256,'a2b3f2eb1b54225a18d9894f9e1a5ef5c597a3343f736cf0d995310a889f33e0');
+ assert.deepEqual(native428.source_bindings.slice(-2).map(s=>s.sql_sha256),['148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a','79dc01a924668455a4438e11fc644a290e7caad8f39bdacf211548b363c99e8b']);
+ for(const s of native428.source_bindings)assert.equal(sha(source(s.source_file,s.source_location)),s.sql_sha256);
+});
+test('428 synthetic capture/archive and every earlier finite declaration remain verifiable',()=>{
+ for(const x of [input(),currentInput(),currentInput(latest),currentInput(messenger),currentInput(basecamp),currentInput(native428)])assert.equal(verifyArchivedSchemaExtension(archiveFor(x)),true);
+ assert.equal(bindBackupSchemaExtension(currentInput(native428)).captured_ledger_count,428);
+});
+for(const [name,mutate]of[
+ ['unqualified429',x=>x.declaration.observed_ledger_count=429],['unqualified427',x=>x.declaration.observed_ledger_count=427],
+ ['missing428',x=>x.migrationLedger.pop()],['changed427SQL',x=>x.migrationLedger.at(-2).statements[0]+='\n'],
+ ['changed428SQL',x=>x.migrationLedger.at(-1).statements[0]+='\n'],['missing prior source',x=>x.declaration.source_bindings.splice(195,1)],
+ ['wrong runtime',x=>x.releaseIdentity.backend_commit='0'.repeat(40)],['catalog drift',x=>x.catalog.functions.push({schema_name:'public',function_name:'unexpected'})],
+ ['inactive candidate',x=>x.declaration.activation_status='candidate'],['replay grant',x=>x.declaration.production_mutation_authorized=true],
+])test('428 binding rejects '+name,()=>{const x=currentInput(native428);mutate(x);assert.throws(()=>bindBackupSchemaExtension(x));});
+test('428 provenance declares observation only and retains exact existing data/recovery boundaries',()=>{
+ const text=fs.readFileSync(new URL('../release/backup-installed-source-native428-provenance.json',import.meta.url),'utf8'),p=JSON.parse(text);
+ assert.doesNotMatch(text,/\/mnt\/|\/home\/|evidence\//);assert.equal(p.replay_authorized,false);assert.equal(p.capture_performed,false);assert.equal(p.restore_performed,false);
+ assert.equal(p.prior_ledger_count,426);assert.equal(p.current_ledger_count,428);assert.equal(p.prior426ledger_and196sources_unchanged,true);
+ assert.equal(p.actual_catalog_delta.recordsAccountedFor,11438);assert.equal(p.actual_catalog_delta.definitionOnlyChanges.length,2);
+ assert.equal(p.source_bindings_sha256,native428.source_bindings_sha256);assert.equal(p.ledger_sha256,native428.ledger_sha256);
 });

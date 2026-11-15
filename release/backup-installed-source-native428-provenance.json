@@ -1,0 +1,49 @@
+{
+  "schema": "custodial.backup-installed-native428-provenance.v1",
+  "prior_ledger_count": 426,
+  "current_ledger_count": 428,
+  "current_ledger_head": "20261115162648",
+  "prior_source_bindings_sha256": "95ecb5913c85bbc8b7ccaf082ae8517d04d943d3002f1e1d85184533ec8d21d3",
+  "source_bindings_sha256": "a2b3f2eb1b54225a18d9894f9e1a5ef5c597a3343f736cf0d995310a889f33e0",
+  "ledger_sha256": "c0bbf827afc1f73338cbed414b2e83b82e5525802cc1cbef35c219dcc4f9ae14",
+  "prior_catalog_fingerprint": "1569d0087224a6fe4f26e9763fdd7a8587d8c8a0ac76a74ac17c09a638c6fdc8",
+  "current_catalog_fingerprint": "2115e751767fecc9e085b748accf9ae70ff0572a1bfb2d4c6c7001d08e3b9088",
+  "prior426ledger_and196sources_unchanged": true,
+  "deployed_release_identity_unchanged": true,
+  "original235historical_membership_unchanged": true,
+  "actual_catalog_delta": {
+    "recordsAccountedFor": 11438,
+    "definitionOnlyChanges": [
+      "custodial_coverall:reconcile_manual_application_date:p_date date",
+      "public:custodial_native_alert_target_at:p_job uuid, p_lease uuid, p_test_at timestamp with time zone"
+    ],
+    "otherRowsUnchanged": true
+  },
+  "statement_source_bindings": [
+    {
+      "ledger_version": "20261115101824",
+      "ledger_name": "custodial_manual_off_day_phone_targets_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261115101824_custodial_manual_off_day_phone_targets_qualified.sql",
+      "sql_sha256": "148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a",
+      "bytes": 28720,
+      "transformation": "none"
+    },
+    {
+      "ledger_version": "20261115162648",
+      "ledger_name": "native_alert_generation_pending",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261115162648_native_alert_generation_pending.sql",
+      "sql_sha256": "79dc01a924668455a4438e11fc644a290e7caad8f39bdacf211548b363c99e8b",
+      "bytes": 19748,
+      "transformation": "none"
+    }
+  ],
+  "capture_performed": false,
+  "replay_authorized": false,
+  "restore_performed": false,
+  "production_mutation_authorized": false,
+  "qualification_scope": "Finite exact installed428 ledger/source/catalog observation only; a consistent encrypted capture and signed readback remain required."
+}

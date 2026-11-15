@@ -11,9 +11,9 @@
     "migration_head": "20260920010000",
     "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
   },
-  "observed_ledger_count": 426,
-  "observed_ledger_head": "20261114045933",
-  "observed_catalog_fingerprint": "1569d0087224a6fe4f26e9763fdd7a8587d8c8a0ac76a74ac17c09a638c6fdc8",
+  "observed_ledger_count": 428,
+  "observed_ledger_head": "20261115162648",
+  "observed_catalog_fingerprint": "2115e751767fecc9e085b748accf9ae70ff0572a1bfb2d4c6c7001d08e3b9088",
   "ledger": [
     {
       "version": "20260514224806",
@@ -2996,9 +2996,23 @@
       "statement_sha256": [
         "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383"
       ]
+    },
+    {
+      "version": "20261115101824",
+      "name": "custodial_manual_off_day_phone_targets_qualified",
+      "statement_sha256": [
+        "148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a"
+      ]
+    },
+    {
+      "version": "20261115162648",
+      "name": "native_alert_generation_pending",
+      "statement_sha256": [
+        "79dc01a924668455a4438e11fc644a290e7caad8f39bdacf211548b363c99e8b"
+      ]
     }
   ],
-  "ledger_sha256": "3cdf416340a7fcbbedafc816d62f378ee2a6f3419e6d07ac992ef207ead0282a",
+  "ledger_sha256": "c0bbf827afc1f73338cbed414b2e83b82e5525802cc1cbef35c219dcc4f9ae14",
   "historical_baseline": [
     {
       "version": "20260514224806",
@@ -5548,7 +5562,23 @@
       "source_location": "retained_installed",
       "source_file": "20261114045933_custodial_basecamp_birthday_work_qualified.sql",
       "sql_sha256": "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383"
+    },
+    {
+      "ledger_version": "20261115101824",
+      "ledger_name": "custodial_manual_off_day_phone_targets_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261115101824_custodial_manual_off_day_phone_targets_qualified.sql",
+      "sql_sha256": "148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a"
+    },
+    {
+      "ledger_version": "20261115162648",
+      "ledger_name": "native_alert_generation_pending",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261115162648_native_alert_generation_pending.sql",
+      "sql_sha256": "79dc01a924668455a4438e11fc644a290e7caad8f39bdacf211548b363c99e8b"
     }
   ],
-  "source_bindings_sha256": "95ecb5913c85bbc8b7ccaf082ae8517d04d943d3002f1e1d85184533ec8d21d3"
+  "source_bindings_sha256": "a2b3f2eb1b54225a18d9894f9e1a5ef5c597a3343f736cf0d995310a889f33e0"
 }
