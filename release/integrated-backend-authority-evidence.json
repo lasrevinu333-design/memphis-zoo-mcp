@@ -2858,6 +2858,11 @@
         "object_id": "af0455ced7b5c524d4ea7e33b1c3dc64f07414f3"
       },
       {
+        "path": "scripts/canonical304-kernel-resource-view.mjs",
+        "mode": "100644",
+        "object_id": "84bb6ca4347e5fcab3538bfa623f0670e3be26ad"
+      },
+      {
         "path": "scripts/capture-private-json-stdin.mjs",
         "mode": "100644",
         "object_id": "b810c414cdd3096491b0b7d8825207b8e5b22e4f"
@@ -3698,6 +3703,16 @@
         "object_id": "697a67f33ce33bbe3e63688b082c730d622294c6"
       },
       {
+        "path": "scripts/fixture-cgroup-memory-contract.mjs",
+        "mode": "100644",
+        "object_id": "d8ee4fe53f24cd85e9b7e432a06cf882c2457317"
+      },
+      {
+        "path": "scripts/fixture-cgroup-memory-tests.mjs",
+        "mode": "100644",
+        "object_id": "61c5eae4a893dd578fdd709a2a657dd2c117d66e"
+      },
+      {
         "path": "scripts/fixtures/activation-context-retention.sql",
         "mode": "100644",
         "object_id": "d022eee5c204594ecc30c218bd513cfebbddab44"
@@ -4295,7 +4310,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "1b9431e8a897d8fa5c43628609c58b0854d6e470"
+        "object_id": "1e23c6ed1554cbf7f35ded1866d34ef50355818a"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -7345,7 +7360,7 @@
       {
         "path": "scripts/run-sealed-canonical304-fixture.mjs",
         "mode": "100644",
-        "object_id": "9ad0f39cfe8d8fde0e119e80d4d8710e3901d2a8"
+        "object_id": "a7fd133defabc66844563e8ef6080f084538557c"
       },
       {
         "path": "scripts/run-sealed-legacy-scheduler-database-tests.mjs",
@@ -7585,7 +7600,7 @@
       {
         "path": "scripts/sealed-canonical304-source-fixture-tests.mjs",
         "mode": "100644",
-        "object_id": "cdd06708732170a2efac323cab475367e8ab62fe"
+        "object_id": "b0697255fff5fffa0f647496d6891e219edabbc8"
       },
       {
         "path": "scripts/sealed-repair-canonical-database-tests.mjs",
@@ -12713,7 +12728,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2517,
+    "authority_path_count": 2520,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
