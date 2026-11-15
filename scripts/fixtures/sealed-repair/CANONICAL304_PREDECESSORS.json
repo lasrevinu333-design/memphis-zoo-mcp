@@ -1,0 +1,405 @@
+{
+  "schema": "custodial.sealed-canonical304-genuine-predecessors.v1",
+  "original_plan_sha256": "4d0ce42a8777bb6493e14ed43207cacd03a80463204c3f9e98182d487c7c4c2d",
+  "scope": "Exact historical runtime and constructor source only; selected SQL/catalog bytes come from existing strict304 fixture; no current319 or production acceptance",
+  "historical_pins_rewritten": false,
+  "runtime_admission": false,
+  "files": [
+    {
+      "path": "scripts/ci-fresh-only-replay.mjs",
+      "bytes": 55299,
+      "sha256": "62dc50f77de0c723dc3cef14425d95719c7afd3019681bed01022875600d3038",
+      "git_commit": "c11b19a432f58fc1aa7a1ec1a603754540483944"
+    },
+    {
+      "path": "src/ai/memphis-ai-daily.js",
+      "bytes": 6542,
+      "sha256": "e8991f6a76e1d754ff1e2a6634a711d0b649635d0aada6fb12e46c3a7d7aac75",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/ai/memphis-ai-intent.js",
+      "bytes": 4305,
+      "sha256": "96ec7166f24c008ef8457148bc410324375575bafe102cad771ba89978d02639",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/ai/memphis-ai-weather.js",
+      "bytes": 7774,
+      "sha256": "e3ae2725bf32359a1075159bbf795897cfb2479ac9a3619b0702ff1ec68e2416",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/approved-manual-coverall-workflow.js",
+      "bytes": 20759,
+      "sha256": "942d21cb66c4150ca24963a55e83c1a1a6292d9365091673582b814645dafa52",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/approved-manual-device-delivery.js",
+      "bytes": 2077,
+      "sha256": "3ede5ba68acbbc7f5143d40c506f899a3767a43dde4efbbbe0bdf48d7a04c9c4",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/approved-manual-recurring-period.js",
+      "bytes": 9589,
+      "sha256": "4c1e2a6720345c0fe2023d73b563cb51563ff990b9ae0375ed2e021106a68b7a",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/approved-manual-roster-transition.js",
+      "bytes": 15795,
+      "sha256": "1884a4ef197d04217d2617693cb9c0a4110f4ba55e5e4e53f0ee8d3190ae068f",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/approved-manual-week.js",
+      "bytes": 15166,
+      "sha256": "7671d684fa7383e03296e23a6bc7e299ae13f916e69bfae87b95fef07f41ff35",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/auth/custodial-leadership-record-operation.mjs",
+      "bytes": 5342,
+      "sha256": "7af466d6134c9376493692e0e7943acbaf4e3f90e643004e97665cfbe96db722",
+      "git_commit": "1ca1a5f5b1856dc1df91c4fde1f4b706464e12ef"
+    },
+    {
+      "path": "src/auth/custodial-leadership-runtime.js",
+      "bytes": 26942,
+      "sha256": "da3efa09c275888abb441dae0c79f07617723584f005e557bb0ff9409ca69de3",
+      "git_commit": "59b3f02242db351cf09558bfd3c6ca8f8264389c"
+    },
+    {
+      "path": "src/auth/device-credential-auth.js",
+      "bytes": 94615,
+      "sha256": "a373bb095671298fdcf70b826b3cc435d9c2a1116a056a84cf938ea8672dcb97",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/auth/shared-access-auth.js",
+      "bytes": 133672,
+      "sha256": "f867dd037c326d23b54a6f618317e63607d16b1cca72f7137ddec557d74a429c",
+      "git_commit": "59b3f02242db351cf09558bfd3c6ca8f8264389c"
+    },
+    {
+      "path": "src/completion-taxonomy-manager.js",
+      "bytes": 2667,
+      "sha256": "3d9b0dc20ac3020c64a41e47c8af7fd561f5aee48801ac4061de8ec5f01c9073",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/custodial-employee-admin.js",
+      "bytes": 35511,
+      "sha256": "7766bbbd3ca3567c8322fe133572a9330ec623296858dc0630d62193c434652d",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/custodial-record-operations.mjs",
+      "bytes": 5808,
+      "sha256": "690cbed0b7612ea079dcc3e9141cce90e844255eb5a1dada4d97d26342913a76",
+      "git_commit": "1ca1a5f5b1856dc1df91c4fde1f4b706464e12ef"
+    },
+    {
+      "path": "src/employee-home-time-facts.js",
+      "bytes": 5968,
+      "sha256": "b7d0a047a75f8266834f18235cbe4c5bf6f5c99d26fbec640cfbcd10d5a26269",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/employee-notifications.js",
+      "bytes": 50262,
+      "sha256": "75e140b93efa27c046909f584b947420e80f5834cf00d60882758396feb9da07",
+      "git_commit": "59b3f02242db351cf09558bfd3c6ca8f8264389c"
+    },
+    {
+      "path": "src/employee-zoo-wide-coverage.js",
+      "bytes": 5102,
+      "sha256": "093684e289689ff019f80799d273b38337718c0989eeb6bd54094fd36af46e61",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/events-api.js",
+      "bytes": 41999,
+      "sha256": "a46f152d578a3b08714ca6cbb35d962d6be56da50d16a6d978db232d2a0a8b0b",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/feedback-triage-status.js",
+      "bytes": 5748,
+      "sha256": "0039ff518d63db9e32fc149fde2091577a355138b1fb50ac34fef64725f50adb",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/feedback-triage.js",
+      "bytes": 3504,
+      "sha256": "97f6ddb8e5e055301aec5506101b47d5bedb8259101c46871030b4adb19fe11c",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/gemini-console-api.js",
+      "bytes": 49501,
+      "sha256": "bed915849523884cca988dacd3d0b93514a689f82bd5ae91610f6ee4f9ea12c6",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/github/client.js",
+      "bytes": 5322,
+      "sha256": "559d1a7acce0ed08aa7c9e2ad850f295af723aa70857de1ab750fd3eee9e205e",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/github/patch.js",
+      "bytes": 1754,
+      "sha256": "32482ca9903fe94706d04996abb5624ea6f8824d097346afc40c5a9e209efeef",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/github/read.js",
+      "bytes": 11524,
+      "sha256": "a1124b888931e34575a99961f1132c8db06858da5832a0818575268c5a51b5e0",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/github/write.js",
+      "bytes": 24353,
+      "sha256": "c3014a91eb038b255ca235fa99dbcc37b8882ed8bed8c049eed7ca52d6428b61",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/index.js",
+      "bytes": 172533,
+      "sha256": "7add9f1beabd92c319390a43c1663fa0b3f7eac3627bb90720598c2d822eef12",
+      "git_commit": "1ca1a5f5b1856dc1df91c4fde1f4b706464e12ef"
+    },
+    {
+      "path": "src/mcp/outlook-event-tools.js",
+      "bytes": 770,
+      "sha256": "81b1da3565ef2f1b321225dbbebc2f2330b34b9598fd41ec6f0e32eed4a582c3",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/mcp/register.js",
+      "bytes": 5673,
+      "sha256": "e8bd31609f70ee62dc60e4c712d5daa0f982d8585525d89f17b035d60d209594",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/mcp/tool-manifest.js",
+      "bytes": 9728,
+      "sha256": "138a541e44fbe3793c3bc09b78f0c7c5b69f84d0e8eab313b791f23b988d37ab",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/memphis-ai.js",
+      "bytes": 118131,
+      "sha256": "f246ab6948fbd9cf50baf30f68ca828f6f485f764d2df75dda2bd19fdc10953d",
+      "git_commit": "1ca1a5f5b1856dc1df91c4fde1f4b706464e12ef"
+    },
+    {
+      "path": "src/messaging-api.js",
+      "bytes": 127782,
+      "sha256": "9fe0e8c924cd99b197368c66df5b6df80e78693956f42cfe4f161ab63efe398f",
+      "git_commit": "1ca1a5f5b1856dc1df91c4fde1f4b706464e12ef"
+    },
+    {
+      "path": "src/native-event-dispatch.js",
+      "bytes": 10901,
+      "sha256": "fc7064e7ba2bb4a01c4d7e8664c9379d8745ac76367b43f93433d29fe4d4ea96",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-location-lifecycle.js",
+      "bytes": 11197,
+      "sha256": "52f6e6c3d415da5214f91b3f633e26152dbb6cf3c06897e509302ee915eb0c67",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-message-dispatch.js",
+      "bytes": 10853,
+      "sha256": "4ebdc244702ee0a92045df1082a7b915c151393f31035895a2af3a4adb20aa62",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-provider-event-decisions.js",
+      "bytes": 6831,
+      "sha256": "e4d579a4b11d117ed51c31bd0a54953a43e431fb3cb2d38b16b4477678b26cbf",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-provider-events.js",
+      "bytes": 7729,
+      "sha256": "9f06bc44c02f6e65fc1a638b33c5f7b0707bdca6483fe6838d0837f8936e0359",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-provider-inventory-payload.js",
+      "bytes": 5725,
+      "sha256": "0994ae2f5ef507bfd90c574a097042a17602290d550e21c15be433992db7edba",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-attempt-lifecycle.js",
+      "bytes": 8800,
+      "sha256": "5280582d7c954a22f39dfb0d0cd5ac29726ae02686eb19bba4e050f0dec7c572",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-delivery-preparation.js",
+      "bytes": 11838,
+      "sha256": "71b2bed9fc70b2cd6a2d57517fade21ded08f52e09fed460f211c1b1239baa78",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-dispatch.js",
+      "bytes": 10860,
+      "sha256": "80ec4199f56f3cf1de4eeac86057480f7db370d33fb1acf186eb2b3a88e04dab",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-payload.js",
+      "bytes": 5626,
+      "sha256": "d48c5204a6b277c57013d7b8affa67977822b33064d85b1abc2bbe017624fff2",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-source-discovery.js",
+      "bytes": 3580,
+      "sha256": "d486ee71f4ca00d6e12a80120dc48664d1339578785a5a20cf4271c0afd7d481",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-source-orchestration.js",
+      "bytes": 5450,
+      "sha256": "6d68683bf89bb3505ca82a297365d5c6cfac53957f99715fcc9c17bd6109446c",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/native-schedule-source-producer.js",
+      "bytes": 3610,
+      "sha256": "a5ffbb3f816ba32e8bf2e2ab8583786a2983cb0ea7cb43eddaa970c9250828bb",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/operations-board.js",
+      "bytes": 3558,
+      "sha256": "e50304ea440d4ae50580fb561c760c05d5ae295ccc4521169165907722801a95",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/operations-mail-contract.js",
+      "bytes": 10896,
+      "sha256": "7b01a7c72c48e950733c173c9cddcc107bd8eb2ed4153713a0db9554ca1d1e65",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/operations-mail-ledger.js",
+      "bytes": 9000,
+      "sha256": "11eca01cf97ff50d8e6baf06e375db0771c7b0bea486aee7cb43dc63dbf1c77e",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/outlook-event-sync.js",
+      "bytes": 9165,
+      "sha256": "ca34e931a7125ccec55106b45254f2dbfd23025bfa8beffb5d654d2b819800df",
+      "git_commit": "0e2be8c7211bf194c2e28a508cc915565c69ee07"
+    },
+    {
+      "path": "src/places-api.js",
+      "bytes": 5226,
+      "sha256": "1de986609853cf4832e621e6f139414b63af3ad4a8e380622688476cd45e7862",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/release-contract.js",
+      "bytes": 6678,
+      "sha256": "6bc95c9299b6b92dada00e4d0a0f89546c3247be67f77fffc49bf0f7cee59d1c",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/request-json-parser.js",
+      "bytes": 6356,
+      "sha256": "68a38a4ec263ff9a80d69082660324d23e84f5328750f346a52a77d016fa28a4",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/same-original-recovery-native-challenge-composition.js",
+      "bytes": 5264,
+      "sha256": "39ebb1dec559c27e00a8ffb4b03275d3daf96d5edbf95c699a9199ca6f0a441f",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/schedule-api.js",
+      "bytes": 230666,
+      "sha256": "1126f421261e4e98a724ff5e935d0c5413596997e8aeb29ff7d7236c41e78efc",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/security-http-boundaries.js",
+      "bytes": 940,
+      "sha256": "f8ecbb5b175bf2b08dda2591c53614b089f9fca3f7dc448c7f84b1a58f0f58d1",
+      "git_commit": "0e2be8c7211bf194c2e28a508cc915565c69ee07"
+    },
+    {
+      "path": "src/static-weekly-control-plane-runtime.js",
+      "bytes": 47435,
+      "sha256": "384693e1730fa0d56e866f0d271f3a334620e38531350551f1087c64a44ff9fb",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-control-plane.js",
+      "bytes": 205520,
+      "sha256": "a39127410f02b229cb5d1cd65a42e5fe946548d7dbd58be3eac421c57f20f1a0",
+      "git_commit": "59b3f02242db351cf09558bfd3c6ca8f8264389c"
+    },
+    {
+      "path": "src/static-weekly-manager-operation.js",
+      "bytes": 2495,
+      "sha256": "def10bbc1f41cf63ceb11bdab8c164317c6253a6993a5f41b39432468605ffb9",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-recurring-phase-authority.js",
+      "bytes": 58205,
+      "sha256": "bf2560321a100c24a8ca84da39cc27e68f90b153e9af25741aa8659bc6c4e16a",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-recurring-staffing-adaptation.js",
+      "bytes": 188145,
+      "sha256": "3453b91c048bbc4cc4cf2508fda9032302a5999e53d0a3cbfe03afc2047d5a09",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-schedule-model.js",
+      "bytes": 36185,
+      "sha256": "6c956a2f3e7cb1a9f6366515393cf2eab03639776f64e53a38317a0010956271",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-schedule-program.js",
+      "bytes": 131112,
+      "sha256": "e16f6c46139d703cbf78879587278a71ace2f1c87b913e80e9c7dc47e2e8aebe",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-shift-end-coverage.js",
+      "bytes": 15897,
+      "sha256": "b9c0d099925a7b837ae9275cb1e51233d06d0816538d02dd4973c84c3bb4dac2",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "src/static-weekly-shift-end-derivation.js",
+      "bytes": 56977,
+      "sha256": "c5ba42f64ab1980e3de6de5c1b15bb46d9ecee2f3fdc68fd0fbf43fd37c52cde",
+      "git_commit": "eb346dd0ac631598c140bd7c4ec417aceaec70ad"
+    },
+    {
+      "path": "release/sealed-repair-frontend-source/SOURCE_PAIR.json",
+      "bytes": 1439,
+      "sha256": "89bef8e1cb5df6cb845a6e48ba756e077f8f074b873b1255e43b5c87b59a620b",
+      "git_commit": "8ae6a6254f4b377004f4a30aa77027eb3ba7c395"
+    }
+  ]
+}
