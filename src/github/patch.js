@@ -34,7 +34,7 @@ export function previewTextReplacement({
 
   const newText = occurrence === "all"
     ? source.split(needle).join(replacement)
-    : source.replace(needle, replacement);
+    : source.replace(needle, () => replacement);
 
   return {
     ok: true,

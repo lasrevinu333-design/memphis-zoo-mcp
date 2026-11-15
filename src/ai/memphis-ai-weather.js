@@ -58,15 +58,13 @@ export function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
 }
 
 function cToF(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return Math.round((n * 9 / 5) + 32);
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.round((value * 9 / 5) + 32);
 }
 
 function kmhToMph(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 0.621371);
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.round(value * 0.621371);
 }
 
 // LOW #7: Weather attribution text is configurable via env var.
@@ -82,7 +80,9 @@ export function summarizeWeatherPayload(weather, defaultLocation = DEFAULT_WEATH
   const wind = windMph == null ? "wind unavailable" : `${windMph} mph wind`;
   const high = highF == null ? "high unavailable" : `high ${highF}°F`;
   const low = lowF == null ? "low unavailable" : `low ${lowF}°F`;
-  const precip = weather.precipitation_probability == null ? "precipitation unknown" : `${Math.round(Number(weather.precipitation_probability))}% chance of precipitation`;
+  const probability = weather.precipitation_probability;
+  const precip = typeof probability === "number" && Number.isFinite(probability) && probability >= 0 && probability <= 100
+    ? `${Math.round(probability)}% chance of precipitation` : "precipitation unknown";
   const condition = weather.condition || "conditions unavailable";
   // LOW #7: Attribution text only included when enabled.
   const attribution = WEATHER_ATTRIBUTION_ENABLED
@@ -132,7 +132,8 @@ export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATI
 }
 
 function weatherCodeToText(code) {
-  const value = Number(code);
+  if (typeof code !== "number" || !Number.isFinite(code) || !Number.isInteger(code)) return "conditions unavailable";
+  const value = code;
   if (value === 0) return "clear";
   if ([1, 2, 3].includes(value)) return "partly cloudy";
   if ([45, 48].includes(value)) return "foggy";
@@ -142,5 +143,5 @@ function weatherCodeToText(code) {
   if ([80, 81, 82].includes(value)) return "rain showers";
   if ([85, 86].includes(value)) return "snow showers";
   if ([95, 96, 99].includes(value)) return "thunderstorms";
-  return "mixed conditions";
+  return "conditions unavailable";
 }

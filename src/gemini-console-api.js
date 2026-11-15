@@ -105,10 +105,10 @@ function hasRole(actor, role) {
   return actor.roles.includes(String(role).toUpperCase());
 }
 
-function apiError(res, error, fallback = "Gemini Console request failed.") {
+function apiError(res, error, fallback = "Gemini Console request failed.", details = {}) {
   const message = String(error?.message || fallback).replace(/(key|token|secret|password)=[^\s&]+/gi, "$1=[redacted]").slice(0, 500);
   const status = Number(error?.status) || (/not found/i.test(message) ? 404 : /denied|forbidden|required manager/i.test(message) ? 403 : /conflict|already|generating/i.test(message) ? 409 : /too large/i.test(message) ? 413 : /unsupported|signature|type/i.test(message) ? 415 : /required|invalid|malformed|unavailable/i.test(message) ? 422 : 500);
-  res.status(status).json({ ok: false, error: status >= 500 ? fallback : message });
+  res.status(status).json({ ok: false, error: status >= 500 ? fallback : message, ...details });
 }
 
 async function deletePendingAttachment(supabase, item, assertActive) {
@@ -164,6 +164,29 @@ async function deletePendingAttachment(supabase, item, assertActive) {
 function sendEvent(res, event, data = {}) {
   if (res.writableEnded || res.destroyed) return;
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function conversationMutationBoundary(req, conversationId) {
+  const lease = req.restoreMutationLease;
+  let lost = false, metadata = "not_attempted";
+  const assertActive = () => {
+    try {
+      lease?.assertActive?.();
+      if (lease?.signal?.aborted) throw lease.signal.reason || new Error("Original mutation lease was aborted.");
+    } catch (error) { lost = true; throw error; }
+  };
+  return {
+    beginWrite() { assertActive(); metadata = "unconfirmed"; },
+    confirmWrite() { metadata = "confirmed"; assertActive(); },
+    assertActive,
+    fail(res, error) {
+      if (lost || lease?.signal?.aborted) {
+        res.status(503).json({ ok: false, code: "conversation_mutation_unconfirmed", retryable: false,
+          error: "The original conversation change could not be acknowledged. Check its exact status before trying again.",
+          data: { conversation_id: isUuid(conversationId) ? conversationId : null, metadata_mutation: metadata } });
+      } else apiError(res, error);
+    },
+  };
 }
 
 function configureEventStream(res, correlationId) {
@@ -452,20 +475,28 @@ export function createGeminiConsoleRouter({
   });
 
   router.post("/conversations", async (req, res) => {
+    const mutation = conversationMutationBoundary(req, String(req.body?.client_operation_id || ""));
     try {
       const actor = actorFrom(req);
       const operationId = String(req.body?.client_operation_id || "");
       if (!isUuid(operationId)) throw Object.assign(new Error("client_operation_id is required."), { status: 422 });
       const title = String(req.body?.title || "New chat").trim().slice(0, 160) || "New chat";
-      if(isCustodialLeadershipManagementSession(req.memphisAuth))return res.status(200).json({ok:true,data:await cohortCall(req,'gemini_conversation',{conversation_id:operationId,title})});
+      mutation.beginWrite();
+      if(isCustodialLeadershipManagementSession(req.memphisAuth)){
+        const data=await cohortCall(req,'gemini_conversation',{conversation_id:operationId,title});
+        mutation.confirmWrite();return res.status(200).json({ok:true,data});
+      }
       const { data, error } = await supabase.from("gemini_console_conversations").upsert({ conversation_id: operationId, owner_manager_id: actor.managerId, title }, { onConflict: "conversation_id", ignoreDuplicates: true }).select("conversation_id,title,status,created_at,updated_at,last_activity_at,draft_text,draft_updated_at").maybeSingle();
       if (error) throw error;
+      mutation.confirmWrite();
       const conversation = data || await conversationFor(actor, operationId);
+      mutation.assertActive();
       res.status(200).json({ ok: true, data: conversation });
-    } catch (error) { apiError(res, error); }
+    } catch (error) { mutation.fail(res, error); }
   });
 
   router.patch("/conversations/:conversationId", async (req, res) => {
+    const mutation = conversationMutationBoundary(req, req.params.conversationId);
     try {
       const actor = actorFrom(req);
       const conversation = await conversationFor(actor, req.params.conversationId);
@@ -475,21 +506,26 @@ export function createGeminiConsoleRouter({
       if (req.body?.status !== undefined && ["active", "archived"].includes(String(req.body.status))) {
         patch.status = String(req.body.status); patch.archived_at = patch.status === "archived" ? new Date().toISOString() : null;
       }
+      mutation.beginWrite();
       const { data, error } = await supabase.from("gemini_console_conversations").update(patch).eq("conversation_id", conversation.conversation_id).eq("owner_manager_id", actor.managerId).select("conversation_id,title,status,created_at,updated_at,last_activity_at,draft_text,draft_updated_at").single();
       if (error) throw error;
+      mutation.confirmWrite();
       res.status(200).json({ ok: true, data });
-    } catch (error) { apiError(res, error); }
+    } catch (error) { mutation.fail(res, error); }
   });
 
   router.delete("/conversations/:conversationId", async (req, res) => {
+    const mutation = conversationMutationBoundary(req, req.params.conversationId);
     try {
       const actor = actorFrom(req);
       await conversationFor(actor, req.params.conversationId);
       const now = new Date().toISOString();
+      mutation.beginWrite();
       const { error } = await supabase.from("gemini_console_conversations").update({ status: "deleted", deleted_at: now, updated_at: now, draft_text: "" }).eq("conversation_id", req.params.conversationId).eq("owner_manager_id", actor.managerId);
       if (error) throw error;
+      mutation.confirmWrite();
       res.status(200).json({ ok: true, data: { conversation_id: req.params.conversationId, status: "deleted" } });
-    } catch (error) { apiError(res, error); }
+    } catch (error) { mutation.fail(res, error); }
   });
 
   router.get("/conversations/:conversationId/messages", async (req, res) => {
@@ -530,6 +566,32 @@ export function createGeminiConsoleRouter({
     } catch (error) { apiError(res, error); }
   });
 
+  router.get("/conversations/:conversationId/attachments/:attachmentId", async (req, res) => {
+    try {
+      const actor = actorFrom(req);
+      const { conversationId, attachmentId } = req.params;
+      if (!isUuid(conversationId) || !isUuid(attachmentId)) throw Object.assign(new Error("Valid original attachment and conversation IDs are required."), { status: 422 });
+      await conversationFor(actor, conversationId);
+      const { data, error } = await supabase.from("gemini_console_attachments")
+        .select("attachment_id,conversation_id,manager_id,original_filename,mime_type,size_bytes,sha256,status,message_id,deleted_at")
+        .eq("attachment_id", attachmentId).eq("conversation_id", conversationId).eq("manager_id", actor.managerId).maybeSingle();
+      if (error) throw error;
+      // Absence is not proof an uncertain writer never committed. This route
+      // observes only; it never uploads, retires, claims or removes an object.
+      const valid = data && data.attachment_id === attachmentId && data.conversation_id === conversationId
+        && data.manager_id === actor.managerId && /^[a-f0-9]{64}$/.test(data.sha256)
+        && Number.isInteger(data.size_bytes) && data.size_bytes > 0 && data.size_bytes <= MAX_FILE_BYTES;
+      let state = "UNCONFIRMED_ORIGINAL_RETAINED";
+      if (valid && data.status === "pending" && data.message_id === null && data.deleted_at === null) state = "PENDING_ORIGINAL_CONFIRMED";
+      if (valid && data.status === "attached" && isUuid(data.message_id) && data.deleted_at === null) state = "ATTACHED_ORIGINAL_CONFIRMED";
+      if (valid && data.status === "deleted" && data.message_id === null && typeof data.deleted_at === "string" && Number.isFinite(Date.parse(data.deleted_at))) state = "REMOVED_ORIGINAL_CONFIRMED";
+      res.status(200).json({ ok: true, data: { schema: "custodial.console-attachment-original.v1", state,
+        attachment_id: attachmentId, conversation_id: conversationId, manager_id: actor.managerId,
+        ...(state !== "UNCONFIRMED_ORIGINAL_RETAINED" ? { original_filename: data.original_filename, mime_type: data.mime_type,
+          size_bytes: data.size_bytes, sha256: data.sha256, message_id: data.message_id, deleted_at: data.deleted_at } : {}) } });
+    } catch (error) { apiError(res, error, "Original attachment status could not be confirmed."); }
+  });
+
   router.post("/conversations/:conversationId/attachments", async (req, res) => {
     const lease = req.restoreMutationLease;
     const assertActive = () => lease?.assertActive?.();
@@ -543,7 +605,10 @@ export function createGeminiConsoleRouter({
       let buffer;
       try { buffer = Buffer.from(String(req.body?.data_base64 || ""), "base64"); } catch { buffer = Buffer.alloc(0); }
       const validated = validateGeminiAttachment({ filename: req.body?.filename, declaredMime: req.body?.mime_type, buffer });
-      attachmentId = randomUUID();
+      if (req.body?.client_attachment_id != null && !isUuid(req.body.client_attachment_id)) throw Object.assign(new Error("Valid original client_attachment_id is required."), { status: 422 });
+      // New callers persist this original ID before dispatch. Legacy callers
+      // retain the existing server-generated ID behavior. Neither path retries.
+      attachmentId = req.body?.client_attachment_id || randomUUID();
       const uploadedPath = `${actor.managerId}/${req.params.conversationId}/${attachmentId}/${validated.filename}`;
       assertActive();
       storageUpload = "unconfirmed";
@@ -574,6 +639,12 @@ export function createGeminiConsoleRouter({
           error: "Attachment upload could not be confirmed. Check this conversation before trying again.",
           data: { attachment_id: attachmentId, storage_upload: storageUpload, metadata_insert: metadataInsert,
             storage_removal: "not_attempted" } });
+        return;
+      }
+      if (isUuid(req.body?.client_attachment_id)) {
+        apiError(res, error, "Attachment upload did not start.", { code: "attachment_upload_not_started",
+          data: { attachment_id: req.body.client_attachment_id, conversation_id: req.params.conversationId,
+            storage_upload: "not_attempted", metadata_insert: "not_attempted" } });
         return;
       }
       apiError(res, error, "Attachment upload failed.");

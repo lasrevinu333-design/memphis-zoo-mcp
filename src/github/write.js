@@ -444,7 +444,7 @@ function applyTextPatch(source, patch, index) {
   // The escapeRegExp utility is available if regex-based replacement is ever needed.
   const nextText = occurrence === "all"
     ? source.split(find).join(replace)
-    : source.replace(find, replace);
+    : source.replace(find, () => replace);
 
   return {
     nextText,
@@ -675,7 +675,7 @@ export async function replaceTextInFile({
     // but String.split + join is already safe. We keep the existing split/join approach which is literal-safe.)
     const nextText = occurrence === "all"
       ? oldContent.split(needle).join(replacement)
-      : oldContent.replace(needle, replacement);
+      : oldContent.replace(needle, () => replacement);
 
     const size = assertWriteSize(nextText, resolvedPath);
     const preview = stableFullPreview({
