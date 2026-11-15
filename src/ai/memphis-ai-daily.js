@@ -67,10 +67,13 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
     return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.`;
   }
 
-  if (!custodianPeople.length && !opsPeople.length) return `I couldn't find any custodians scheduled to work in the current publication on ${serviceDate}. Ops-manager day-of staffing is not verified here.`;
+  if (!custodianPeople.length && !opsPeople.length) return `I couldn't find any custodians scheduled to work in the current publication on ${serviceDate}.`;
 
   const sections = [];
-  sections.push(`Ops managers: ${opsPeople.length ? opsPeople.join("; ") : "day-of staffing not verified"}`);
+  // The governed custodial publication does not supply an ops-manager roster.
+  // Keep a general answer scoped to facts actually read; an explicit manager
+  // staffing question still returns the unavailable result above.
+  if (opsPeople.length) sections.push(`Ops managers: ${opsPeople.join("; ")}`);
   sections.push(`Custodians: ${custodianPeople.length ? custodianPeople.join("; ") : "none listed"}`);
   return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.`;
 }
