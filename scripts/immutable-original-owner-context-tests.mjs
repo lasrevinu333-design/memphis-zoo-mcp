@@ -2,6 +2,7 @@ import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableI
 import './isolated-current-postgres-cron-setup-tests.mjs';
 import './isolated-current-vendor-privileges-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
+import './immutable-current-deferred-guard-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.

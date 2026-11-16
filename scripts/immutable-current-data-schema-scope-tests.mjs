@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope,currentDataSchemaDependencyStatements,rebindCurrentDataSchemaDependencies} from './immutable-current-data-schema-scope.mjs';
 import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
+import {removeCurrentDeferredReceiptGuards} from './immutable-current-deferred-guard-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const oldFull="('public','auth','storage','custodial_release_identity')",oldOrdinary="('public','auth','storage')";
 const full="('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')";
@@ -21,10 +22,11 @@ test('all authenticated data schemas are included in exact current import, codec
   const name=statement.sourcePath.slice('proposals/'.length);
   if(!currentDataSchemaScopeStatements.includes(name)&&!currentDataSchemaDependencyStatements.includes(name))continue;
   assert.ok(!statement.sql.includes(oldFull)&&!statement.sql.includes(oldOrdinary));
-  const original=originalSql(statement.sql);
+  const admitted=name==='immutable-private-owner-context.sql'?removeCurrentDeferredReceiptGuards(statement.sql):statement.sql;
+  const original=originalSql(admitted);
   let compiled=currentDataSchemaScopeStatements.includes(name)?extendCurrentPostgresDataSchemaScope(name,original):original;
   if(currentDataSchemaDependencyStatements.includes(name))compiled=rebindCurrentDataSchemaDependencies(name,compiled);
-  assert.equal(compiled,statement.sql);
+  assert.equal(compiled,admitted);
   statement.sql=original;statement.sourceSha256=sha(original);count++;
  }
  assert.equal(count,4);
@@ -37,7 +39,7 @@ test('all authenticated data schemas are included in exact current import, codec
 test('modified predecessors, unrecognized schemas and unknown scope selectors cannot compile',()=>{
  for(const statement of program.statements){
   const name=statement.sourcePath.slice('proposals/'.length);if(!currentDataSchemaScopeStatements.includes(name))continue;
-  const original=originalSql(statement.sql);
+  const original=originalSql(name==='immutable-private-owner-context.sql'?removeCurrentDeferredReceiptGuards(statement.sql):statement.sql);
   for(const changed of [original+'\n',original.replace('custodial_release_identity','unknown_private'),original.replace('FOR UPDATE','FOR SHARE')]){
    if(changed!==original)assert.throws(()=>extendCurrentPostgresDataSchemaScope(name,changed));
   }
