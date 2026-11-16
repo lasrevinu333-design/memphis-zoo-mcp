@@ -1,6 +1,7 @@
 // Observational DATA only. The original exception is retained and rethrown by
 // the owning factory; no catch here resumes, retries or admits an operation.
 import {types} from 'node:util';
+import {createHash} from 'node:crypto';
 const failures=new WeakMap();
 const enums={
  fresh_stage:new Set(['ADMIT_FRESH_STAGE','VERIFY_ORIGINAL_FIDELITY','INITIALIZE_SOURCE','PREPARE_RESTORE_CONTROL','CAPTURE_PRE_RESTORE_STATE','IMPORT_ORIGINAL_DATA','VERIFY_STAGED_DATA']),
@@ -9,6 +10,7 @@ const enums={
  import_operation:new Set(['BEGIN_IMPORT','PLAN_ORDINARY_ORDER','STAGE_PRIVATE_ORIGINALS','CONSUME_ORDINARY_ORIGINALS','FINISH_IMPORT']),
  import_relation_schema:new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']),
  import_native_operation:new Set(['LOCK_RELATION_ACCESS_EXCLUSIVE','COUNT_RELATION_ROWS']),
+ guard_schema:new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']),
  source_statement:new Set(Array.from({length:13},(_,i)=>String(i+1).padStart(2,'0'))),
  fresh_refusal:new Set(['GLOBAL_FENCE_UNAVAILABLE','EVENT_PREDECESSOR_DIFFERS','MESSENGER_PREDECESSOR_DIFFERS','MESSAGE_GUARD_PREDECESSOR_DIFFERS','MESSAGE_EFFECTS_PREDECESSOR_DIFFERS','MESSAGE_AUDIT_PREDECESSOR_DIFFERS','MESSAGE_RECEIPT_PREDECESSOR_DIFFERS','DEVICE_TRIGGER_DIFFERS','DEVICE_PREDECESSOR_DIFFERS','DEVICE_ACL_DIFFERS','MANAGER_TRIGGER_DIFFERS','MANAGER_PREDECESSOR_DIFFERS','MANAGER_ACL_DIFFERS','EMPLOYEE_PUSH_TRIGGER_DIFFERS','EMPLOYEE_PUSH_PREDECESSOR_DIFFERS','EMPLOYEE_PUSH_ACL_DIFFERS','SOURCE_INVENTORY_EPOCH_UNAVAILABLE','SOURCE_INVENTORY_CONTEXT_CHANGED','SOURCE_INVENTORY_ORIGINAL_CHANGED','IMPORT_ORIGINAL_CONTEXT_CHANGED','IMPORT_FULL_TARGET_CATALOG_MISMATCH','PRIVATE_GUARD_KIND_UNSUPPORTED','MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED','MIXED_INSERT_GUARD_UNSUPPORTED','CURRENT_SOURCE_REGISTRY_STALE']),
 };
@@ -90,9 +92,34 @@ export function classifyImmutableImportPermissionContext(error,tables){
  }
  return Object.freeze(result);
 }
+export function classifyImmutableImportGuard(error,tables){
+ if(own(error,'code')!=='55000'||own(error,'message')!=='IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED')return Object.freeze({});
+ const raw=own(error,'detail');if(typeof raw!=='string'||Buffer.byteLength(raw)>8192||types.isProxy(tables)||!Array.isArray(tables))return Object.freeze({});
+ let d;try{d=JSON.parse(raw);}catch{return Object.freeze({});}
+ const keys=['schema','table','trigger','function_identity','tgtype','enabled','owner','function_sha256'];
+ if(!d||typeof d!=='object'||Array.isArray(d)||Object.getPrototypeOf(d)!==Object.prototype||
+  !keys.every(k=>Object.hasOwn(d,k))||Object.keys(d).length!==keys.length)return Object.freeze({});
+ const identifier=v=>typeof v==='string'&&/^[A-Za-z_][A-Za-z0-9_$]*$/.test(v)&&Buffer.byteLength(v)<=63;
+ if(!enums.guard_schema.has(d.schema)||!identifier(d.table)||!identifier(d.trigger)||!identifier(d.owner)||
+  typeof d.function_identity!=='string'||!(/^[A-Za-z_][A-Za-z0-9_$]*\.[A-Za-z_][A-Za-z0-9_$]*\(\)$/.test(d.function_identity))||d.function_identity.length>130||
+  !Number.isSafeInteger(d.tgtype)||d.tgtype<0||d.tgtype>127||!['O','A'].includes(d.enabled)||
+  d.function_sha256!==null&&(typeof d.function_sha256!=='string'||!/^[a-f0-9]{64}$/.test(d.function_sha256)))return Object.freeze({});
+ let matches=0;
+ for(const key of Reflect.ownKeys(tables))if(typeof key==='string'&&/^(0|[1-9][0-9]*)$/.test(key)){
+  const row=own(tables,key);if(own(row,'schema_name')===d.schema&&own(row,'table_name')===d.table)matches++;
+ }
+ if(matches!==1)return Object.freeze({});
+ const sha=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ return Object.freeze({guard_schema:d.schema,guard_relation_sha256:sha([d.schema,d.table]),guard_trigger_sha256:sha([d.schema,d.table,d.trigger]),
+  ...(d.function_sha256?{guard_function_sha256:d.function_sha256}:{})});
+}
 export function immutableFreshDiagnosticFields(value){
  const result={};
  for(const [key,allowed] of Object.entries(enums)){const data=own(value,key);if(allowed.has(data))result[key]=data;}
+ const digest=key=>{const v=own(value,key);return typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)?v:undefined;};
+ if(result.guard_schema&&digest('guard_relation_sha256')&&digest('guard_trigger_sha256')){
+  for(const key of ['guard_relation_sha256','guard_trigger_sha256','guard_function_sha256'])if(digest(key))result[key]=digest(key);
+ }else delete result.guard_schema;
  // An ordinal is meaningful only inside the pinned installer loop.
  if(result.initializer_stage!=='INSTALL_PINNED_STATEMENT')delete result.source_statement;
  return Object.freeze(result);

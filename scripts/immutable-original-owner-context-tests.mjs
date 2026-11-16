@@ -1,4 +1,4 @@
-import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
 import './isolated-current-postgres-cron-setup-tests.mjs';
 import './isolated-current-vendor-privileges-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
@@ -11,13 +11,30 @@ import {readFileSync} from 'node:fs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 const text=file=>readFileSync(new URL(file,import.meta.url),'utf8');
-const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,...deps};return new Function(...Object.keys(deps),text(file)
+const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard,...deps};return new Function(...Object.keys(deps),text(file)
  .replace(/^import\s[\s\S]*?;\n/gm,'').replaceAll('export async function','async function')+'\nreturn '+result+';')(...Object.values(deps));};
 const profiles=[
  Object.freeze({id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'}),
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('unsupported INSERT guard diagnosis exports only catalog-bound schema and digests through the actual receipt chain',()=>{
+ const detail={schema:'public',table:'private_table',trigger:'private_trigger',function_identity:'public.private_function()',tgtype:7,enabled:'O',owner:'postgres',function_sha256:'a'.repeat(64)};
+ const tables=[{schema_name:'public',table_name:'private_table'}],cause=Object.assign(new Error('IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED'),{code:'55000',detail:JSON.stringify(detail)});
+ const value=classifyImmutableImportGuard(cause,tables),sha=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ assert.deepEqual(value,{guard_schema:'public',guard_relation_sha256:sha(['public','private_table']),guard_trigger_sha256:sha(['public','private_table','private_trigger']),guard_function_sha256:'a'.repeat(64)});
+ assert.doesNotMatch(JSON.stringify(value),/private_table|private_trigger|private_function|postgres/);
+ const error=Object.assign(new Error('PRIVATE SQL'),{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',sql_state:'55000',import_refusal:cause.message});
+ recordImmutableFreshFailure(error,{import_operation:'BEGIN_IMPORT',...value});
+ const projected=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);assert.deepEqual(projectPrivateRestoreDiagnostic(projected),projected);
+ const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[projected]})));
+ assert.deepEqual(receipt.restore_diagnostics,[projected]);
+ for(const change of [{function_sha256:'PRIVATE'},{row:'PRIVATE ROW'},{tgtype:-1},{schema:'unknown'},{table:'not_in_catalog'},{enabled:'D'}]){
+  const invalid=Object.assign(new Error(cause.message),{code:'55000',detail:JSON.stringify({...detail,...change})});assert.deepEqual(classifyImmutableImportGuard(invalid,tables),{});
+ }
+ assert.deepEqual(classifyImmutableImportGuard(Object.assign(new Error('other'),{code:'55000',detail:cause.detail}),tables),{});
+ let traps=0;const getter={code:'55000',message:cause.message};Object.defineProperty(getter,'detail',{get(){traps++;return cause.detail;}});assert.deepEqual(classifyImmutableImportGuard(getter,tables),{});assert.equal(traps,0);
+});
 test('native permission context exposes only an authenticated-catalog schema and fixed operation, omitting ambiguous names',()=>{
  const cause=Object.assign(new Error('permission denied for table private_records'),{code:'42501',where:'SQL statement "LOCK TABLE auth.private_records IN ACCESS EXCLUSIVE MODE"\nPRIVATE ROW AND SQL'});
  const tables=[{schema_name:'auth',table_name:'private_records'}],value=classifyImmutableImportPermissionContext(cause,tables);

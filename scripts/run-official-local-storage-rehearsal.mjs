@@ -134,9 +134,9 @@ const insist = (value,message) => { if(!value) throw new Error(message); };
 // One fixed dependency, authenticated before import. The exact URL preserves
 // the host factory's WeakMap instance; the provider receives an owned0400 copy.
 const diagnosticHelperUrl=new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url);
-const diagnosticHelperSha256='e64ddf0c683cc490d45b1966d17182df06b3b1dcd43188b5b8e59b39c24adbe6';
+const diagnosticHelperSha256='d4fea489dde154c67e91fdd29f339e36a823d8a017fa33f300d05709847cf75b';
 const diagnosticHelperBytes=readFileSync(diagnosticHelperUrl);
-insist(diagnosticHelperBytes.length===9620 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
+insist(diagnosticHelperBytes.length===12062 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
 const {readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import(diagnosticHelperUrl.href);
 insist(readFileSync(diagnosticHelperUrl).equals(diagnosticHelperBytes),'Fixed diagnostic helper changed.');
 export function stageOwnedStorageWorker(mount){
@@ -369,7 +369,7 @@ export function privateRestoreStageDiagnostic(phase,event,error=null,freshFields
 export function projectPrivateRestoreDiagnostic(value){
   if(!value||typeof value!=='object'||isProxy(value)||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return null;
   const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
-  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','import_relation_schema','import_native_operation','source_statement','fresh_refusal'];
+  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','import_relation_schema','import_native_operation','guard_schema','guard_relation_sha256','guard_trigger_sha256','guard_function_sha256','source_statement','fresh_refusal'];
   if(keys.some(key=>!allowed.includes(key)||!Object.hasOwn(descriptors[key],'value')||descriptors[key].enumerable!==true))return null;
   const data=Object.fromEntries(keys.map(key=>[key,descriptors[key].value]));
   if(keys.some(key=>key!=='private_payload_exported'&&typeof data[key]!=='string'))return null;
