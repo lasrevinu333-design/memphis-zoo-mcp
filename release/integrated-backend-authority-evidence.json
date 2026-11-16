@@ -1578,6 +1578,11 @@
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
       },
       {
+        "path": "release/kernel-resource-view-source/590f68b21a2ae4bd555c85c5b3c0774082129ab91b361cef607fff8baee1a773.mjs",
+        "mode": "100644",
+        "object_id": "84bb6ca4347e5fcab3538bfa623f0670e3be26ad"
+      },
+      {
         "path": "release/native-manual-staffing-20261030/EVIDENCE.json",
         "mode": "100644",
         "object_id": "617a37c2a8620cc3346f2e221688f33dafc3ad54"
@@ -2870,7 +2875,7 @@
       {
         "path": "scripts/canonical304-kernel-resource-view.mjs",
         "mode": "100644",
-        "object_id": "84bb6ca4347e5fcab3538bfa623f0670e3be26ad"
+        "object_id": "f6494deb1b7ae3ff40da87ebac093556ad8d5752"
       },
       {
         "path": "scripts/capture-private-json-stdin.mjs",
@@ -3725,7 +3730,7 @@
       {
         "path": "scripts/fixture-cgroup-memory-tests.mjs",
         "mode": "100644",
-        "object_id": "61c5eae4a893dd578fdd709a2a657dd2c117d66e"
+        "object_id": "d74065c1ac56bb2a280e106f24ab01042b850781"
       },
       {
         "path": "scripts/fixtures/activation-context-retention.sql",
@@ -4330,7 +4335,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "610abce38a84e7a2836bb08328fa7d09c601fec6"
+        "object_id": "85b4c7afc02ef916cfd00a096feb9bc774852a48"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -12758,7 +12763,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2526,
+    "authority_path_count": 2527,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
