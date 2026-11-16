@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {restoreSplitFoundationWorkflow} from '../foundation-ci-split-layout.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const current='e1dc3b5a7dbc4d4ed350db52e314f3ed6fbe3e7ccded2d945aad454c07c2749b';
 const previous='7d3b6cd5e5f8992f625e0ea12a3432c83099f8bb4c8192c494362552bd3ae61e';
@@ -15,6 +16,7 @@ const canonical304Prior='          node --max-old-space-size=384 scripts/sealed-
 const legacy='          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs';
 const legacyPrior='          npm run --silent test:static-weekly-scheduler:database';
 export function restoreFoundationPcRunnerWorkflow(source,name){
+ source=restoreSplitFoundationWorkflow(source,name);
  if(name==='foundation-security-gate.yml'&&sha(source)==='4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7'){
   // Exact current observer successor; frozen canonical304 driver/SQL unchanged.
   assert.equal(sha(readFileSync(new URL('../run-sealed-canonical304-fixture.mjs',import.meta.url))),'42bee2609d2011741455b37cfe361819ccd04d78223b61628eef2778f6e5dbc7');

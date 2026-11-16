@@ -23,6 +23,8 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci --ignore-scripts
+      - name: Verify exact Foundation phase layout
+        run: node scripts/foundation-ci-split-layout-tests.mjs
       - name: Reviewed phone, pair, and isolated recorder regressions
         shell: /usr/bin/env -i HOME=/home/runner PATH=/opt/hostedtoolcache/node/22.23.4/x64/bin:/usr/bin:/bin /bin/bash --noprofile --norc -e -o pipefail {0}
         run: |
@@ -154,16 +156,6 @@ jobs:
           npm run --silent test:sealed-repair-contracts
           node scripts/sealed-canonical304-source-fixture-tests.mjs
           TMPDIR="$ci_sql_parent" node --max-old-space-size=384 scripts/run-sealed-canonical304-fixture.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
-          # This starts only disposable worker-owned PostgreSQL containers and
-          # includes the real independent-session concurrency/restart suite.
-          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs
-          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs --integrated-suite-order
-          TMPDIR="$ci_sql_parent" node scripts/run-retained-release-provenance-tests.mjs
-          npm run --silent test:release-closure
-          npm run --silent test:final-closure-database-isolated
-          npm run --silent test:release-migration-authorization
-          npm run --silent test:release-migration-plan-db-isolated
-          npm run --silent test:isolated-restore-lease-shim
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -202,4 +194,91 @@ jobs:
             ${{ runner.temp }}/approved-manual-period-native/RESULT.json
             ${{ runner.temp }}/approved-manual-period-worker/RESULT.json
             ${{ runner.temp }}/approved-manual-capacity-data/RESULT.json
+          if-no-files-found: warn
+
+  remaining_contracts:
+    needs: validate
+    runs-on: ${{ github.event_name == 'push' && github.actor == 'lasrevinu333-design' && github.ref == 'refs/heads/codex/mod-full-name-20261114' && 'custodial-foundation-isolated' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify exact Foundation phase layout
+        run: node scripts/foundation-ci-split-layout-tests.mjs
+      - name: Provision exact selected fresh PostgreSQL image
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518'
+          node --input-type=module -e 'import fs from "node:fs"; if(JSON.parse(fs.readFileSync("release/fresh-only-replay/MANIFEST.json")).image!==process.argv[1]) process.exit(1)' "$image"
+          evidence_root="$RUNNER_TEMP/ci-fresh-only-failure-evidence"
+          node --input-type=module -e 'import fs from "node:fs"; const p=process.argv[1]; if(!fs.existsSync(p))fs.mkdirSync(p,{mode:0o700}); const s=fs.lstatSync(p); if(!s.isDirectory()||s.isSymbolicLink()||fs.realpathSync(p)!==p||s.uid!==process.getuid()||(s.mode&0o777)!==0o700)process.exit(1)' "$evidence_root"
+          evidence="$evidence_root/pinned-pg-provisioning"
+          mkdir -m 700 -p "$evidence"
+          mirror='docker.io/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518'
+          set +e
+          timeout --signal=TERM --kill-after=5s 120s docker pull "$mirror" > "$evidence/mirror.stdout" 2> "$evidence/mirror.stderr"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$evidence/mirror.actual-exit"
+          if [ "$code" -ne 0 ]; then cat "$evidence/mirror.stderr" >&2; exit "$code"; fi
+          docker image inspect --format '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}}}' "$mirror" > "$evidence/mirror-image.json"
+          node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1])); if(!/^sha256:[a-f0-9]{64}$/.test(m.id)||!Array.isArray(m.repo_digests)||!m.repo_digests.some(d=>d===process.argv[2]||d===process.argv[2].replace(/^docker[.]io\//,""))) process.exit(1)' "$evidence/mirror-image.json" "$mirror"
+          for attempt in 1 2 3; do
+            printf '%s\n' "$image" > "$evidence/$attempt.image"
+            set +e
+            timeout --signal=TERM --kill-after=5s 45s docker pull "$image" > "$evidence/$attempt.stdout" 2> "$evidence/$attempt.stderr"
+            code=$?
+            set -e
+            printf '%s\n' "$code" > "$evidence/$attempt.actual-exit"
+            if [ "$code" -eq 0 ]; then
+              docker image inspect --format '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}}}' "$image" > "$evidence/verified-ecr-image.json"
+              node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(process.argv[1])),m=JSON.parse(fs.readFileSync(process.argv[2])); if(e.id!==m.id||!Array.isArray(e.repo_digests)||!e.repo_digests.includes(process.argv[3])) process.exit(1)' "$evidence/verified-ecr-image.json" "$evidence/mirror-image.json" "$image"
+              exit 0
+            fi
+            cat "$evidence/$attempt.stderr" >&2
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq 'toomanyrequests|rate exceeded|HTTP[^0-9]*429|status[^0-9]*429' "$evidence/$attempt.stderr" "$evidence/$attempt.stdout"; then
+              exit "$code"
+            fi
+            sleep "$((attempt * 5))"
+          done
+      - name: Retained scheduler SQL and release closure contracts
+        run: |
+          set -euo pipefail
+          ci_sql_parent="/mnt/custodial-sql-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-remaining"
+          test ! -e "$ci_sql_parent"
+          stat -c 'CI_SQL_PATH=%n device=%d mount=%m' /mnt /
+          findmnt --json --output TARGET,SOURCE,FSTYPE,MAJ:MIN
+          lsblk --json --output NAME,TYPE,FSTYPE,SIZE,MOUNTPOINTS
+          if [ "$(stat -c %d /mnt)" = "$(stat -c %d /)" ]; then
+            printf '%s\n' '::error::Foundation database qualification requires an existing secondary disk. This runner exposes /mnt on its root disk; the guarded local fixture remains available. No root-disk or tmpfs fallback is permitted.' >&2
+            exit 1
+          fi
+          if ! command -v bwrap; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends bubblewrap
+          fi
+          command -v bwrap
+          sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$ci_sql_parent"
+          # This starts only disposable worker-owned PostgreSQL containers and
+          # includes the real independent-session concurrency/restart suite.
+          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs
+          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs --integrated-suite-order
+          TMPDIR="$ci_sql_parent" node scripts/run-retained-release-provenance-tests.mjs
+          npm run --silent test:release-closure
+          npm run --silent test:final-closure-database-isolated
+          npm run --silent test:release-migration-authorization
+          npm run --silent test:release-migration-plan-db-isolated
+          npm run --silent test:isolated-restore-lease-shim
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: ci-fresh-only-failure-evidence-${{ github.run_id }}-remaining
+          path: ${{ runner.temp }}/ci-fresh-only-failure-evidence/
           if-no-files-found: warn

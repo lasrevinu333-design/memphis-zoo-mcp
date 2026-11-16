@@ -1,0 +1,205 @@
+name: Foundation Security Gate
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ${{ github.event_name == 'push' && github.actor == 'lasrevinu333-design' && github.ref == 'refs/heads/codex/mod-full-name-20261114' && 'custodial-foundation-isolated' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+      - name: Reviewed phone, pair, and isolated recorder regressions
+        shell: /usr/bin/env -i HOME=/home/runner PATH=/opt/hostedtoolcache/node/22.23.4/x64/bin:/usr/bin:/bin /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+          docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed
+          /usr/bin/sha256sum --check --strict <<'REVIEWED_INPUTS'
+          fda67843739193dded328d2ff03a01559b15e6f1a835dd0a7ffd137ac58ace4d  package.json
+          3b9f30421adbcd7261d37756b533df03372403e633ed7073a9e7703c03ab4204  package-lock.json
+          6437d19f892910fda47da67c7a85a0ac9cbdf80a06955f481f46e32f6a19b37e  scripts/legacy-activation-http-tests.mjs
+          b2fe3d3dd2c1b7619d5cb7869a865ef44284269264cd6e0f931cdbbf930141d0  scripts/release-pair-consumer-regression-tests.mjs
+          9c330f91a9795187cbfb1edb92f2283b121935b609169e33effdb07f52e88e12  scripts/run-isolated-release-recorder-tests.mjs
+          c2b5f2f3324cd7615844cfb3c458c4e1febc11ce7e8c4f05368567fce1e64cfe  scripts/production-release-recorder-database-tests.mjs
+          6a0c4211cedb1379501769b6944c4821762a4015cb00dca09f40fe1f647a1329  scripts/fixtures/exact-frontend-pair.mjs
+          REVIEWED_INPUTS
+          /opt/hostedtoolcache/node/22.23.4/x64/bin/node scripts/legacy-activation-http-tests.mjs && /opt/hostedtoolcache/node/22.23.4/x64/bin/node scripts/release-pair-consumer-regression-tests.mjs && /opt/hostedtoolcache/node/22.23.4/x64/bin/node scripts/run-isolated-release-recorder-tests.mjs
+          node --test scripts/source252-production-role-order-tests.mjs scripts/current310-production-role-order-tests.mjs scripts/production-forward-current310-311-tests.mjs
+      - name: Syntax and dependency audit
+        run: |
+          set -euo pipefail
+          node --check src/index.js
+          node --check src/auth/shared-access-auth.js
+          node --check src/auth/mcp-connector-auth.js
+          node --check src/leadership-bootstrap.js
+          node --check src/custodial-employee-admin.js
+          node --check src/manager-notifications.js
+          npm audit --omit=dev --audit-level=high
+      - name: Verify exact release evidence freshness
+        run: npm run --silent release:integrated-backend-authority:check
+      - name: Record closure toolchain provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '{"image_os":"%s","image_version":"%s","node":"%s","postgres_image":"%s"}\n' \
+            "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$(node --version)" \
+            "$(docker image inspect supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed --format '{{.Id}}')" \
+            > closure-toolchain-provenance.json
+      - name: Provision exact selected fresh PostgreSQL image
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518'
+          node --input-type=module -e 'import fs from "node:fs"; if(JSON.parse(fs.readFileSync("release/fresh-only-replay/MANIFEST.json")).image!==process.argv[1]) process.exit(1)' "$image"
+          evidence_root="$RUNNER_TEMP/ci-fresh-only-failure-evidence"
+          node --input-type=module -e 'import fs from "node:fs"; const p=process.argv[1]; if(!fs.existsSync(p))fs.mkdirSync(p,{mode:0o700}); const s=fs.lstatSync(p); if(!s.isDirectory()||s.isSymbolicLink()||fs.realpathSync(p)!==p||s.uid!==process.getuid()||(s.mode&0o777)!==0o700)process.exit(1)' "$evidence_root"
+          evidence="$evidence_root/pinned-pg-provisioning"
+          mkdir -m 700 -p "$evidence"
+          mirror='docker.io/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518'
+          set +e
+          timeout --signal=TERM --kill-after=5s 120s docker pull "$mirror" > "$evidence/mirror.stdout" 2> "$evidence/mirror.stderr"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$evidence/mirror.actual-exit"
+          if [ "$code" -ne 0 ]; then cat "$evidence/mirror.stderr" >&2; exit "$code"; fi
+          docker image inspect --format '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}}}' "$mirror" > "$evidence/mirror-image.json"
+          node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1])); if(!/^sha256:[a-f0-9]{64}$/.test(m.id)||!Array.isArray(m.repo_digests)||!m.repo_digests.some(d=>d===process.argv[2]||d===process.argv[2].replace(/^docker[.]io\//,""))) process.exit(1)' "$evidence/mirror-image.json" "$mirror"
+          for attempt in 1 2 3; do
+            printf '%s\n' "$image" > "$evidence/$attempt.image"
+            set +e
+            timeout --signal=TERM --kill-after=5s 45s docker pull "$image" > "$evidence/$attempt.stdout" 2> "$evidence/$attempt.stderr"
+            code=$?
+            set -e
+            printf '%s\n' "$code" > "$evidence/$attempt.actual-exit"
+            if [ "$code" -eq 0 ]; then
+              docker image inspect --format '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}}}' "$image" > "$evidence/verified-ecr-image.json"
+              node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(process.argv[1])),m=JSON.parse(fs.readFileSync(process.argv[2])); if(e.id!==m.id||!Array.isArray(e.repo_digests)||!e.repo_digests.includes(process.argv[3])) process.exit(1)' "$evidence/verified-ecr-image.json" "$evidence/mirror-image.json" "$image"
+              exit 0
+            fi
+            cat "$evidence/$attempt.stderr" >&2
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq 'toomanyrequests|rate exceeded|HTTP[^0-9]*429|status[^0-9]*429' "$evidence/$attempt.stderr" "$evidence/$attempt.stdout"; then
+              exit "$code"
+            fi
+            sleep "$((attempt * 5))"
+          done
+      - name: Authentication and integration contracts
+        run: |
+          set -euo pipefail
+          ci_sql_parent="/mnt/custodial-sql-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$ci_sql_parent"
+          stat -c 'CI_SQL_PATH=%n device=%d mount=%m' /mnt /
+          findmnt --json --output TARGET,SOURCE,FSTYPE,MAJ:MIN
+          lsblk --json --output NAME,TYPE,FSTYPE,SIZE,MOUNTPOINTS
+          if [ "$(stat -c %d /mnt)" = "$(stat -c %d /)" ]; then
+            printf '%s\n' '::error::Foundation database qualification requires an existing secondary disk. This runner exposes /mnt on its root disk; the guarded local fixture remains available. No root-disk or tmpfs fallback is permitted.' >&2
+            exit 1
+          fi
+          if ! command -v bwrap; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends bubblewrap
+          fi
+          command -v bwrap
+          sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$ci_sql_parent"
+          npm run --silent test:ci-workflows
+          npm run --silent test:auth
+          npm run --silent test:backup-source-binding
+          node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs
+          node scripts/manager-scheduler-http-tests.mjs
+          node scripts/scheduler-reported-boundaries-tests.mjs "$RUNNER_TEMP/scheduler-reported-boundaries-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          python3 scripts/current-owned-sql-ci-entry.py --consumer manager --runtime "$ci_sql_parent/manager-runtime" --evidence "$RUNNER_TEMP/owned-manager-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          npm run --silent test:manager-auth
+          node scripts/map-owner-session-http-tests.mjs
+          node scripts/feedback-acknowledgment-auth-tests.mjs
+          node scripts/static-weekly-control-plane-tests.mjs
+          node scripts/static-weekly-control-plane-runtime-tests.mjs
+          python3 scripts/current-owned-sql-ci-entry.py --consumer owner --runtime "$ci_sql_parent/owner-runtime" --evidence "$RUNNER_TEMP/owned-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node scripts/release-attestation-path-tests.mjs
+          npm run --silent test:custodial-employee-phones
+          node scripts/proxy-address-regression-tests.mjs
+          npm run --silent test:foundation-containment
+          python3 scripts/current-owned-sql-ci-entry.py --consumer read-only --runtime "$ci_sql_parent/read-only-runtime" --evidence "$RUNNER_TEMP/owned-read-only-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          npm run --silent test:operations-leadership-mobile
+          npm run --silent test:manager-notifications
+          npm run --silent test:custodial-employee-phones
+          npm run --silent test:messaging
+          npm run --silent test:messaging-manager-authority
+          npm run --silent test:batch2
+          npm run --silent test:moxie-decommission
+          npm run --silent test:schedule-source-type
+          npm run --silent test:foundation
+          npm run --silent test:foundation-repair
+          npm run --silent test:scheduler-overhaul
+          npm run --silent test:static-weekly-scheduler:fast
+          node scripts/approved-manual-gps-tests.mjs
+          node scripts/approved-manual-absence-tests.mjs
+          node scripts/approved-manual-period-projection-tests.mjs --native-evidence-dir "$RUNNER_TEMP/approved-manual-period-native"
+          node scripts/approved-manual-period-worker-tests.mjs "$RUNNER_TEMP/approved-manual-period-worker"
+          node scripts/approved-manual-roster-transition-tests.mjs
+          node scripts/approved-manual-capacity-transition-tests.mjs "$RUNNER_TEMP/approved-manual-capacity-data"
+          npm run --silent test:sealed-repair-contracts
+          node scripts/sealed-canonical304-source-fixture-tests.mjs
+          TMPDIR="$ci_sql_parent" node --max-old-space-size=384 scripts/run-sealed-canonical304-fixture.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
+          # This starts only disposable worker-owned PostgreSQL containers and
+          # includes the real independent-session concurrency/restart suite.
+          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs
+          TMPDIR="$ci_sql_parent" node scripts/run-sealed-legacy-scheduler-database-tests.mjs --integrated-suite-order
+          TMPDIR="$ci_sql_parent" node scripts/run-retained-release-provenance-tests.mjs
+          npm run --silent test:release-closure
+          npm run --silent test:final-closure-database-isolated
+          npm run --silent test:release-migration-authorization
+          npm run --silent test:release-migration-plan-db-isolated
+          npm run --silent test:isolated-restore-lease-shim
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: closure-toolchain-provenance-${{ github.run_id }}
+          path: closure-toolchain-provenance.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: ci-fresh-only-failure-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/ci-fresh-only-failure-evidence/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: approved-manual-activation-result-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/approved-manual-activation-sql/RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/MAIN_FRESH304_CAPTURE_RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/REPAIR_EXTENSION_RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/REPAIR_MODULE_*_RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/REPAIR_REGRESSION_SUMMARY.json
+            ${{ runner.temp }}/approved-manual-activation-sql/RESOURCE_*.json
+            ${{ runner.temp }}/approved-manual-activation-sql/FAILED_ORIGINAL_FIXTURE_PRESERVED.json
+            ${{ runner.temp }}/approved-manual-activation-sql/UNKNOWN_ORIGINAL_FIXTURE_PRESERVED.json
+            ${{ runner.temp }}/approved-manual-activation-sql/CURRENT_DAY_ACTIVATION_RECEIPT.json
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: approved-manual-dated-data-result-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/approved-manual-period-native/RESULT.json
+            ${{ runner.temp }}/approved-manual-period-worker/RESULT.json
+            ${{ runner.temp }}/approved-manual-capacity-data/RESULT.json
+          if-no-files-found: warn
