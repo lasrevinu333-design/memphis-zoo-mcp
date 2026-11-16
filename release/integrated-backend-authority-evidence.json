@@ -988,6 +988,11 @@
         "object_id": "453dac0f417aa9973163f5b5210d0faa270926ee"
       },
       {
+        "path": "release/canonical304-history-source/42bee2609d2011741455b37cfe361819ccd04d78223b61628eef2778f6e5dbc7.mjs",
+        "mode": "100644",
+        "object_id": "a7fd133defabc66844563e8ef6080f084538557c"
+      },
+      {
         "path": "release/combined-release-verification.json",
         "mode": "100644",
         "object_id": "698d18b9fa7c419c6cfe6df5b5a380d372509a77"
@@ -2873,6 +2878,16 @@
         "object_id": "af0455ced7b5c524d4ea7e33b1c3dc64f07414f3"
       },
       {
+        "path": "scripts/canonical304-historical-state-view-tests.mjs",
+        "mode": "100644",
+        "object_id": "86e9ffb41de79706ba760818d87219da84ee07c9"
+      },
+      {
+        "path": "scripts/canonical304-historical-state-view.mjs",
+        "mode": "100644",
+        "object_id": "5c23f36003748f3589ad31e5d9b7120501ef27b7"
+      },
+      {
         "path": "scripts/canonical304-kernel-resource-view.mjs",
         "mode": "100644",
         "object_id": "f6494deb1b7ae3ff40da87ebac093556ad8d5752"
@@ -4335,7 +4350,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "85b4c7afc02ef916cfd00a096feb9bc774852a48"
+        "object_id": "537baf8411b0dc615679fc24aaf18d5d483ea4e7"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -5736,6 +5751,16 @@
         "path": "scripts/manual-period-boundary-tests.mjs",
         "mode": "100644",
         "object_id": "eb3b2fbfe67f2fe65e3b197ba80f9653430fd289"
+      },
+      {
+        "path": "scripts/manual-period-historical-state-successor-tests.mjs",
+        "mode": "100644",
+        "object_id": "5f34cbf4436c5c0c3feeb2baec872642552c61d9"
+      },
+      {
+        "path": "scripts/manual-period-historical-state-successor.mjs",
+        "mode": "100644",
+        "object_id": "41f6cf439bb655c418d85dc051473e08cccf2935"
       },
       {
         "path": "scripts/manual-period-repair-database-extension.mjs",
@@ -7395,7 +7420,7 @@
       {
         "path": "scripts/run-sealed-canonical304-fixture.mjs",
         "mode": "100644",
-        "object_id": "a7fd133defabc66844563e8ef6080f084538557c"
+        "object_id": "36f0fdaead17d02c1c4365c01bdf677a70fd77ce"
       },
       {
         "path": "scripts/run-sealed-legacy-scheduler-database-tests.mjs",
@@ -12763,7 +12788,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2527,
+    "authority_path_count": 2532,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
