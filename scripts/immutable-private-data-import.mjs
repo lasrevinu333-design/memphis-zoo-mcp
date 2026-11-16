@@ -1,4 +1,4 @@
-import {recordImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,classifyImmutableImportPermission} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import {createInterface} from 'node:readline';
@@ -90,9 +90,9 @@ function sameFreshNativePort(db,original){
   const current=captureFreshNativePort(db);
   if(!original||current.connection!==original.connection||current.stream!==original.stream||current.processID!==original.processID)fail();
 }
-function fail(cause,code='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED') {
+function fail(cause,code='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',fields) {
   const error=Object.assign(new Error(code),{code,outcome:'UNKNOWN',retry_safe:false});
-  if(cause){privateFailures.set(error,cause);
+  if(cause&&typeof cause==='object'&&!types.isProxy(cause)){privateFailures.set(error,cause);
     const field=Object.getOwnPropertyDescriptor(cause,'code');
     if(field&&Object.hasOwn(field,'value')&&typeof field.value==='string'&&/^[0-9A-Z]{5}$/.test(field.value))error.sql_state=field.value;
     // Fixed shipping guard vocabulary only. Never expose raw PG detail,
@@ -106,6 +106,8 @@ function fail(cause,code='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED') {
       'IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED','Immutable import current Source registry unavailable or stale',
     ].includes(message.value))error.import_refusal=message.value;
   }
+  const permission=classifyImmutableImportPermission(cause);
+  if(fields||permission)recordImmutableFreshFailure(error,{...fields,...(permission?{fresh_refusal:permission}:{})});
   throw error; // No raw PG detail/body/cause on the observable failure.
 }
 function closed(value,keys) {
@@ -978,9 +980,10 @@ export async function stageVerifiedImmutablePrivateData(options) {
     source_identity_sha256:binding.source_identity_sha256,source_project_ref:binding.project_ref,target_project_ref:intent.target_project_ref,
     actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,
     target_release_identity:intent.target_release_identity,catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers});
+  let importOperation='BEGIN_IMPORT';
   async function sql(text,args=[]) {
     sameSource(verifiedArchive,original);
-    let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error);}
+    let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',{import_operation:importOperation});}
     sameSource(verifiedArchive,original);return result;
   }
   const initial=await sql('select custodial_dr.begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb) as context',
@@ -999,7 +1002,9 @@ export async function stageVerifiedImmutablePrivateData(options) {
     const result=await sql(text,[...args,JSON.stringify(witness)]);
     if(!isDeepStrictEqual(contextWitness(result),witness))fail();
   }
+  importOperation='PLAN_ORDINARY_ORDER';
   const ordinaryOrder=await planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext);
+  importOperation='STAGE_PRIVATE_ORIGINALS';
   let total=0;
   for(const selected of original.selection.privateTables) {
     sameSource(verifiedArchive,original);
@@ -1024,11 +1029,13 @@ export async function stageVerifiedImmutablePrivateData(options) {
     finally{input.close();data.stream.destroy();guard.destroy();await settled.catch(()=>{});
       try{await data.close();}catch(cleanup){if(firstFailure)throw new AggregateError([firstFailure,cleanup],'Immutable private source cleanup failed',{cause:firstFailure});throw cleanup;}}
   }
+  importOperation='CONSUME_ORDINARY_ORIGINALS';
   for(const selected of ordinaryOrder)
     await consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext);
   // All ORIGINAL EOF/digests/counts precede the only guarded finish/inserts.
   sameSource(verifiedArchive,original);
   await assertContext();sameSource(verifiedArchive,original);
+  importOperation='FINISH_IMPORT';
   const finished=await sql('select custodial_dr.finish_immutable_private_import() as result');
   if(finished.rowCount!==1)fail();
   const result=closed(finished.rows[0].result,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);

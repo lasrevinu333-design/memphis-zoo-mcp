@@ -1,4 +1,4 @@
-import {recordImmutableFreshFailure,readImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableImportPermission} from './immutable-private-stage-diagnostic.mjs';
 import './isolated-current-postgres-cron-setup-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
@@ -10,13 +10,35 @@ import {readFileSync} from 'node:fs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 const text=file=>readFileSync(new URL(file,import.meta.url),'utf8');
-const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,...deps};return new Function(...Object.keys(deps),text(file)
+const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,classifyImmutableImportPermission,...deps};return new Function(...Object.keys(deps),text(file)
  .replace(/^import\s[\s\S]*?;\n/gm,'').replaceAll('export async function','async function')+'\nreturn '+result+';')(...Object.values(deps));};
 const profiles=[
  Object.freeze({id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'}),
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('private import permission diagnostics retain only closed class and operation, never native errors or identifiers',()=>{
+ const source=text('./immutable-private-data-import.mjs'),start=source.indexOf('function fail('),end=source.indexOf('\nfunction closed(',start);
+ assert.ok(start>0&&end>start);
+ const throwFailure=new Function('privateFailures','types','recordImmutableFreshFailure','classifyImmutableImportPermission',
+  source.slice(start,end)+'\nreturn fail;')(new WeakMap(),types,recordImmutableFreshFailure,classifyImmutableImportPermission);
+ for(const [message,label] of [['permission denied for table private_personal_records','NATIVE_RELATION_ACCESS_DENIED'],
+  ['permission denied for schema private_payroll','NATIVE_SCHEMA_ACCESS_DENIED'],['permission denied for function private_salary','NATIVE_FUNCTION_EXECUTE_DENIED'],
+  ['query would be affected by row-level security policy for table "private_payroll"','NATIVE_ROW_SECURITY_DENIED'],
+  ['PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED','IMPORT_GUARD_CONTEXT_DENIED']]){
+  const cause=Object.assign(new Error(message),{code:'42501',detail:'PRIVATE ROW AND SQL'}),kind=classifyImmutableImportPermission(cause);assert.equal(kind,label);
+  let error;try{throwFailure(cause,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',{import_operation:'BEGIN_IMPORT'});}catch(value){error=value;}
+  assert.equal(error.code,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED');assert.equal(error.sql_state,'42501');
+  const value=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);
+  assert.equal(value.import_operation,'BEGIN_IMPORT');assert.equal(value.fresh_refusal,label);assert.deepEqual(projectPrivateRestoreDiagnostic(value),value);
+  assert.doesNotMatch(JSON.stringify(value),/private_personal|private_payroll|private_salary|PRIVATE ROW|PRIVATE SQL/);
+  const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[value]})));
+  assert.deepEqual(receipt.restore_diagnostics,[value]);
+ }
+ for(const cause of [Object.assign(new Error('PRIVATE UNKNOWN'),{code:'42501'}),Object.assign(new Error('permission denied for table private_records'),{code:'55000'}),new Proxy({},{})])assert.equal(classifyImmutableImportPermission(cause),undefined);
+ let traps=0;const cause={code:'42501'};Object.defineProperty(cause,'message',{get(){traps++;return 'PRIVATE';}});
+ assert.equal(classifyImmutableImportPermission(cause),undefined);assert.equal(traps,0);
+});
 test('existing original-import guard reason survives closed public metadata without exposing its raw cause',()=>{
  const error=Object.assign(new Error('PRIVATE SQL CAUSE'),{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',sql_state:'55000',import_refusal:'Immutable import full target catalog mismatch'});
  recordImmutableFreshFailure(error,{fresh_stage:'IMPORT_ORIGINAL_DATA'});

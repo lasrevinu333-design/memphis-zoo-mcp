@@ -6,9 +6,21 @@ const enums={
  fresh_stage:new Set(['ADMIT_FRESH_STAGE','VERIFY_ORIGINAL_FIDELITY','INITIALIZE_SOURCE','PREPARE_RESTORE_CONTROL','CAPTURE_PRE_RESTORE_STATE','IMPORT_ORIGINAL_DATA','VERIFY_STAGED_DATA']),
  initializer_stage:new Set(['PREPARE_SOURCE','VERIFY_NATIVE_CONTEXT','VERIFY_EMPTY_RELATIONS','VERIFY_ISOLATED_CRON_SETUP','INITIALIZE_CONTROL','RECONCILE_ARCHIVED_ACLS','VERIFY_PREDECESSORS','INSTALL_PINNED_STATEMENT','INSTALL_APPLICATION_GUARD','VERIFY_SUCCESSORS','VERIFY_OWNER_FENCE','RESTORE_METADATA','RESTORE_MIGRATION_LEDGER','RESTORE_CRON','RESTORE_RELEASES','RESTORE_REGISTRY','VERIFY_RESTORED_METADATA','VERIFY_FINAL_STATE']),
  initializer_operation:new Set(['READ_NATIVE_CONTEXT','EXECUTE_QUERY','READ_PINNED_STATEMENT']),
+ import_operation:new Set(['BEGIN_IMPORT','PLAN_ORDINARY_ORDER','STAGE_PRIVATE_ORIGINALS','CONSUME_ORDINARY_ORIGINALS','FINISH_IMPORT']),
  source_statement:new Set(Array.from({length:13},(_,i)=>String(i+1).padStart(2,'0'))),
  fresh_refusal:new Set(['GLOBAL_FENCE_UNAVAILABLE','EVENT_PREDECESSOR_DIFFERS','MESSENGER_PREDECESSOR_DIFFERS','MESSAGE_GUARD_PREDECESSOR_DIFFERS','MESSAGE_EFFECTS_PREDECESSOR_DIFFERS','MESSAGE_AUDIT_PREDECESSOR_DIFFERS','MESSAGE_RECEIPT_PREDECESSOR_DIFFERS','DEVICE_TRIGGER_DIFFERS','DEVICE_PREDECESSOR_DIFFERS','DEVICE_ACL_DIFFERS','MANAGER_TRIGGER_DIFFERS','MANAGER_PREDECESSOR_DIFFERS','MANAGER_ACL_DIFFERS','EMPLOYEE_PUSH_TRIGGER_DIFFERS','EMPLOYEE_PUSH_PREDECESSOR_DIFFERS','EMPLOYEE_PUSH_ACL_DIFFERS','SOURCE_INVENTORY_EPOCH_UNAVAILABLE','SOURCE_INVENTORY_CONTEXT_CHANGED','SOURCE_INVENTORY_ORIGINAL_CHANGED','IMPORT_ORIGINAL_CONTEXT_CHANGED','IMPORT_FULL_TARGET_CATALOG_MISMATCH','PRIVATE_GUARD_KIND_UNSUPPORTED','MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED','MIXED_INSERT_GUARD_UNSUPPORTED','CURRENT_SOURCE_REGISTRY_STALE']),
 };
+const permissionRefusals=new Map([
+ ['PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED','IMPORT_GUARD_CONTEXT_DENIED'],
+ ['Immutable import policy creator changed','IMPORT_POLICY_CREATOR_CHANGED'],
+ ['Original immutable import context cannot be replaced','IMPORT_CONTEXT_REPLACEMENT_DENIED'],
+ ['Original immutable import context cannot be removed','IMPORT_CONTEXT_REMOVAL_DENIED'],
+ ['Original staged private DATA cannot be replaced or removed','STAGED_DATA_REPLACEMENT_DENIED'],
+ ['Immutable original codec owner unavailable','ORIGINAL_CODEC_OWNER_UNAVAILABLE'],
+ ['Original group owner differs; original object owner required','ORIGINAL_GROUP_OWNER_DENIED'],
+ ['Original application fence owner differs; original object owner required','ORIGINAL_APPLICATION_OWNER_DENIED'],
+]);
+for(const label of [...permissionRefusals.values(),'NATIVE_RELATION_ACCESS_DENIED','NATIVE_SCHEMA_ACCESS_DENIED','NATIVE_FUNCTION_EXECUTE_DENIED','NATIVE_ROW_SECURITY_DENIED'])enums.fresh_refusal.add(label);
 const fixedRefusals=new Map([
  ['Immutable import original global fence unavailable','GLOBAL_FENCE_UNAVAILABLE'],
  ['Exact original event function predecessor differs','EVENT_PREDECESSOR_DIFFERS'],
@@ -46,6 +58,17 @@ const own=(value,key)=>{
  if(!value||typeof value!=='object'||types.isProxy(value))return undefined;
  const d=Object.getOwnPropertyDescriptor(value,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;
 };
+export function classifyImmutableImportPermission(error){
+ if(own(error,'code')!=='42501')return undefined;
+ const message=own(error,'message');if(typeof message!=='string'||message.length>512)return undefined;
+ if(permissionRefusals.has(message))return permissionRefusals.get(message);
+ // Names are discarded. No raw message, detail, row, SQL or identifier export.
+ if(/^permission denied for (?:table|relation) (?:[A-Za-z_][A-Za-z0-9_]*|"[^"]{1,63}")$/.test(message))return 'NATIVE_RELATION_ACCESS_DENIED';
+ if(/^permission denied for schema (?:[A-Za-z_][A-Za-z0-9_]*|"[^"]{1,63}")$/.test(message))return 'NATIVE_SCHEMA_ACCESS_DENIED';
+ if(/^permission denied for function [A-Za-z_][A-Za-z0-9_]*$/.test(message))return 'NATIVE_FUNCTION_EXECUTE_DENIED';
+ if(/^query would be affected by row-level security policy for table "[^"]{1,63}"$/.test(message))return 'NATIVE_ROW_SECURITY_DENIED';
+ return undefined;
+}
 export function immutableFreshDiagnosticFields(value){
  const result={};
  for(const [key,allowed] of Object.entries(enums)){const data=own(value,key);if(allowed.has(data))result[key]=data;}

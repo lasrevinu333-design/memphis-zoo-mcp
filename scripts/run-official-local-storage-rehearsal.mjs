@@ -134,9 +134,9 @@ const insist = (value,message) => { if(!value) throw new Error(message); };
 // One fixed dependency, authenticated before import. The exact URL preserves
 // the host factory's WeakMap instance; the provider receives an owned0400 copy.
 const diagnosticHelperUrl=new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url);
-const diagnosticHelperSha256='1ee4c8699ce504611c08b952c1e8c33e1c7df2adc1b244f539ff2bf8702ae64e';
+const diagnosticHelperSha256='aa8eedfe626edf1f213d475f9ccf762f3f559642a960cafc665dd6883330f6e1';
 const diagnosticHelperBytes=readFileSync(diagnosticHelperUrl);
-insist(diagnosticHelperBytes.length===6127 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
+insist(diagnosticHelperBytes.length===8158 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
 const {readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import(diagnosticHelperUrl.href);
 insist(readFileSync(diagnosticHelperUrl).equals(diagnosticHelperBytes),'Fixed diagnostic helper changed.');
 export function stageOwnedStorageWorker(mount){
@@ -369,7 +369,7 @@ export function privateRestoreStageDiagnostic(phase,event,error=null,freshFields
 export function projectPrivateRestoreDiagnostic(value){
   if(!value||typeof value!=='object'||isProxy(value)||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return null;
   const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
-  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','source_statement','fresh_refusal'];
+  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','source_statement','fresh_refusal'];
   if(keys.some(key=>!allowed.includes(key)||!Object.hasOwn(descriptors[key],'value')||descriptors[key].enumerable!==true))return null;
   const data=Object.fromEntries(keys.map(key=>[key,descriptors[key].value]));
   if(keys.some(key=>key!=='private_payload_exported'&&typeof data[key]!=='string'))return null;
