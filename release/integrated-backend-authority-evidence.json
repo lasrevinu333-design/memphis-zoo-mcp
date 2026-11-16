@@ -1148,6 +1148,11 @@
         "object_id": "45e51917fcb994f038c6cad8ff8d372f2cb1d42f"
       },
       {
+        "path": "release/final-closure-historical-source/eab515c5a2d81cffe7787fa8cfedd9b99197e4f38281037ad4637bd96ce8f508.mjs",
+        "mode": "100644",
+        "object_id": "3b1e9724e7ef08533d386ba7be293cd0227ed3b2"
+      },
+      {
         "path": "release/foundation-ci-workflow-source/4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7.yml",
         "mode": "100644",
         "object_id": "9654d64a85b86d481f2a2910225f605e1b3d136f"
@@ -3695,7 +3700,12 @@
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
         "mode": "100644",
-        "object_id": "3b1e9724e7ef08533d386ba7be293cd0227ed3b2"
+        "object_id": "bee0adcfa4ba0110a3b67a8191e1951f2350c318"
+      },
+      {
+        "path": "scripts/final-closure-historical-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "d3188f44eb082180a7d1726fa25df8d4ba74ccfc"
       },
       {
         "path": "scripts/final-operational-correction-database-tests.mjs",
@@ -4311,6 +4321,11 @@
         "path": "scripts/fixtures/exact-frontend-pair.mjs",
         "mode": "100644",
         "object_id": "03eaf4a0dcb2598b32b4f4d6390a8b5e106ad37b"
+      },
+      {
+        "path": "scripts/fixtures/final-closure-historical-source.mjs",
+        "mode": "100644",
+        "object_id": "8aac3f7c0c6abe66c60e9fa05eadc17a13e10cd4"
       },
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
@@ -12743,7 +12758,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2523,
+    "authority_path_count": 2526,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
