@@ -1,3 +1,4 @@
+import {removeCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -20,6 +21,7 @@ const originalSql=sql=>pairs.reduce((s,[old,next])=>s.replaceAll(next,old),sql).
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 assert.equal(program.recipes.pop().identity,leadershipRestoreIdentity);
 const leadershipContext=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+leadershipContext.sql=removeCurrentTaxonomyGuard(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);
 leadershipContext.sql=removeCurrentLeadershipRestoreSource(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);
 // Review the unchanged predecessor contracts through the complete inverse;
 // the actual new callback/installer has its own affected tests.

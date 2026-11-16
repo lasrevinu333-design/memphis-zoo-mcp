@@ -1,3 +1,4 @@
+import {removeCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -7,6 +8,7 @@ import {removeCurrentLeadershipRestoreSource,leadershipRestoreIdentity} from './
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentCoverallRestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+statement.sql=removeCurrentTaxonomyGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 assert.equal(program.recipes.pop().identity,leadershipRestoreIdentity);
 statement.sql=removeCurrentLeadershipRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('four exact unchanged source-lock consumers preserve the complete previous callback program and all guard behavior',()=>{

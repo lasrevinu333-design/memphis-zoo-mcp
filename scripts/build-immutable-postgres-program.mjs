@@ -8,6 +8,7 @@ import {loadImmutableMessageSourceRecipes} from './immutable-private-message-sou
 import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope,currentDataSchemaDependencyStatements,rebindCurrentDataSchemaDependencies} from './immutable-current-data-schema-scope.mjs';
 import {extendCurrentDeferredReceiptGuards} from './immutable-current-deferred-guard-source.mjs';
 import {currentCoverallRestoreRecipe,extendCurrentCoverallRestoreSource} from './immutable-current-coverall-restore-source.mjs';
+import {extendCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import {currentLeadershipRestoreRecipe,extendCurrentLeadershipRestoreSource} from './immutable-current-leadership-restore-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const body=s=>s.split('AS $function$')[1].slice(0,-'$function$\n'.length);
@@ -99,6 +100,7 @@ const statements=order.map(name=>{
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentDeferredReceiptGuards(name,sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentCoverallRestoreSource(sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentLeadershipRestoreSource(sql);
+ if(name==='immutable-private-owner-context.sql')sql=extendCurrentTaxonomyGuard(sql);
  const wrapper=name==='immutable-original-employee-push-authority-restore.sql'?'DO_ONLY':
  ['immutable-private-owner-context.sql','immutable-original-employee-restore.sql','immutable-original-device-boundary-restore.sql','immutable-original-authority-reconciliation.sql','immutable-original-manager-push-restore.sql'].includes(name)?'OUTER_TRANSACTION':'NONE';
  return {sourcePath:old.sourcePath,originalSourceSha256:old.sourceSha256,sourceSha256:sha(sql),wrapper,sql};

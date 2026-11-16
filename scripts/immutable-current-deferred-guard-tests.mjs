@@ -1,3 +1,4 @@
+import {removeCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -8,6 +9,7 @@ import {removeCurrentLeadershipRestoreSource,leadershipRestoreIdentity} from './
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const bytes=readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'),program=JSON.parse(bytes);
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+statement.sql=removeCurrentTaxonomyGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 assert.equal(program.recipes.pop().identity,leadershipRestoreIdentity);
 statement.sql=removeCurrentLeadershipRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 assert.equal(program.recipes.pop().identity,coverallRestoreIdentity);

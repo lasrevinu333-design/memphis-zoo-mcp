@@ -5,6 +5,7 @@ import './immutable-current-data-schema-scope-tests.mjs';
 import './immutable-current-deferred-guard-tests.mjs';
 import './immutable-current-coverall-restore-tests.mjs';
 import './immutable-current-leadership-restore-tests.mjs';
+import './immutable-current-taxonomy-guard-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.
