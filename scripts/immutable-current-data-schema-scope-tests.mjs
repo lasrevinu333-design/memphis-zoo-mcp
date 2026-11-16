@@ -1,3 +1,4 @@
+import {removeCurrentCoverageRestoreSource,coverageRestoreIdentity} from './immutable-current-coverage-restore-source.mjs';
 import {removeCurrentOc24RestoreSource,oc24RestoreIdentity} from './immutable-current-oc24-restore-source.mjs';
 import {removeCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import test from 'node:test';
@@ -21,6 +22,8 @@ const pairs=[
 const originalSql=sql=>pairs.reduce((s,[old,next])=>s.replaceAll(next,old),sql).replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const leadershipContext=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.equal(program.recipes.pop().identity,coverageRestoreIdentity);
+leadershipContext.sql=removeCurrentCoverageRestoreSource(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);
 assert.equal(program.recipes.pop().identity,oc24RestoreIdentity);
 leadershipContext.sql=removeCurrentOc24RestoreSource(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);
 leadershipContext.sql=removeCurrentTaxonomyGuard(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);

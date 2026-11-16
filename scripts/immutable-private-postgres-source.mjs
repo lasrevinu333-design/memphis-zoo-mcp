@@ -5,7 +5,7 @@ import {dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 const path=fileURLToPath(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url));
-const pin='04a835ab262acc395e49c28657ed151895488ec95bfc46ed40de483cdb33e14a',size=516611;
+const pin='52e8a18627da3483b764ef420fcc804c7f0eaabb9aa11de4fe75895c841744ad',size=527603;
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const identity=s=>[s.dev,s.ino,s.mode,s.uid,s.gid,s.nlink,s.size,s.mtimeNs,s.ctimeNs];
 function snapshot(pathname=path,expectedPin=pin,expectedSize=size){
@@ -28,11 +28,12 @@ export function loadImmutableCurrentPostgresSource(){
  const program=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(original.bytes));
  assert.equal(program.format,'custodial.immutable-private-current-postgres-program.v1');
  assert.deepEqual(program.profile,{id:'immutable-private-current-postgres',actor:'postgres'});
- assert.equal(program.recipes.length,26);assert.equal(program.statements.length,13);
- assert.equal(new Set(program.recipes.map(r=>r.identity)).size,26);
- assert.equal(program.recipes.at(-3).identity,'custodial_coverall.bind_manual_delivery_after_acceptance()');
- assert.equal(program.recipes.at(-2).identity,'custodial_leadership_private.bind_registration_generation()');
- assert.equal(program.recipes.at(-1).identity,'public.custodial_oc24_completion_selection_guard()');
+ assert.equal(program.recipes.length,27);assert.equal(program.statements.length,13);
+ assert.equal(new Set(program.recipes.map(r=>r.identity)).size,27);
+ assert.equal(program.recipes.at(-4).identity,'custodial_coverall.bind_manual_delivery_after_acceptance()');
+ assert.equal(program.recipes.at(-3).identity,'custodial_leadership_private.bind_registration_generation()');
+ assert.equal(program.recipes.at(-2).identity,'public.custodial_oc24_completion_selection_guard()');
+ assert.equal(program.recipes.at(-1).identity,'public.sch_guard_operational_coverage_template()');
  for(const r of program.recipes){assert.equal(sha(r.before),r.beforeHash);assert.equal(sha(r.after),r.afterHash);}
  for(const s of program.statements)assert.equal(sha(s.sql),s.sourceSha256);
  const assertCurrent=function(){assert.equal(arguments.length,0);const now=snapshot();assert.deepEqual(now.identity,original.identity);assert.deepEqual(now.parents,original.parents);assert.ok(now.bytes.equals(original.bytes));const current=provenance();assert.deepEqual(current.identity,installed.identity);assert.deepEqual(current.parents,installed.parents);assert.ok(current.bytes.equals(installed.bytes));};

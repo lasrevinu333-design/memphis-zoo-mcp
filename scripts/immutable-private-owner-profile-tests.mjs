@@ -22,7 +22,7 @@ function fixture(actor='postgres'){
  return {inventory:{'inventory/original-guards.json':JSON.stringify(guards),'inventory/original-relations.json':JSON.stringify(relations),'inventory/original-acls.json':JSON.stringify(acls)},catalog:{functions:recipes.map(r=>({schema_name:r.identity.split('.')[0],function_name:r.identity.split('.')[1].slice(0,-2),identity_arguments:'',definition:r.before}))}};
 }
 const mutate=(data,file,fn)=>{const v=JSON.parse(data.inventory[file]);fn(v);data.inventory[file]=JSON.stringify(v);};
-test('exact28 current original definitions and complete postgres owner evidence derive fixed DATA',()=>{
+test('exact29 current original definitions and complete postgres owner evidence derive fixed DATA',()=>{
  const p=inspectImmutableOriginalOwnerData(fixture());assert.deepEqual(p,{id:'immutable-private-current-postgres',actor:'postgres'});assert.ok(Object.isFrozen(p));
 });
 test('legacy source program stays explicit and unchanged',()=>{
@@ -55,7 +55,7 @@ test('caller supplied objects never become branded archive/source/statement auth
 });
 test('fixed program reproduces from pinned public Source; every emitted SQL and recipe hash matches',()=>{
  execFileSync(process.execPath,['scripts/build-immutable-postgres-program.mjs','--check']);const p=loadImmutableCurrentPostgresSource();
- assert.equal(p.recipes.length,26);assert.equal(p.statements.length,13);
+ assert.equal(p.recipes.length,27);assert.equal(p.statements.length,13);
  for(const r of p.recipes){assert.equal(sha(r.before),r.beforeHash);assert.equal(sha(r.after),r.afterHash);assert.ok(!r.after.includes('supabase_admin'));}
  for(const s of p.statements){assert.equal(sha(s.sql),s.sourceSha256);assert.ok(!s.sql.includes('supabase_admin'));}
  p.assertCurrent();assert.throws(()=>loadImmutableCurrentPostgresSource('postgres'));assert.throws(()=>p.assertCurrent('ignored'));

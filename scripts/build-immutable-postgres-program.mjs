@@ -8,6 +8,7 @@ import {loadImmutableMessageSourceRecipes} from './immutable-private-message-sou
 import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope,currentDataSchemaDependencyStatements,rebindCurrentDataSchemaDependencies} from './immutable-current-data-schema-scope.mjs';
 import {extendCurrentDeferredReceiptGuards} from './immutable-current-deferred-guard-source.mjs';
 import {currentCoverallRestoreRecipe,extendCurrentCoverallRestoreSource} from './immutable-current-coverall-restore-source.mjs';
+import {currentCoverageRestoreRecipe,extendCurrentCoverageRestoreSource} from './immutable-current-coverage-restore-source.mjs';
 import {currentOc24RestoreRecipe,extendCurrentOc24RestoreSource} from './immutable-current-oc24-restore-source.mjs';
 import {extendCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import {currentLeadershipRestoreRecipe,extendCurrentLeadershipRestoreSource} from './immutable-current-leadership-restore-source.mjs';
@@ -103,11 +104,12 @@ const statements=order.map(name=>{
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentLeadershipRestoreSource(sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentTaxonomyGuard(sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentOc24RestoreSource(sql);
+ if(name==='immutable-private-owner-context.sql')sql=extendCurrentCoverageRestoreSource(sql);
  const wrapper=name==='immutable-original-employee-push-authority-restore.sql'?'DO_ONLY':
  ['immutable-private-owner-context.sql','immutable-original-employee-restore.sql','immutable-original-device-boundary-restore.sql','immutable-original-authority-reconciliation.sql','immutable-original-manager-push-restore.sql'].includes(name)?'OUTER_TRANSACTION':'NONE';
  return {sourcePath:old.sourcePath,originalSourceSha256:old.sourceSha256,sourceSha256:sha(sql),wrapper,sql};
 });
-const result={format:'custodial.immutable-private-current-postgres-program.v1',profile:{id:'immutable-private-current-postgres',actor:'postgres'},provenance:{sourcePath:installedPath,sourceSha256:sha(installed),definitions:specs.map(([identity,,sha256])=>({identity,sha256}))},recipes:[...recipes,currentCoverallRestoreRecipe(),currentLeadershipRestoreRecipe(),currentOc24RestoreRecipe()],statements};
+const result={format:'custodial.immutable-private-current-postgres-program.v1',profile:{id:'immutable-private-current-postgres',actor:'postgres'},provenance:{sourcePath:installedPath,sourceSha256:sha(installed),definitions:specs.map(([identity,,sha256])=>({identity,sha256}))},recipes:[...recipes,currentCoverallRestoreRecipe(),currentLeadershipRestoreRecipe(),currentOc24RestoreRecipe(),currentCoverageRestoreRecipe()],statements};
 domain.assertCurrent();messages.assertCurrent();
 const output=JSON.stringify(result,null,2)+'\n';
 if(process.argv.includes('--check'))assert.equal(readFileSync('proposals/immutable-private-current-postgres-program.json','utf8'),output);
