@@ -32,9 +32,40 @@ export function currentCoverallRestoreRecipe(){
  return Object.freeze({identity:coverallRestoreIdentity,registry_identity:coverallRestoreIdentity,before,after,
   beforeHash:sha(before),afterHash:sha(after),beforeBodyHash:sha(original),afterBodyHash:sha(afterBody)});
 }
+export function currentManualPlanSourceFenceGuard(){
+ assert.equal(arguments.length,0);
+ const source=readFileSync(new URL('../release/installed-source/20261022071830_recurring_normal_notification_plan.sql',import.meta.url),'utf8');
+ assert.equal(sha(source),'f3083dba31b1973cd42692362ceda5e4c08d505c063ceb505c75214dd4e16c95');
+ const marker='create function public.static_weekly_v27_notification_plan_source_write_fence()\n';assert.equal(source.split(marker).length,2);
+ const at=source.indexOf(marker),start=source.indexOf('as $fence$',at)+'as $fence$'.length,end=source.indexOf('$fence$;',start);assert.ok(start>at&&end>start);
+ const definition="CREATE OR REPLACE FUNCTION public.static_weekly_v27_notification_plan_source_write_fence()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$"+source.slice(start,end)+'$function$\n';
+ assert.equal(sha(definition),'4fc0ef22db650c17c5d98a35ef62ba165c6fe7301408bd9aab454e875a724fff');
+ // currentCoverallRestoreRecipe also authenticates the complete installation
+ // Source declaring the three-table loop and fourth lunch-proof consumer.
+ currentCoverallRestoreRecipe();
+ return `     -- Exact four retained manual-plan source fences still take their shared lock.
+     AND NOT EXISTS(
+      SELECT 1 FROM (VALUES
+       ('manual_application_bindings','custodial_manual_notification_plan_source_fence'),
+       ('manual_application_intents','custodial_manual_notification_plan_source_fence'),
+       ('manual_application_receipts','custodial_manual_notification_plan_source_fence'),
+       ('manual_lunch_admission_proofs','manual_lunch_proof_source_fence')
+      ) manual_fence(table_name,trigger_name)
+      WHERE current_user=session_user AND session_user='postgres'
+       AND guard_relation_namespace.nspname='custodial_coverall' AND guard_relation.relname=manual_fence.table_name
+       AND item->>'schema_name'='custodial_coverall' AND item->>'table_name'=manual_fence.table_name
+       AND t.tgname=manual_fence.trigger_name AND t.tgtype=62 AND t.tgenabled='A'
+       AND NOT t.tgisinternal AND t.tgconstraint=0 AND NOT t.tgdeferrable AND NOT t.tginitdeferred
+       AND t.tgqual IS NULL AND t.tgnargs=0 AND octet_length(t.tgargs)=0 AND t.tgattr=''::int2vector
+       AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL
+       AND t.tgfoid=to_regprocedure('public.static_weekly_v27_notification_plan_source_write_fence()')
+       AND guard_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=session_user)
+       AND public.static_weekly_digest_text(pg_get_functiondef(guard_function.oid))='4fc0ef22db650c17c5d98a35ef62ba165c6fe7301408bd9aab454e875a724fff')
+`;
+}
 function parts(){
  const r=currentCoverallRestoreRecipe();
- const guard=`     -- One Source-attested callback; its exact-original branch is installed below.
+ const callbackGuard=`     -- One Source-attested callback; its exact-original branch is installed below.
      AND NOT (current_user=session_user AND session_user='postgres'
       AND guard_relation_namespace.nspname='custodial_coverall' AND guard_relation.relname='activation_receipts'
       AND t.tgname='manual_operational_delivery_complete' AND t.tgtype=5 AND t.tgenabled='O'
@@ -45,6 +76,7 @@ function parts(){
       AND guard_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=session_user)
       AND public.static_weekly_digest_text(pg_get_functiondef(guard_function.oid))='${r.afterHash}')
 `;
+ const guard=callbackGuard+currentManualPlanSourceFenceGuard();
  const install=`
 -- Exact current Source-only callback integration, before original import seals
 -- its full target shape. Both original trigger consumers/ACLs remain intact.
