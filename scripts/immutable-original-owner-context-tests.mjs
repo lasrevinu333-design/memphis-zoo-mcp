@@ -1,4 +1,4 @@
-import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableImportPermission} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext} from './immutable-private-stage-diagnostic.mjs';
 import './isolated-current-postgres-cron-setup-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
@@ -10,13 +10,31 @@ import {readFileSync} from 'node:fs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 const text=file=>readFileSync(new URL(file,import.meta.url),'utf8');
-const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,classifyImmutableImportPermission,...deps};return new Function(...Object.keys(deps),text(file)
+const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,...deps};return new Function(...Object.keys(deps),text(file)
  .replace(/^import\s[\s\S]*?;\n/gm,'').replaceAll('export async function','async function')+'\nreturn '+result+';')(...Object.values(deps));};
 const profiles=[
  Object.freeze({id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'}),
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('native permission context exposes only an authenticated-catalog schema and fixed operation, omitting ambiguous names',()=>{
+ const cause=Object.assign(new Error('permission denied for table private_records'),{code:'42501',where:'SQL statement "LOCK TABLE auth.private_records IN ACCESS EXCLUSIVE MODE"\nPRIVATE ROW AND SQL'});
+ const tables=[{schema_name:'auth',table_name:'private_records'}],value=classifyImmutableImportPermissionContext(cause,tables);
+ assert.deepEqual(value,{import_relation_schema:'auth',import_native_operation:'LOCK_RELATION_ACCESS_EXCLUSIVE'});
+ assert.doesNotMatch(JSON.stringify(value),/private_records|PRIVATE ROW|PRIVATE SQL/);
+ assert.equal(classifyImmutableImportPermissionContext(cause,[...tables,{schema_name:'public',table_name:'private_records'}]).import_relation_schema,undefined);
+ assert.equal(classifyImmutableImportPermissionContext(cause,[{schema_name:'unknown',table_name:'private_records'}]).import_relation_schema,undefined);
+ assert.equal(classifyImmutableImportPermissionContext(cause,[{schema_name:'auth',table_name:'different'}]).import_relation_schema,undefined);
+ const count=Object.assign(new Error(cause.message),{code:'42501',where:'SQL statement "SELECT count(*) FROM ONLY auth.private_records"'});
+ assert.equal(classifyImmutableImportPermissionContext(count,tables).import_native_operation,'COUNT_RELATION_ROWS');
+ let traps=0;const hostile={schema_name:'auth'};Object.defineProperty(hostile,'table_name',{get(){traps++;return 'private_records';}});
+ assert.equal(classifyImmutableImportPermissionContext(cause,[hostile]).import_relation_schema,undefined);assert.equal(traps,0);
+ const error=Object.assign(new Error('PRIVATE SQL'),{sql_state:'42501',code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'});
+ recordImmutableFreshFailure(error,{import_operation:'BEGIN_IMPORT',fresh_refusal:'NATIVE_RELATION_ACCESS_DENIED',...value});
+ const projected=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);assert.deepEqual(projectPrivateRestoreDiagnostic(projected),projected);
+ const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[projected]})));
+ assert.deepEqual(receipt.restore_diagnostics,[projected]);
+});
 test('private import permission diagnostics retain only closed class and operation, never native errors or identifiers',()=>{
  const source=text('./immutable-private-data-import.mjs'),start=source.indexOf('function fail('),end=source.indexOf('\nfunction closed(',start);
  assert.ok(start>0&&end>start);

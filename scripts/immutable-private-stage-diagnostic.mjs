@@ -7,6 +7,8 @@ const enums={
  initializer_stage:new Set(['PREPARE_SOURCE','VERIFY_NATIVE_CONTEXT','VERIFY_EMPTY_RELATIONS','VERIFY_ISOLATED_CRON_SETUP','INITIALIZE_CONTROL','RECONCILE_ARCHIVED_ACLS','VERIFY_PREDECESSORS','INSTALL_PINNED_STATEMENT','INSTALL_APPLICATION_GUARD','VERIFY_SUCCESSORS','VERIFY_OWNER_FENCE','RESTORE_METADATA','RESTORE_MIGRATION_LEDGER','RESTORE_CRON','RESTORE_RELEASES','RESTORE_REGISTRY','VERIFY_RESTORED_METADATA','VERIFY_FINAL_STATE']),
  initializer_operation:new Set(['READ_NATIVE_CONTEXT','EXECUTE_QUERY','READ_PINNED_STATEMENT']),
  import_operation:new Set(['BEGIN_IMPORT','PLAN_ORDINARY_ORDER','STAGE_PRIVATE_ORIGINALS','CONSUME_ORDINARY_ORIGINALS','FINISH_IMPORT']),
+ import_relation_schema:new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']),
+ import_native_operation:new Set(['LOCK_RELATION_ACCESS_EXCLUSIVE','COUNT_RELATION_ROWS']),
  source_statement:new Set(Array.from({length:13},(_,i)=>String(i+1).padStart(2,'0'))),
  fresh_refusal:new Set(['GLOBAL_FENCE_UNAVAILABLE','EVENT_PREDECESSOR_DIFFERS','MESSENGER_PREDECESSOR_DIFFERS','MESSAGE_GUARD_PREDECESSOR_DIFFERS','MESSAGE_EFFECTS_PREDECESSOR_DIFFERS','MESSAGE_AUDIT_PREDECESSOR_DIFFERS','MESSAGE_RECEIPT_PREDECESSOR_DIFFERS','DEVICE_TRIGGER_DIFFERS','DEVICE_PREDECESSOR_DIFFERS','DEVICE_ACL_DIFFERS','MANAGER_TRIGGER_DIFFERS','MANAGER_PREDECESSOR_DIFFERS','MANAGER_ACL_DIFFERS','EMPLOYEE_PUSH_TRIGGER_DIFFERS','EMPLOYEE_PUSH_PREDECESSOR_DIFFERS','EMPLOYEE_PUSH_ACL_DIFFERS','SOURCE_INVENTORY_EPOCH_UNAVAILABLE','SOURCE_INVENTORY_CONTEXT_CHANGED','SOURCE_INVENTORY_ORIGINAL_CHANGED','IMPORT_ORIGINAL_CONTEXT_CHANGED','IMPORT_FULL_TARGET_CATALOG_MISMATCH','PRIVATE_GUARD_KIND_UNSUPPORTED','MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED','MIXED_INSERT_GUARD_UNSUPPORTED','CURRENT_SOURCE_REGISTRY_STALE']),
 };
@@ -68,6 +70,25 @@ export function classifyImmutableImportPermission(error){
  if(/^permission denied for function [A-Za-z_][A-Za-z0-9_]*$/.test(message))return 'NATIVE_FUNCTION_EXECUTE_DENIED';
  if(/^query would be affected by row-level security policy for table "[^"]{1,63}"$/.test(message))return 'NATIVE_ROW_SECURITY_DENIED';
  return undefined;
+}
+export function classifyImmutableImportPermissionContext(error,tables){
+ const result={};if(classifyImmutableImportPermission(error)!=='NATIVE_RELATION_ACCESS_DENIED')return Object.freeze(result);
+ const message=own(error,'message'),match=/^permission denied for (?:table|relation) (?:"([^"]{1,63})"|([A-Za-z_][A-Za-z0-9_]*))$/.exec(message);
+ if(match&&Array.isArray(tables)&&!types.isProxy(tables)){
+  const schemas=[];
+  for(const key of Reflect.ownKeys(tables)){
+   if(typeof key!=='string'||!(/^(0|[1-9][0-9]*)$/.test(key)))continue;
+   const row=own(tables,key),schema=own(row,'schema_name');
+   if(own(row,'table_name')===(match[1]??match[2])&&enums.import_relation_schema.has(schema))schemas.push(schema);
+  }
+  if(schemas.length===1)result.import_relation_schema=schemas[0];
+ }
+ const context=own(error,'where');
+ if(typeof context==='string'&&context.length<=16384){
+  if(/SQL statement "LOCK TABLE [^\n"]{1,192} IN ACCESS EXCLUSIVE MODE"/.test(context))result.import_native_operation='LOCK_RELATION_ACCESS_EXCLUSIVE';
+  else if(/SQL statement "SELECT count\(\*\) FROM ONLY [^\n"]{1,192}"/.test(context))result.import_native_operation='COUNT_RELATION_ROWS';
+ }
+ return Object.freeze(result);
 }
 export function immutableFreshDiagnosticFields(value){
  const result={};

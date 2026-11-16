@@ -1,4 +1,4 @@
-import {recordImmutableFreshFailure,classifyImmutableImportPermission} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import {createInterface} from 'node:readline';
@@ -983,7 +983,8 @@ export async function stageVerifiedImmutablePrivateData(options) {
   let importOperation='BEGIN_IMPORT';
   async function sql(text,args=[]) {
     sameSource(verifiedArchive,original);
-    let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',{import_operation:importOperation});}
+    let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',
+      {import_operation:importOperation,...classifyImmutableImportPermissionContext(error,original.selection.databaseTables)});}
     sameSource(verifiedArchive,original);return result;
   }
   const initial=await sql('select custodial_dr.begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb) as context',
