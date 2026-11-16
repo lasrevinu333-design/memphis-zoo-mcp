@@ -5,6 +5,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
+import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope} from './immutable-current-data-schema-scope.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const body=s=>s.split('AS $function$')[1].slice(0,-'$function$\n'.length);
 const once=(s,a,b)=>{assert.equal(s.split(a).length,2);return s.replace(a,()=>b);};
@@ -90,6 +91,7 @@ const statements=order.map(name=>{
   const predicate="IF (SELECT count(*) FROM pg_catalog.aclexplode(coalesce(original.proacl,pg_catalog.acldefault('f',owner_oid))))<>";
   sql=once(sql,predicate+'2',predicate+'1');
  }
+ if(currentDataSchemaScopeStatements.includes(name))sql=extendCurrentPostgresDataSchemaScope(name,sql);
  const wrapper=name==='immutable-original-employee-push-authority-restore.sql'?'DO_ONLY':
  ['immutable-private-owner-context.sql','immutable-original-employee-restore.sql','immutable-original-device-boundary-restore.sql','immutable-original-authority-reconciliation.sql','immutable-original-manager-push-restore.sql'].includes(name)?'OUTER_TRANSACTION':'NONE';
  return {sourcePath:old.sourcePath,originalSourceSha256:old.sourceSha256,sourceSha256:sha(sql),wrapper,sql};
