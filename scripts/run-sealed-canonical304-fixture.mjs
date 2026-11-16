@@ -8,7 +8,7 @@ import {validateOwnedDiskParent} from './ci-fresh-owned-disk.mjs';
 import {exportCiFreshOnlyFailureEvidence} from './ci-fresh-only-replay.mjs';
 import {withSealedCanonical304SourceFixture} from './fixtures/sealed-canonical304-source-fixture.mjs';
 import {withCanonical304KernelResourceDriver} from './canonical304-kernel-resource-view.mjs';
-import {withCanonical304HistoricalStateDriver} from './canonical304-historical-state-view.mjs';
+import {withOffdayHistoricalSource} from './manual-offday-owned-source-view.mjs';
 assert.equal(process.argv.length,4);assert.equal(process.argv[2],'--out');
 const out=resolve(process.argv[3]);assert.equal(out,process.argv[3],'Exact absolute evidence output required');
 assert.equal(lstatSync(out,{throwIfNoEntry:false}),undefined,'New evidence path only; never reuse a consumed rehearsal');
@@ -27,7 +27,7 @@ await withSealedCanonical304SourceFixture(root,async(fixture,receipt)=>{
  console.log(JSON.stringify({status:'EXACT_HISTORICAL304_SOURCE_SELECTED',...receipt,SQL_executed:false}));
  const result=await withCanonical304KernelResourceDriver(fixture,async(driver,proof)=>{
   console.log(JSON.stringify(proof));
-  return withCanonical304HistoricalStateDriver(fixture,driver,async(selected,historyProof)=>{
+  return withOffdayHistoricalSource(fixture,driver,async(selected,historyProof)=>{
    console.log(JSON.stringify(historyProof));
    return spawnSync(process.execPath,[...process.execArgv,selected,'--out',out],
     {cwd:fixture,env:{...process.env,TMPDIR:diskTmp},stdio:'inherit'});

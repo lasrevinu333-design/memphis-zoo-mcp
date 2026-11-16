@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {deriveManualOffdaySource} from './manual-offday-source-successor.mjs';
+const original=fs.readFileSync(new URL('../src/approved-manual-period-projection.js',import.meta.url));
+test('candidate derives only from exact original source and preserves original inverse',()=>{const r=deriveManualOffdaySource(original);assert.equal(r.proof.candidateBytes,23488);assert.equal(r.proof.runtimeRouted,false);assert.equal(r.proof.SQLChanged,false);assert.ok(r.source.includes('acceptedExceptionsDigest:digest(acceptedExceptions)'));});
+test('wrong source, hash drift, substituted guard and already-derived candidate refuse',()=>{for(const input of [Buffer.concat([original,Buffer.from('\n')]),original.toString().replace('assert.equal','assert.notEqual'),deriveManualOffdaySource(original).source])assert.throws(()=>deriveManualOffdaySource(input));});

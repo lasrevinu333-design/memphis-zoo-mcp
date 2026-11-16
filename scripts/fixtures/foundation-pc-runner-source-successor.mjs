@@ -19,10 +19,16 @@ export function restoreFoundationPcRunnerWorkflow(source,name){
  source=restoreSplitFoundationWorkflow(source,name);
  if(name==='foundation-security-gate.yml'&&sha(source)==='4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7'){
   // Exact current observer successor; frozen canonical304 driver/SQL unchanged.
-  assert.equal(sha(readFileSync(new URL('../run-sealed-canonical304-fixture.mjs',import.meta.url))),'2916b59a84074c7ff8f9c81dc55722685d3d5d278c88cbb2ba37c6e8c4980c73');
+  assert.equal(sha(readFileSync(new URL('../run-sealed-canonical304-fixture.mjs',import.meta.url))),'7fcacecdf43c0ac016c3c4daa76b1896899b1f623b69a9c4c0b4943b381a2e2c');
   assert.equal(sha(readFileSync(new URL('../canonical304-kernel-resource-view.mjs',import.meta.url))),'2bc4777d641f84331fa7f88e980f5c6656f2936d716452cb22c8e0b3aaaf9f29');
   assert.equal(sha(readFileSync(new URL('../canonical304-historical-state-view.mjs',import.meta.url))),'e1337a7201b07f8488a52e37ab8e14b6bb0beb639438e087a32901c9b6841fa1');
   assert.equal(sha(readFileSync(new URL('../manual-period-historical-state-successor.mjs',import.meta.url))),'052090bdfa009fa3bfd79720c98f7dd770a95444c0bd038bfc865746e73f4ce2');
+  assert.equal(sha(readFileSync(new URL('../manual-offday-owned-source-view.mjs',import.meta.url))),'3e622967dd872528a0cada144ef1381433591a4437d97cee43901471527318d2');
+  assert.equal(sha(readFileSync(new URL('../manual-offday-historical-routing.mjs',import.meta.url))),'968e2070165f81075428935a21dec9a97519d53079fa1d163c95f790ed95be5c');
+  assert.equal(sha(readFileSync(new URL('../manual-offday-child-source-view.mjs',import.meta.url))),'a611ae9e7137efa82f454f3b7b2238865f46e1403afa2a393fc55844c9e52084');
+  assert.equal(sha(readFileSync(new URL('../manual-offday-source-successor.mjs',import.meta.url))),'b35920108637fa1e27d5da89a217d6b6b830c79570d7f61feb78c84a2ff2ede5');
+  assert.equal(sha(readFileSync(new URL('../../release/offday-child-source-closure.json',import.meta.url))),'e63d8eb506c7cdd919bd92b84599fecfdfa5ebc3a24d34ec231e51b69c95e6d2');
+  assert.equal(sha(readFileSync(new URL('../../release/offday-historical304-source-closure.json',import.meta.url))),'184c5b11df2b715a77b0d9f05f4cd6c49cfb619b4ab76badbc8e030e282b4aff');
   assert.equal(sha(readFileSync(new URL('../fixture-cgroup-memory-contract.mjs',import.meta.url))),'6809f2075d489359a35af840db0bf09ae58a0995d6d3b93b6ab0e3fd352e8d86');
   assert.equal(sha(readFileSync(new URL('../run-retained-release-provenance-tests.mjs',import.meta.url))),
    '6f49f7bc0d09a984e17ea747683d5cc266896319e05bd98a1eeabc7669ec7f20');

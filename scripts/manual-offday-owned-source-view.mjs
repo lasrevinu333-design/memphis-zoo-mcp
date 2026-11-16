@@ -1,0 +1,13 @@
+// Scoped temporary source ownership only. This wrapper never creates a database.
+import assert from 'node:assert/strict';import {createHash,randomBytes} from 'node:crypto';import {resolve} from 'node:path';import {readFileSync,realpathSync,lstatSync,openSync,writeFileSync,fsyncSync,fstatSync,closeSync,unlinkSync,constants} from 'node:fs';import {readOffdayHistoricalClosure,deriveOffdayHistoricalRouting,deriveOffdayHistoricalDriver} from './manual-offday-historical-routing.mjs';import {deriveCanonical304KernelResourceDriver} from './canonical304-kernel-resource-view.mjs';
+const sha=x=>createHash('sha256').update(x).digest('hex');
+export async function withOffdayHistoricalSource(root,kernelPath,run){
+ assert.equal(root,resolve(root));assert.equal(realpathSync(root),root);assert.equal(typeof run,'function');
+ const originals=readOffdayHistoricalClosure(),kernel=readFileSync(kernelPath),frozen=readFileSync(resolve(root,'scripts/sealed-repair-canonical-database-tests.mjs'));assert.deepEqual(Buffer.from(deriveCanonical304KernelResourceDriver(frozen).driver),kernel);
+ const tag=randomBytes(12).toString('hex'),routing=deriveOffdayHistoricalRouting({files:originals,tag}),driver=deriveOffdayHistoricalDriver({routing}),driverPath='scripts/.offday-driver-'+tag+'.mjs',owned=[];
+ const verify=()=>{assert.deepEqual(readFileSync(kernelPath),kernel);for(const[path,bytes]of originals)assert.deepEqual(readFileSync(resolve(root,path)),bytes,'Selected original changed: '+path);for(const o of owned){const held=fstatSync(o.fd,{bigint:true}),s=lstatSync(o.path,{bigint:true});assert.ok(s.isFile()&&!s.isSymbolicLink()&&s.nlink===1n);for(const x of [s,held])for(const k of ['dev','ino','uid','mode','size','ctimeNs','birthtimeNs'])assert.equal(x[k],o.identity[k]);assert.equal(sha(readFileSync(o.path)),o.sha);}};
+ verify();
+ try{for(const f of [...routing.files,{path:driverPath,source:driver.driver}]){const path=resolve(root,f.path);assert.ok(path.startsWith(root+'/'));const fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_RDWR|constants.O_NOFOLLOW,0o400);try{writeFileSync(fd,f.source);fsyncSync(fd);owned.push({path,fd,identity:fstatSync(fd,{bigint:true}),sha:sha(f.source)});}catch(e){closeSync(fd);throw e;}}
+  verify();const result=await run(resolve(root,driverPath),{...routing.proof,driver:driver.proof,ownedCandidates:owned.map(o=>({path:o.path,sha256:o.sha})),SQLExecuted:false});verify();return result;
+ }finally{let error;try{verify();for(const o of [...owned].reverse())unlinkSync(o.path);}catch(e){error=e;}finally{for(const o of owned)closeSync(o.fd);}if(error)throw error;}
+}
