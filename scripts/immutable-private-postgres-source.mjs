@@ -5,7 +5,7 @@ import {dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 const path=fileURLToPath(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url));
-const pin='5b171d6a35ab4776e4f4ca764cff78fbfbc5aee26184c79bfada9c0818471e25',size=503136;
+const pin='77e8877d0ca63aacb23e96f10b98888f896007bf530c8db54c102c5a1a6030fe',size=504143;
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const identity=s=>[s.dev,s.ino,s.mode,s.uid,s.gid,s.nlink,s.size,s.mtimeNs,s.ctimeNs];
 function snapshot(pathname=path,expectedPin=pin,expectedSize=size){
