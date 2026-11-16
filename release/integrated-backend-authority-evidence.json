@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "9654d64a85b86d481f2a2910225f605e1b3d136f"
+        "object_id": "a1d3f74b869aa5ea9df92252f5c2357b75f033ba"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -1146,6 +1146,11 @@
         "path": "release/disaster-recovery-runtime-contract.json",
         "mode": "100644",
         "object_id": "45e51917fcb994f038c6cad8ff8d372f2cb1d42f"
+      },
+      {
+        "path": "release/foundation-ci-workflow-source/4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7.yml",
+        "mode": "100644",
+        "object_id": "9654d64a85b86d481f2a2910225f605e1b3d136f"
       },
       {
         "path": "release/fresh-only-replay/BOOTSTRAP.sql",
@@ -4310,7 +4315,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "1e23c6ed1554cbf7f35ded1866d34ef50355818a"
+        "object_id": "610abce38a84e7a2836bb08328fa7d09c601fec6"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -5266,6 +5271,16 @@
         "path": "scripts/fixtures/visitor-attendance-runtime-fixture.mjs",
         "mode": "100644",
         "object_id": "8843bf259a7866b1ef6989f147e051f646d4d907"
+      },
+      {
+        "path": "scripts/foundation-ci-split-layout-tests.mjs",
+        "mode": "100644",
+        "object_id": "a95c5f7ee61e46d5d9ef90071c6c656b15e6e9fb"
+      },
+      {
+        "path": "scripts/foundation-ci-split-layout.mjs",
+        "mode": "100644",
+        "object_id": "2489f9a631b2428ca0a6c56ff70401b679e51f72"
       },
       {
         "path": "scripts/foundation-repair-tests.mjs",
@@ -12728,7 +12743,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2520,
+    "authority_path_count": 2523,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
