@@ -988,6 +988,11 @@
         "object_id": "453dac0f417aa9973163f5b5210d0faa270926ee"
       },
       {
+        "path": "release/canonical304-history-source/2916b59a84074c7ff8f9c81dc55722685d3d5d278c88cbb2ba37c6e8c4980c73.mjs",
+        "mode": "100644",
+        "object_id": "36f0fdaead17d02c1c4365c01bdf677a70fd77ce"
+      },
+      {
         "path": "release/canonical304-history-source/42bee2609d2011741455b37cfe361819ccd04d78223b61628eef2778f6e5dbc7.mjs",
         "mode": "100644",
         "object_id": "a7fd133defabc66844563e8ef6080f084538557c"
@@ -1611,6 +1616,16 @@
         "path": "release/native-manual-staffing-20261030/original-pto-acceptance-receipt.json",
         "mode": "100644",
         "object_id": "42614a1fc30ba6431c6cb6c98a12297e4c2a81a7"
+      },
+      {
+        "path": "release/offday-child-source-closure.json",
+        "mode": "100644",
+        "object_id": "f341ac0d73392c91fb80568ad5f3eeb24080c980"
+      },
+      {
+        "path": "release/offday-historical304-source-closure.json",
+        "mode": "100644",
+        "object_id": "6abbad6a3a33ba546bda6f164ceed36dd218c8f6"
       },
       {
         "path": "release/owner-access-schema-delta.json",
@@ -2676,6 +2691,16 @@
         "path": "scripts/approved-manual-notification-continuity-tests.mjs",
         "mode": "100644",
         "object_id": "94ca63123355255c6f8c4fec13b5d06c9009f8b6"
+      },
+      {
+        "path": "scripts/approved-manual-offday-feasibility-tests.mjs",
+        "mode": "100644",
+        "object_id": "84de6c501f3c52c4d87aa53521a99c66dc932e2f"
+      },
+      {
+        "path": "scripts/approved-manual-offday-two-frame-tests.mjs",
+        "mode": "100644",
+        "object_id": "95e4b44790a4644d8cf4be61ed9b59e5bcdfe899"
       },
       {
         "path": "scripts/approved-manual-period-projection-tests.mjs",
@@ -4350,7 +4375,7 @@
       {
         "path": "scripts/fixtures/foundation-pc-runner-source-successor.mjs",
         "mode": "100644",
-        "object_id": "537baf8411b0dc615679fc24aaf18d5d483ea4e7"
+        "object_id": "bbfc370af00b3b589c4e9433e61f488e655de993"
       },
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
@@ -4476,6 +4501,11 @@
         "path": "scripts/fixtures/manual-live-roster-20261030.json",
         "mode": "100644",
         "object_id": "d642c3eb4d4af9504682298b66b2290bbf36aa88"
+      },
+      {
+        "path": "scripts/fixtures/manual-offday-candidate-test.mjs",
+        "mode": "100644",
+        "object_id": "8ae2936011960570ff7a9e3a3a521dbf49edaddd"
       },
       {
         "path": "scripts/fixtures/mcp-oauth-legacy-pre-ledger.js.txt",
@@ -5746,6 +5776,51 @@
         "path": "scripts/manager-scheduler-http-tests.mjs",
         "mode": "100644",
         "object_id": "e3494a6cbd61a3e7eaf9cd15f5691367a5a87abb"
+      },
+      {
+        "path": "scripts/manual-offday-child-source-view-tests.mjs",
+        "mode": "100644",
+        "object_id": "d66823442d73746cdb66d256168cda27655be7f8"
+      },
+      {
+        "path": "scripts/manual-offday-child-source-view.mjs",
+        "mode": "100644",
+        "object_id": "2d4edcd2d4994fcbb9ef3b84cbd2a93c9dbece25"
+      },
+      {
+        "path": "scripts/manual-offday-historical-child-tests.mjs",
+        "mode": "100644",
+        "object_id": "86536457b3c18e1067d69fbeafa5de9c8f6634f6"
+      },
+      {
+        "path": "scripts/manual-offday-historical-routing-tests.mjs",
+        "mode": "100644",
+        "object_id": "ef8bc971809329c86910b8b22663e75cb027b707"
+      },
+      {
+        "path": "scripts/manual-offday-historical-routing.mjs",
+        "mode": "100644",
+        "object_id": "8ad1995e867351ba085ce7469075e41fb607fba4"
+      },
+      {
+        "path": "scripts/manual-offday-owned-source-view-tests.mjs",
+        "mode": "100644",
+        "object_id": "a9a7071e00c005c5407bf25a523c83a9002e25a9"
+      },
+      {
+        "path": "scripts/manual-offday-owned-source-view.mjs",
+        "mode": "100644",
+        "object_id": "3ef2dfb4eea73a29dddf873e3ff24c7e4cbc7dad"
+      },
+      {
+        "path": "scripts/manual-offday-source-successor-tests.mjs",
+        "mode": "100644",
+        "object_id": "4ba3545361a6e26f5d1308cd97bcb7593176daba"
+      },
+      {
+        "path": "scripts/manual-offday-source-successor.mjs",
+        "mode": "100644",
+        "object_id": "1e0642f501979326c8b5a9aed2ca93701dffd39e"
       },
       {
         "path": "scripts/manual-period-boundary-tests.mjs",
@@ -7420,7 +7495,7 @@
       {
         "path": "scripts/run-sealed-canonical304-fixture.mjs",
         "mode": "100644",
-        "object_id": "36f0fdaead17d02c1c4365c01bdf677a70fd77ce"
+        "object_id": "28bfa40f0d112e17aae0a8066d3e1b68c86e4bce"
       },
       {
         "path": "scripts/run-sealed-legacy-scheduler-database-tests.mjs",
@@ -12788,7 +12863,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2532,
+    "authority_path_count": 2547,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
