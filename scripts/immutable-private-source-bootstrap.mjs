@@ -191,12 +191,13 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
  const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
  const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
- const recipeCount=postgresProgram?26:25;
+ const recipeCount=postgresProgram?27:25;
  assert.equal(allRecipes.length,recipeCount);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,recipeCount);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
   assert.ok(/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/.test(recipe.identity)
-   ||postgresProgram&&recipe.identity==='custodial_coverall.bind_manual_delivery_after_acceptance()');
+   ||postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
+    'custodial_leadership_private.bind_registration_generation()'].includes(recipe.identity));
   for(const key of ['before','after'])assert.equal(typeof recipe[key],'string');
   for(const key of ['beforeHash','afterHash','beforeBodyHash','afterBodyHash'])assert.match(recipe[key],/^[a-f0-9]{64}$/);
   assert.equal(sha(recipe.before),recipe.beforeHash);assert.equal(sha(recipe.after),recipe.afterHash);
@@ -218,7 +219,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   assert.ok(!Object.hasOwn(registrySource,found[0].object_identity));
   registrySource[found[0].object_identity]=Object.freeze({definition_sql:recipe.after,definition_sha256:recipe.afterHash});
  }
- assert.equal(Object.keys(registrySource).length,24);
+ assert.equal(Object.keys(registrySource).length,postgresProgram?25:24);
  sourcePhase='SOURCE_STATEMENTS';
  const statements=postgresProgram?postgresProgram.statements.map(({sourcePath,sourceSha256,sql})=>({sourcePath,sourceSha256,sql})):[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
   ...authority.map(({sourcePath,sourceSha256,sql})=>Object.freeze({sourcePath,sourceSha256,sql}))];

@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {currentCoverallRestoreRecipe,coverallRestoreIdentity,extendCurrentCoverallRestoreSource,removeCurrentCoverallRestoreSource,currentManualPlanSourceFenceGuard} from './immutable-current-coverall-restore-source.mjs';
+import {removeCurrentLeadershipRestoreSource,leadershipRestoreIdentity} from './immutable-current-leadership-restore-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentCoverallRestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.equal(program.recipes.pop().identity,leadershipRestoreIdentity);
+statement.sql=removeCurrentLeadershipRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('four exact unchanged source-lock consumers preserve the complete previous callback program and all guard behavior',()=>{
  const guard=currentManualPlanSourceFenceGuard();assert.equal(statement.sql.split(guard).length,2);
  const prior=structuredClone(program),s=prior.statements.find(s=>s.sourcePath===statement.sourcePath);

@@ -4,6 +4,7 @@ import './isolated-current-vendor-privileges-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
 import './immutable-current-deferred-guard-tests.mjs';
 import './immutable-current-coverall-restore-tests.mjs';
+import './immutable-current-leadership-restore-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.
@@ -267,8 +268,8 @@ test('initializer records exact pinned statement refusal without changing error 
   const archive={},executed=[],error=Object.assign(new Error('Exact original messenger function/ACL/trigger predecessor differs'),{code:'55000'});
   const context={actor:profile.actor,session_actor:profile.actor,readonly:'off',replication:'origin',row_security:'off',search_path:'pg_catalog',database:'UNIT_ONLY',database_oid:'5',backend_pid:411,transaction_id:'1285',database_owner:'postgres',dr_owner:'postgres',original_owned_relations:5,active_leases:0,held_fences:2};
   const relations=[{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}];
-  const recipeCount=profile.id==='immutable-private-current-postgres'?26:25;
-  const recipes=Array.from({length:recipeCount},(_,i)=>({identity:i===25?'custodial_coverall.bind_manual_delivery_after_acceptance()':'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
+  const recipeCount=profile.id==='immutable-private-current-postgres'?27:25;
+  const recipes=Array.from({length:recipeCount},(_,i)=>({identity:i===26?'custodial_leadership_private.bind_registration_generation()':i===25?'custodial_coverall.bind_manual_delivery_after_acceptance()':'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
   const source={inventory:{'inventory/table-catalog.json':'[]','inventory/original-relations.json':JSON.stringify(relations)},recipes,statements:Array.from({length:13},(_,i)=>'PINNED_STATEMENT_'+(i+1))};
   class RecordingClient{async query(sql){
    if(sql.startsWith('select current_user actor'))return {rowCount:1,rows:[context]};
@@ -292,20 +293,20 @@ test('initializer records exact pinned statement refusal without changing error 
 test('fresh composition labels original initializer/control/snapshot/import refusals and stops',async()=>{
  const source=text('./immutable-private-data-import.mjs'),start=source.indexOf('export async function stageVerifiedImmutableFreshData(options)'),end=source.indexOf('// One original fresh DATA transaction decision.',start);
  assert.ok(start>=0&&end>start);const body=source.slice(start,end).replace('export async function','async function');
- for(const profile of profiles)for(const [failed,phase] of [['initialize','INITIALIZE_SOURCE'],['receipt','INITIALIZE_SOURCE'],['profile','INITIALIZE_SOURCE'],['control','PREPARE_RESTORE_CONTROL'],['snapshot','CAPTURE_PRE_RESTORE_STATE'],['import','IMPORT_ORIGINAL_DATA']]){
+ for(const profile of profiles)for(const [failed,phase] of [['initialize','INITIALIZE_SOURCE'],['receipt','INITIALIZE_SOURCE'],['stale_receipt','INITIALIZE_SOURCE'],['profile','INITIALIZE_SOURCE'],['control','PREPARE_RESTORE_CONTROL'],['snapshot','CAPTURE_PRE_RESTORE_STATE'],['import','IMPORT_ORIGINAL_DATA']]){
   const error=Object.assign(new Error('UNIT PRIVATE PAYLOAD'),{code:'55000'}),calls=[],archive={},dbClass=class{query(){}},db=new dbClass(),intent={restore_id:'UNIT',authority_generation:1,target_project_ref:'UNIT'},binding={archive_digest:'a'.repeat(64)};
   const original={selection:{privateTables:[{table_name:'employee_message_original_outcomes'},{table_name:'group_original_creations'}],databaseTables:[]},privateDataMembers:[{data_encoding:'TEXT',row_count:'0'},{data_encoding:'TEXT',row_count:'0'}],sourceBinding:binding};
   const captured={sourceBinding:binding,intent,envelope:{}},witness={database_oid:'5',backend_pid:411,transaction_id:'1285',restore_id:'UNIT',authority_generation:'1',archive_digest:binding.archive_digest};
   const enter=key=>{calls.push(key);if(key===failed)throw error;};
-  const count=profile.id==='immutable-private-current-postgres'?26:25;
-  const deps={types,isDeepStrictEqual,recordImmutableFreshFailure,Client:dbClass,query:dbClass.prototype.query,closed:v=>v,fail:()=>{assert.ok(['receipt','profile'].includes(failed));throw error;},captureFreshNativePort:()=>({}),sameFreshNativePort:()=>{},nativeData:()=> 'T',freshClients:new WeakSet(),freshArchives:new WeakSet(),freshStaged:new WeakMap(),sameSource:()=>{},
+  const count=profile.id==='immutable-private-current-postgres'?27:25;
+  const deps={types,isDeepStrictEqual,recordImmutableFreshFailure,Client:dbClass,query:dbClass.prototype.query,closed:v=>v,fail:()=>{assert.ok(['receipt','stale_receipt','profile'].includes(failed));throw error;},captureFreshNativePort:()=>({}),sameFreshNativePort:()=>{},nativeData:()=> 'T',freshClients:new WeakSet(),freshArchives:new WeakSet(),freshStaged:new WeakMap(),sameSource:()=>{},
    identities:['employee_message_original_outcomes','group_original_creations'],witnessKeys:Object.keys(witness),postgresJsonTextLineEncoding:'JSON',postgresTextColumnsLineEncoding:'TEXT',
    readVerifiedPrivateImportSource:()=>original,captureVerifiedImmutableFreshRestoreIntent:()=>({}),readVerifiedImmutableFreshRestoreIntent:()=>captured,requireLegacyOriginalDataFidelity:async()=>{},
    readVerifiedImmutableArchiveOwnerProfile:()=>failed==='profile'?{id:profile.id,actor:'unknown'}:profile,
-   initializeVerifiedImmutableFreshSource:async()=>{enter('initialize');return {schema:'custodial.immutable-private-source-initialized.v1',initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false,guard_recipes:failed==='receipt'?(count===26?25:26):count,source_statements:13,authority_scope_functions:6,...witness};},
+   initializeVerifiedImmutableFreshSource:async()=>{enter('initialize');return {schema:'custodial.immutable-private-source-initialized.v1',initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false,guard_recipes:failed==='receipt'?(count===27?25:27):failed==='stale_receipt'?26:count,source_statements:13,authority_scope_functions:6,...witness};},
    prepareVerifiedImmutableFreshRestoreControl:async()=>{enter('control');return witness;},capturePreRestoreState:async()=>{enter('snapshot');},stageVerifiedImmutablePrivateData:async()=>{enter('import');}};
   const fn=new Function(...Object.keys(deps),body+';return stageVerifiedImmutableFreshData;')(...Object.values(deps));
   await assert.rejects(fn({db,verifiedArchive:archive,originalIntentEnvelope:{},intentVerifyKey:'unit',intentVerifyKeyId:'unit'}),e=>e===error);
-  assert.equal(calls.at(-1),['receipt','profile'].includes(failed)?'initialize':failed);assert.deepEqual(readImmutableFreshFailure(error),{fresh_stage:phase});
+  assert.equal(calls.at(-1),['receipt','stale_receipt','profile'].includes(failed)?'initialize':failed);assert.deepEqual(readImmutableFreshFailure(error),{fresh_stage:phase});
  }
 });
