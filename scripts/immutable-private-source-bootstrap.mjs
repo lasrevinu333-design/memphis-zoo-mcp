@@ -191,10 +191,12 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
  const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
  const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
- assert.equal(allRecipes.length,25);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,25);
+ const recipeCount=postgresProgram?26:25;
+ assert.equal(allRecipes.length,recipeCount);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,recipeCount);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
-  assert.match(recipe.identity,/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/);
+  assert.ok(/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/.test(recipe.identity)
+   ||postgresProgram&&recipe.identity==='custodial_coverall.bind_manual_delivery_after_acceptance()');
   for(const key of ['before','after'])assert.equal(typeof recipe[key],'string');
   for(const key of ['beforeHash','afterHash','beforeBodyHash','afterBodyHash'])assert.match(recipe[key],/^[a-f0-9]{64}$/);
   assert.equal(sha(recipe.before),recipe.beforeHash);assert.equal(sha(recipe.after),recipe.afterHash);
@@ -208,6 +210,9 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   const aliases=recipe.registry_identity===recipe.identity&&recipe.identity.startsWith('public.')
    ?[recipe.identity,recipe.identity.slice(7)]:[recipe.registry_identity];
   const found=originalRows.filter(row=>row.object_kind==='function'&&aliases.includes(row.object_identity));
+  if(postgresProgram&&recipe.identity==='custodial_coverall.bind_manual_delivery_after_acceptance()'){
+   assert.equal(found.length,0,'Fixed current unregistered callback must not rewrite original registry DATA');continue;
+  }
   if(recipe.identity==='custodial_dr.guard_application_mutation()'){assert.equal(found.length,0);continue;}
   assert.equal(found.length,1);assert.equal(found[0].definition_sql,recipe.before);assert.equal(found[0].definition_sha256,recipe.beforeHash);
   assert.ok(!Object.hasOwn(registrySource,found[0].object_identity));

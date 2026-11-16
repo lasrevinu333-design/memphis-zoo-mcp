@@ -7,6 +7,7 @@ import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-sourc
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope,currentDataSchemaDependencyStatements,rebindCurrentDataSchemaDependencies} from './immutable-current-data-schema-scope.mjs';
 import {extendCurrentDeferredReceiptGuards} from './immutable-current-deferred-guard-source.mjs';
+import {currentCoverallRestoreRecipe,extendCurrentCoverallRestoreSource} from './immutable-current-coverall-restore-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const body=s=>s.split('AS $function$')[1].slice(0,-'$function$\n'.length);
 const once=(s,a,b)=>{assert.equal(s.split(a).length,2);return s.replace(a,()=>b);};
@@ -95,13 +96,14 @@ const statements=order.map(name=>{
  if(currentDataSchemaScopeStatements.includes(name))sql=extendCurrentPostgresDataSchemaScope(name,sql);
  if(currentDataSchemaDependencyStatements.includes(name))sql=rebindCurrentDataSchemaDependencies(name,sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentDeferredReceiptGuards(name,sql);
+ if(name==='immutable-private-owner-context.sql')sql=extendCurrentCoverallRestoreSource(sql);
  const wrapper=name==='immutable-original-employee-push-authority-restore.sql'?'DO_ONLY':
  ['immutable-private-owner-context.sql','immutable-original-employee-restore.sql','immutable-original-device-boundary-restore.sql','immutable-original-authority-reconciliation.sql','immutable-original-manager-push-restore.sql'].includes(name)?'OUTER_TRANSACTION':'NONE';
  return {sourcePath:old.sourcePath,originalSourceSha256:old.sourceSha256,sourceSha256:sha(sql),wrapper,sql};
 });
-const result={format:'custodial.immutable-private-current-postgres-program.v1',profile:{id:'immutable-private-current-postgres',actor:'postgres'},provenance:{sourcePath:installedPath,sourceSha256:sha(installed),definitions:specs.map(([identity,,sha256])=>({identity,sha256}))},recipes,statements};
+const result={format:'custodial.immutable-private-current-postgres-program.v1',profile:{id:'immutable-private-current-postgres',actor:'postgres'},provenance:{sourcePath:installedPath,sourceSha256:sha(installed),definitions:specs.map(([identity,,sha256])=>({identity,sha256}))},recipes:[...recipes,currentCoverallRestoreRecipe()],statements};
 domain.assertCurrent();messages.assertCurrent();
 const output=JSON.stringify(result,null,2)+'\n';
 if(process.argv.includes('--check'))assert.equal(readFileSync('proposals/immutable-private-current-postgres-program.json','utf8'),output);
 else writeFileSync('proposals/immutable-private-current-postgres-program.json',output,{flag:'wx'});
-console.log(JSON.stringify({ok:true,sha256:sha(output),bytes:Buffer.byteLength(output),recipes:recipes.length,statements:statements.length}));
+console.log(JSON.stringify({ok:true,sha256:sha(output),bytes:Buffer.byteLength(output),recipes:result.recipes.length,statements:statements.length}));

@@ -164,7 +164,9 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  initializerStage='RECONCILE_ARCHIVED_ACLS';
  const acl=await reconcileVerifiedImmutableBootstrapAcls(db,source,verifiedArchive);await readContext();
  const recipeIdentities=Object.freeze(source.recipes.map(recipe=>recipe.identity));
- assert.equal(recipeIdentities.length,25);assert.equal(new Set(recipeIdentities).size,25);
+ const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?26:25;
+ assert.equal(recipeIdentities.length,recipeCount);assert.equal(new Set(recipeIdentities).size,recipeCount);
+ if(recipeCount===26)assert.equal(recipeIdentities.at(-1),'custodial_coverall.bind_manual_delivery_after_acceptance()');
  // One fresh, ordered native catalog read per side, never a cached verdict.
  // LEFT JOIN retains a missing overload as a refused row rather than omitting it.
  const readRecipeCatalog=async()=>{
@@ -173,8 +175,8 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    from unnest($1::text[]) with ordinality i(identity,ordinality)
    left join pg_catalog.pg_proc p on p.oid=to_regprocedure(i.identity) and p.prokind='f'
    order by i.ordinality`,[recipeIdentities]);
-  assert.equal(result.rowCount,25);assert.equal(result.rows.length,25);
-  assert.equal(new Set(result.rows.map(row=>row.identity)).size,25);
+  assert.equal(result.rowCount,recipeCount);assert.equal(result.rows.length,recipeCount);
+  assert.equal(new Set(result.rows.map(row=>row.identity)).size,recipeCount);
   for(const [index,row] of result.rows.entries()){
    assert.deepEqual(Object.keys(row).sort(),['definition','identity','ordinal','owner','prosrc']);
    assert.equal(row.ordinal,index+1);assert.equal(row.identity,recipeIdentities[index]);

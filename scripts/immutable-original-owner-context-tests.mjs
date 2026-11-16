@@ -3,6 +3,7 @@ import './isolated-current-postgres-cron-setup-tests.mjs';
 import './isolated-current-vendor-privileges-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
 import './immutable-current-deferred-guard-tests.mjs';
+import './immutable-current-coverall-restore-tests.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.
@@ -266,7 +267,8 @@ test('initializer records exact pinned statement refusal without changing error 
   const archive={},executed=[],error=Object.assign(new Error('Exact original messenger function/ACL/trigger predecessor differs'),{code:'55000'});
   const context={actor:profile.actor,session_actor:profile.actor,readonly:'off',replication:'origin',row_security:'off',search_path:'pg_catalog',database:'UNIT_ONLY',database_oid:'5',backend_pid:411,transaction_id:'1285',database_owner:'postgres',dr_owner:'postgres',original_owned_relations:5,active_leases:0,held_fences:2};
   const relations=[{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}];
-  const recipes=Array.from({length:25},(_,i)=>({identity:'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
+  const recipeCount=profile.id==='immutable-private-current-postgres'?26:25;
+  const recipes=Array.from({length:recipeCount},(_,i)=>({identity:i===25?'custodial_coverall.bind_manual_delivery_after_acceptance()':'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
   const source={inventory:{'inventory/table-catalog.json':'[]','inventory/original-relations.json':JSON.stringify(relations)},recipes,statements:Array.from({length:13},(_,i)=>'PINNED_STATEMENT_'+(i+1))};
   class RecordingClient{async query(sql){
    if(sql.startsWith('select current_user actor'))return {rowCount:1,rows:[context]};
@@ -275,7 +277,7 @@ test('initializer records exact pinned statement refusal without changing error 
    if(sql.startsWith('select schema_name,table_name,row_count'))return {rowCount:1,rows:[{schema_name:'public',table_name:'fixture',row_count:'0',transaction_id:'1285'}]};
    if(sql.startsWith('select (select count(*)::int'))return {rows:[{controls:0,manifests:0,events:0,migrations:0,jobs:0,existing_import:null}]};
    if(sql.startsWith('insert into custodial_dr.restore_control'))return {rowCount:1,rows:[]};
-   if(sql.startsWith('select i.ordinality'))return {rowCount:25,rows:recipes.map((r,i)=>({ordinal:i+1,identity:r.identity,definition:r.before,prosrc:'BODY '+i,owner:profile.actor}))};
+   if(sql.startsWith('select i.ordinality'))return {rowCount:recipeCount,rows:recipes.map((r,i)=>({ordinal:i+1,identity:r.identity,definition:r.before,prosrc:'BODY '+i,owner:profile.actor}))};
    assert.ok(source.statements.includes(sql));executed.push(sql);if(executed.length===ordinal)throw error;return {rows:[]};
   }}
   const fn=load('./immutable-private-source-initializer.mjs',{assert,types,isDeepStrictEqual,createHash,pg:{Client:RecordingClient},

@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {deferredReceiptGuardClause,extendCurrentDeferredReceiptGuards,removeCurrentDeferredReceiptGuards,deferredGuardPredecessorSha} from './immutable-current-deferred-guard-source.mjs';
+import {removeCurrentCoverallRestoreSource,coverallRestoreIdentity} from './immutable-current-coverall-restore-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const bytes=readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'),program=JSON.parse(bytes);
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.equal(program.recipes.pop().identity,coverallRestoreIdentity);
+statement.sql=removeCurrentCoverallRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('only exact two unchanged receipt validators are admitted and complete prior program remains recoverable',()=>{
  const previous=removeCurrentDeferredReceiptGuards(statement.sql);assert.equal(sha(previous),deferredGuardPredecessorSha);
  assert.equal(extendCurrentDeferredReceiptGuards('immutable-private-owner-context.sql',previous),statement.sql);

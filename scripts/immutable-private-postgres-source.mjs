@@ -5,7 +5,7 @@ import {dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 const path=fileURLToPath(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url));
-const pin='2319e1390c160e927efea90c169bda35412fb5ada327d7c8e1f6f53c790e1b94',size=475884;
+const pin='5838994653d2a6be0ae47b25d66959399b52c181c7340b73e0f1c493ede7b2a9',size=490088;
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const identity=s=>[s.dev,s.ino,s.mode,s.uid,s.gid,s.nlink,s.size,s.mtimeNs,s.ctimeNs];
 function snapshot(pathname=path,expectedPin=pin,expectedSize=size){
@@ -28,8 +28,9 @@ export function loadImmutableCurrentPostgresSource(){
  const program=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(original.bytes));
  assert.equal(program.format,'custodial.immutable-private-current-postgres-program.v1');
  assert.deepEqual(program.profile,{id:'immutable-private-current-postgres',actor:'postgres'});
- assert.equal(program.recipes.length,23);assert.equal(program.statements.length,13);
- assert.equal(new Set(program.recipes.map(r=>r.identity)).size,23);
+ assert.equal(program.recipes.length,24);assert.equal(program.statements.length,13);
+ assert.equal(new Set(program.recipes.map(r=>r.identity)).size,24);
+ assert.equal(program.recipes.at(-1).identity,'custodial_coverall.bind_manual_delivery_after_acceptance()');
  for(const r of program.recipes){assert.equal(sha(r.before),r.beforeHash);assert.equal(sha(r.after),r.afterHash);}
  for(const s of program.statements)assert.equal(sha(s.sql),s.sourceSha256);
  const assertCurrent=function(){assert.equal(arguments.length,0);const now=snapshot();assert.deepEqual(now.identity,original.identity);assert.deepEqual(now.parents,original.parents);assert.ok(now.bytes.equals(original.bytes));const current=provenance();assert.deepEqual(current.identity,installed.identity);assert.deepEqual(current.parents,installed.parents);assert.ok(current.bytes.equals(installed.bytes));};

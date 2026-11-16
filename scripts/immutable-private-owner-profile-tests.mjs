@@ -19,10 +19,10 @@ function fixture(actor='postgres'){
  const recipes=actor==='postgres'?loadImmutableCurrentPostgresSource().recipes:[...loadImmutableDomainSourceRecipes().recipes,...loadImmutableMessageSourceRecipes().recipes];
  const acls={routines:[...recipes.map(r=>({kind:'FUNCTION',identity:r.identity,owner_name:actor})),{kind:'FUNCTION',identity:defs[0][0],owner_name:actor}],relations:tables.map(([schema_name,object_name])=>({kind:'TABLE',schema_name,object_name,owner_name:actor})),namespaces_columns:[{kind:'SCHEMA',schema_name:'custodial_release_identity',owner_name:actor}]};
  const relations=tables.map(([schema_name,table_name])=>({schema_name,table_name,owner_name:actor}));
- return {inventory:{'inventory/original-guards.json':JSON.stringify(guards),'inventory/original-relations.json':JSON.stringify(relations),'inventory/original-acls.json':JSON.stringify(acls)},catalog:{functions:recipes.map(r=>({schema_name:'public',function_name:r.identity.slice(7,-2),identity_arguments:'',definition:r.before}))}};
+ return {inventory:{'inventory/original-guards.json':JSON.stringify(guards),'inventory/original-relations.json':JSON.stringify(relations),'inventory/original-acls.json':JSON.stringify(acls)},catalog:{functions:recipes.map(r=>({schema_name:r.identity.split('.')[0],function_name:r.identity.split('.')[1].slice(0,-2),identity_arguments:'',definition:r.before}))}};
 }
 const mutate=(data,file,fn)=>{const v=JSON.parse(data.inventory[file]);fn(v);data.inventory[file]=JSON.stringify(v);};
-test('exact25 current original definitions and complete postgres owner evidence derive fixed DATA',()=>{
+test('exact26 current original definitions and complete postgres owner evidence derive fixed DATA',()=>{
  const p=inspectImmutableOriginalOwnerData(fixture());assert.deepEqual(p,{id:'immutable-private-current-postgres',actor:'postgres'});assert.ok(Object.isFrozen(p));
 });
 test('legacy source program stays explicit and unchanged',()=>{
@@ -33,6 +33,17 @@ test('missing, duplicate or mixed owners cannot select an actor profile',()=>{
  for(const edit of edits){const f=fixture();mutate(f,'inventory/original-acls.json',edit);assert.throws(()=>inspectImmutableOriginalOwnerData(f));}
  for(const edit of [v=>v.pop(),v=>v[1].owner='supabase_admin',v=>v[0].prosrc+=' ',v=>v[0].definition=v[0].definition.replace(' LANGUAGE plpgsql',' LANGUAGE plpgsql\n SECURITY DEFINER')]){const f=fixture();mutate(f,'inventory/original-guards.json',edit);assert.throws(()=>inspectImmutableOriginalOwnerData(f));}
 });
+test('current private callback needs its exact signed definition and owner; legacy never inherits it',()=>{
+ const identity='custodial_coverall.bind_manual_delivery_after_acceptance()';
+ for(const change of [rows=>rows.splice(rows.findIndex(r=>r.identity===identity),1),
+  rows=>rows.find(r=>r.identity===identity).owner_name='supabase_admin',
+  rows=>rows.push(rows.find(r=>r.identity===identity))]){
+  const f=fixture();mutate(f,'inventory/original-acls.json',v=>change(v.routines));assert.throws(()=>inspectImmutableOriginalOwnerData(f));
+ }
+ const changed=fixture();changed.catalog.functions.find(f=>f.schema_name==='custodial_coverall').definition+='\n';assert.throws(()=>inspectImmutableOriginalOwnerData(changed));
+ const legacy=fixture('supabase_admin');assert.ok(!legacy.catalog.functions.some(f=>f.schema_name==='custodial_coverall'));
+ assert.equal(inspectImmutableOriginalOwnerData(legacy).actor,'supabase_admin');
+});
 test('normal bodies, definer flags and current recipe set are exact not observed-source allowlists',()=>{
  for(const edit of [f=>f.catalog.functions[0].definition+=' ',f=>f.catalog.functions[0].definition=f.catalog.functions[0].definition.replace(' SECURITY DEFINER\n',''),f=>f.catalog.functions.push(f.catalog.functions[0]),f=>f.catalog.functions.pop()]){const f=fixture();edit(f);assert.throws(()=>inspectImmutableOriginalOwnerData(f));}
  const f=fixture();const legacy=loadImmutableDomainSourceRecipes().recipes.find(r=>r.identity==='public.events_app_validate_scope_venue()');f.catalog.functions.find(r=>r.function_name==='events_app_validate_scope_venue').definition=legacy.before;assert.throws(()=>inspectImmutableOriginalOwnerData(f));
@@ -42,7 +53,7 @@ test('caller supplied objects never become branded archive/source/statement auth
 });
 test('fixed program reproduces from pinned public Source; every emitted SQL and recipe hash matches',()=>{
  execFileSync(process.execPath,['scripts/build-immutable-postgres-program.mjs','--check']);const p=loadImmutableCurrentPostgresSource();
- assert.equal(p.recipes.length,23);assert.equal(p.statements.length,13);
+ assert.equal(p.recipes.length,24);assert.equal(p.statements.length,13);
  for(const r of p.recipes){assert.equal(sha(r.before),r.beforeHash);assert.equal(sha(r.after),r.afterHash);assert.ok(!r.after.includes('supabase_admin'));}
  for(const s of p.statements){assert.equal(sha(s.sql),s.sourceSha256);assert.ok(!s.sql.includes('supabase_admin'));}
  p.assertCurrent();assert.throws(()=>loadImmutableCurrentPostgresSource('postgres'));assert.throws(()=>p.assertCurrent('ignored'));

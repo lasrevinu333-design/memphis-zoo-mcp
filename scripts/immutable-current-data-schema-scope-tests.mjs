@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope,currentDataSchemaDependencyStatements,rebindCurrentDataSchemaDependencies} from './immutable-current-data-schema-scope.mjs';
 import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
 import {removeCurrentDeferredReceiptGuards} from './immutable-current-deferred-guard-source.mjs';
+import {removeCurrentCoverallRestoreSource,coverallRestoreIdentity} from './immutable-current-coverall-restore-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const oldFull="('public','auth','storage','custodial_release_identity')",oldOrdinary="('public','auth','storage')";
 const full="('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')";
@@ -16,6 +17,11 @@ const pairs=[
 ];
 const originalSql=sql=>pairs.reduce((s,[old,next])=>s.replaceAll(next,old),sql).replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+// Review the unchanged predecessor contracts through the complete inverse;
+// the actual new callback/installer has its own affected tests.
+assert.equal(program.recipes.pop().identity,coverallRestoreIdentity);
+const context=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+context.sql=removeCurrentCoverallRestoreSource(context.sql);context.sourceSha256=sha(context.sql);
 test('all authenticated data schemas are included in exact current import, codec and readback predicates',()=>{
  const prior=structuredClone(program);let count=0;
  for(const statement of prior.statements){
