@@ -21,14 +21,20 @@ test('changed predecessors, unknown sources and missing or duplicate clauses ref
  assert.throws(()=>extendCurrentDeferredReceiptGuards('unknown.sql',previous));
  for(const changed of [previous,statement.sql+deferredReceiptGuardClause,statement.sql.replace('t.tgtype=5','t.tgtype=7')])assert.throws(()=>removeCurrentDeferredReceiptGuards(changed));
 });
-test('admission preserves exact owners, inventory, full trigger and deferred-constraint shape without changing database objects',()=>{
+test('admission preserves exact owners, installed Source, full trigger and deferred-constraint shape without changing database objects',()=>{
  for(const value of ["current_user=session_user AND session_user='postgres'","receipt_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=session_user)",
   "t.tgtype=5","t.tgdeferrable AND t.tginitdeferred","receipt_constraint.contype='t'",'receipt_constraint.conrelid=t.tgrelid',
   'receipt_constraint.condeferrable AND receipt_constraint.condeferred',"t.tgattr=''::int2vector",'t.tgqual IS NULL AND t.tgnargs=0',
-  't.tgoldtable IS NULL AND t.tgnewtable IS NULL','receipt_inventory.definition_sql=pg_get_functiondef(receipt_function.oid)',
+  't.tgoldtable IS NULL AND t.tgnewtable IS NULL','public.static_weekly_digest_text(pg_get_functiondef(receipt_function.oid))=receipt_guard.definition_sha256',
   "'complete_coverall_activation','O'","'complete_recurring_receipt','A'"])assert.ok(deferredReceiptGuardClause.includes(value),value);
  assert.doesNotMatch(deferredReceiptGuardClause,/\b(?:create|alter|drop|insert|update|delete|truncate|grant|revoke|disable|replica)\b/i);
  assert.ok(statement.sql.includes("MESSAGE='IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED'"));
  // The two original definitions still run; no replacement recipe or bypass branch.
  assert.ok(program.recipes.every(r=>!r.identity.includes('require_activation_receipt')&&!r.identity.includes('manual_recurring_require_receipt')));
+ // Native run43792688434 proved this real Source has no matching registry
+ // definition. Do not fabricate registry DATA or alter its original count.
+ assert.ok(!deferredReceiptGuardClause.includes('receipt_inventory'));
+ const predecessor=removeCurrentDeferredReceiptGuards(statement.sql);
+ assert.equal((statement.sql.match(/i\.definition_sha256=fixed\.definition_sha256/g)||[]).length,
+  (predecessor.match(/i\.definition_sha256=fixed\.definition_sha256/g)||[]).length,'all existing registry gates retained');
 });

@@ -33,7 +33,9 @@ const detailAnchor="'function_sha256',unsupported_insert_guard.function_sha256):
 const detailWithChecks="'function_sha256',unsupported_insert_guard.function_sha256,\n      'receipt_guard_checks',unsupported_insert_guard.receipt_guard_checks)::text,8192);";
 export const deferredReceiptGuardClause=`     -- These exact original constraint triggers still execute at COMMIT.
      -- They only verify the matching original receipt exists; missing receipts
-     -- remain fatal. Never admit another deferred or side-effecting trigger.
+     -- remain fatal. Independent retained installation Source pins these two
+     -- definitions; a matching legacy recovery-registry row is not assumed.
+     -- Never admit another deferred or side-effecting trigger.
      AND NOT EXISTS(
       SELECT 1 FROM (VALUES
        ('activation_operations','complete_coverall_activation','O','public.static_weekly_coverall_require_activation_receipt()',
@@ -56,10 +58,7 @@ export const deferredReceiptGuardClause=`     -- These exact original constraint
        AND receipt_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=session_user)
        AND receipt_function.prokind='f' AND receipt_function.pronargs=0
        AND receipt_function.prorettype='pg_catalog.trigger'::regtype AND receipt_function.prosecdef
-       AND public.static_weekly_digest_text(pg_get_functiondef(receipt_function.oid))=receipt_guard.definition_sha256
-       AND EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory receipt_inventory
-        WHERE receipt_inventory.object_kind='function' AND receipt_inventory.definition_sql=pg_get_functiondef(receipt_function.oid)
-         AND receipt_inventory.definition_sha256=receipt_guard.definition_sha256))
+       AND public.static_weekly_digest_text(pg_get_functiondef(receipt_function.oid))=receipt_guard.definition_sha256)
 `;
 export function extendCurrentDeferredReceiptGuards(name,sql){
  assert.equal(name,'immutable-private-owner-context.sql');assert.equal(typeof sql,'string');
