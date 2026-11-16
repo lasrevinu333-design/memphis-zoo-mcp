@@ -17,6 +17,7 @@ import {loadImmutableMessageSourceRecipes} from './immutable-private-message-sou
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
 import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
+import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -210,7 +211,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null;
+  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
@@ -357,10 +358,18 @@ export async function runPrivate(){
       requireOwnerProfile();await verifyTarget();
     }
     phase='private_original_restore_and_storage';await verifyTarget();
-    result=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
-    assertPrivateResult(result,source,envelope.intent);await verifyTarget();
+    const restoreOriginal=async()=>{
+      const restored=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
+      assertPrivateResult(restored,source,envelope.intent);await verifyTarget();return restored;
+    };
+    if(requireOwnerProfile().id==='immutable-private-current-postgres'){
+      const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreOriginal);
+      vendorPrivileges=qualified.receipt;assert.equal(vendorPrivileges.retirement_verified,true);result=qualified.value;
+    }else result=await restoreOriginal();
     phase='verified_waiting_cleanup';
-  }catch(e){failure=e;}
+  }catch(e){failure=e;
+    if(e&&typeof e==='object'&&!isProxy(e))vendorPrivileges=projectIsolatedVendorPrivilegeStatus(Object.getOwnPropertyDescriptor(e,'vendor_privileges')?.value)??vendorPrivileges;
+  }
   finally{
     phase=failure?phase:'cleanup';closing=true;inspectionController.abort();
     try{if(relay){await closeOwnedRelay(relay,sockets,Date.now()+15000);relayClosed=true;}
@@ -389,7 +398,7 @@ export async function runPrivate(){
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
-      subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
+      subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }
