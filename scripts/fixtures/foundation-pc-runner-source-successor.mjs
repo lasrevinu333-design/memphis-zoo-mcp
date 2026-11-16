@@ -19,8 +19,10 @@ export function restoreFoundationPcRunnerWorkflow(source,name){
  source=restoreSplitFoundationWorkflow(source,name);
  if(name==='foundation-security-gate.yml'&&sha(source)==='4ff403c1cc51c42224d6ab3807b7d9cea8f60d03b263262b4bdb216ea2232ad7'){
   // Exact current observer successor; frozen canonical304 driver/SQL unchanged.
-  assert.equal(sha(readFileSync(new URL('../run-sealed-canonical304-fixture.mjs',import.meta.url))),'42bee2609d2011741455b37cfe361819ccd04d78223b61628eef2778f6e5dbc7');
+  assert.equal(sha(readFileSync(new URL('../run-sealed-canonical304-fixture.mjs',import.meta.url))),'2916b59a84074c7ff8f9c81dc55722685d3d5d278c88cbb2ba37c6e8c4980c73');
   assert.equal(sha(readFileSync(new URL('../canonical304-kernel-resource-view.mjs',import.meta.url))),'2bc4777d641f84331fa7f88e980f5c6656f2936d716452cb22c8e0b3aaaf9f29');
+  assert.equal(sha(readFileSync(new URL('../canonical304-historical-state-view.mjs',import.meta.url))),'e1337a7201b07f8488a52e37ab8e14b6bb0beb639438e087a32901c9b6841fa1');
+  assert.equal(sha(readFileSync(new URL('../manual-period-historical-state-successor.mjs',import.meta.url))),'052090bdfa009fa3bfd79720c98f7dd770a95444c0bd038bfc865746e73f4ce2');
   assert.equal(sha(readFileSync(new URL('../fixture-cgroup-memory-contract.mjs',import.meta.url))),'6809f2075d489359a35af840db0bf09ae58a0995d6d3b93b6ab0e3fd352e8d86');
   assert.equal(sha(readFileSync(new URL('../run-retained-release-provenance-tests.mjs',import.meta.url))),
    '6f49f7bc0d09a984e17ea747683d5cc266896319e05bd98a1eeabc7669ec7f20');
