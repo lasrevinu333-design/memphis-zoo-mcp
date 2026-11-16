@@ -1,3 +1,4 @@
+import {removeCurrentRestrictedCoverageRestoreSource,restrictedCoverageRestoreIdentity} from './immutable-current-restricted-coverage-restore-source.mjs';
 import {removeCurrentCoverageRestoreSource,coverageRestoreIdentity} from './immutable-current-coverage-restore-source.mjs';
 import {originalPublicPlanFenceRelations,currentPublicPlanSourceFenceGuards} from './immutable-current-public-plan-fences.mjs';
 import test from 'node:test';
@@ -8,6 +9,8 @@ import {currentOc24RestoreRecipe,oc24RestoreIdentity,extendCurrentOc24RestoreSou
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentOc24RestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.equal(program.recipes.pop().identity,restrictedCoverageRestoreIdentity);
+statement.sql=removeCurrentRestrictedCoverageRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 assert.equal(program.recipes.pop().identity,coverageRestoreIdentity);
 statement.sql=removeCurrentCoverageRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('exact archived completion restoration preserves all normal OC24 checks and the entire preceding program',()=>{

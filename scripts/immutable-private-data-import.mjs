@@ -698,7 +698,7 @@ export async function stageVerifiedImmutableFreshData(options) {
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
   const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
-  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?29
+  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?30
     :initializedOwner.id==='immutable-private-legacy-supabase-admin'&&initializedOwner.actor==='supabase_admin'?25:null;
   if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
     ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false

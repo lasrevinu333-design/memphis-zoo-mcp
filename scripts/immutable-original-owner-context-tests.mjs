@@ -271,8 +271,8 @@ test('initializer records exact pinned statement refusal without changing error 
   const archive={},executed=[],error=Object.assign(new Error('Exact original messenger function/ACL/trigger predecessor differs'),{code:'55000'});
   const context={actor:profile.actor,session_actor:profile.actor,readonly:'off',replication:'origin',row_security:'off',search_path:'pg_catalog',database:'UNIT_ONLY',database_oid:'5',backend_pid:411,transaction_id:'1285',database_owner:'postgres',dr_owner:'postgres',original_owned_relations:5,active_leases:0,held_fences:2};
   const relations=[{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}];
-  const recipeCount=profile.id==='immutable-private-current-postgres'?29:25;
-  const recipes=Array.from({length:recipeCount},(_,i)=>({identity:i===28?'public.sch_guard_operational_coverage_template()':i===27?'public.custodial_oc24_completion_selection_guard()':i===26?'custodial_leadership_private.bind_registration_generation()':i===25?'custodial_coverall.bind_manual_delivery_after_acceptance()':'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
+  const recipeCount=profile.id==='immutable-private-current-postgres'?30:25;
+  const recipes=Array.from({length:recipeCount},(_,i)=>({identity:i===29?'public.sch_guard_restricted_coverage_template()':i===28?'public.sch_guard_operational_coverage_template()':i===27?'public.custodial_oc24_completion_selection_guard()':i===26?'custodial_leadership_private.bind_registration_generation()':i===25?'custodial_coverall.bind_manual_delivery_after_acceptance()':'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
   const source={inventory:{'inventory/table-catalog.json':'[]','inventory/original-relations.json':JSON.stringify(relations)},recipes,statements:Array.from({length:13},(_,i)=>'PINNED_STATEMENT_'+(i+1))};
   class RecordingClient{async query(sql){
    if(sql.startsWith('select current_user actor'))return {rowCount:1,rows:[context]};
@@ -301,12 +301,12 @@ test('fresh composition labels original initializer/control/snapshot/import refu
   const original={selection:{privateTables:[{table_name:'employee_message_original_outcomes'},{table_name:'group_original_creations'}],databaseTables:[]},privateDataMembers:[{data_encoding:'TEXT',row_count:'0'},{data_encoding:'TEXT',row_count:'0'}],sourceBinding:binding};
   const captured={sourceBinding:binding,intent,envelope:{}},witness={database_oid:'5',backend_pid:411,transaction_id:'1285',restore_id:'UNIT',authority_generation:'1',archive_digest:binding.archive_digest};
   const enter=key=>{calls.push(key);if(key===failed)throw error;};
-  const count=profile.id==='immutable-private-current-postgres'?29:25;
+  const count=profile.id==='immutable-private-current-postgres'?30:25;
   const deps={types,isDeepStrictEqual,recordImmutableFreshFailure,Client:dbClass,query:dbClass.prototype.query,closed:v=>v,fail:()=>{assert.ok(['receipt','stale_receipt','profile'].includes(failed));throw error;},captureFreshNativePort:()=>({}),sameFreshNativePort:()=>{},nativeData:()=> 'T',freshClients:new WeakSet(),freshArchives:new WeakSet(),freshStaged:new WeakMap(),sameSource:()=>{},
    identities:['employee_message_original_outcomes','group_original_creations'],witnessKeys:Object.keys(witness),postgresJsonTextLineEncoding:'JSON',postgresTextColumnsLineEncoding:'TEXT',
    readVerifiedPrivateImportSource:()=>original,captureVerifiedImmutableFreshRestoreIntent:()=>({}),readVerifiedImmutableFreshRestoreIntent:()=>captured,requireLegacyOriginalDataFidelity:async()=>{},
    readVerifiedImmutableArchiveOwnerProfile:()=>failed==='profile'?{id:profile.id,actor:'unknown'}:profile,
-   initializeVerifiedImmutableFreshSource:async()=>{enter('initialize');return {schema:'custodial.immutable-private-source-initialized.v1',initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false,guard_recipes:failed==='receipt'?(count===29?25:29):failed==='stale_receipt'?28:count,source_statements:13,authority_scope_functions:6,...witness};},
+   initializeVerifiedImmutableFreshSource:async()=>{enter('initialize');return {schema:'custodial.immutable-private-source-initialized.v1',initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false,guard_recipes:failed==='receipt'?(count===30?25:30):failed==='stale_receipt'?29:count,source_statements:13,authority_scope_functions:6,...witness};},
    prepareVerifiedImmutableFreshRestoreControl:async()=>{enter('control');return witness;},capturePreRestoreState:async()=>{enter('snapshot');},stageVerifiedImmutablePrivateData:async()=>{enter('import');}};
   const fn=new Function(...Object.keys(deps),body+';return stageVerifiedImmutableFreshData;')(...Object.values(deps));
   await assert.rejects(fn({db,verifiedArchive:archive,originalIntentEnvelope:{},intentVerifyKey:'unit',intentVerifyKeyId:'unit'}),e=>e===error);
