@@ -3745,7 +3745,7 @@
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
         "mode": "100644",
-        "object_id": "bee0adcfa4ba0110a3b67a8191e1951f2350c318"
+        "object_id": "a0496a9c2347b6ba3102bbd6c215f3047d722c8b"
       },
       {
         "path": "scripts/final-closure-historical-source-tests.mjs",
@@ -5476,6 +5476,26 @@
         "path": "scripts/gps-native-history-source-tests.mjs",
         "mode": "100644",
         "object_id": "6ff8192b5a2318dd575fe1d082699745cc547908"
+      },
+      {
+        "path": "scripts/gps-session-owned-source-view-tests.mjs",
+        "mode": "100644",
+        "object_id": "540d3f2b16694f10887c53096eaecb087c480aea"
+      },
+      {
+        "path": "scripts/gps-session-owned-source-view.mjs",
+        "mode": "100644",
+        "object_id": "ed6909f79c2d73e335141e00aed61ac185cbab46"
+      },
+      {
+        "path": "scripts/gps-session-rebuild-source-successor-tests.mjs",
+        "mode": "100644",
+        "object_id": "db68717921c291f552533101d287175d35c919b3"
+      },
+      {
+        "path": "scripts/gps-session-rebuild-source-successor.mjs",
+        "mode": "100644",
+        "object_id": "fc778aab12fa83e8546738af19f79912432555de"
       },
       {
         "path": "scripts/hash-backup-directory.mjs",
@@ -12863,7 +12883,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2547,
+    "authority_path_count": 2551,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
