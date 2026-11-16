@@ -164,11 +164,12 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  initializerStage='RECONCILE_ARCHIVED_ACLS';
  const acl=await reconcileVerifiedImmutableBootstrapAcls(db,source,verifiedArchive);await readContext();
  const recipeIdentities=Object.freeze(source.recipes.map(recipe=>recipe.identity));
- const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?27:25;
+ const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?28:25;
  assert.equal(recipeIdentities.length,recipeCount);assert.equal(new Set(recipeIdentities).size,recipeCount);
- if(recipeCount===27){
-  assert.equal(recipeIdentities.at(-2),'custodial_coverall.bind_manual_delivery_after_acceptance()');
-  assert.equal(recipeIdentities.at(-1),'custodial_leadership_private.bind_registration_generation()');
+ if(recipeCount===28){
+  assert.equal(recipeIdentities.at(-3),'custodial_coverall.bind_manual_delivery_after_acceptance()');
+  assert.equal(recipeIdentities.at(-2),'custodial_leadership_private.bind_registration_generation()');
+  assert.equal(recipeIdentities.at(-1),'public.custodial_oc24_completion_selection_guard()');
  }
  // One fresh, ordered native catalog read per side, never a cached verdict.
  // LEFT JOIN retains a missing overload as a refused row rather than omitting it.

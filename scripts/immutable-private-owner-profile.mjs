@@ -28,7 +28,7 @@ function inspectOriginalOwnerData({inventory,catalog}){
  }
  const domain=loadImmutableDomainSourceRecipes(),messages=loadImmutableMessageSourceRecipes(),current=loadImmutableCurrentPostgresSource();
  const recipes=actor==='postgres'?current.recipes:[...domain.recipes,...messages.recipes];
- assert.equal(recipes.length,actor==='postgres'?25:23);assert.ok(Array.isArray(catalog.functions));
+ assert.equal(recipes.length,actor==='postgres'?26:23);assert.ok(Array.isArray(catalog.functions));
  for(const r of recipes){
   const fn=one(catalog.functions.filter(f=>`${f.schema_name}.${f.function_name}(${f.identity_arguments})`===r.identity));
   assert.equal(sha(fn.definition),r.beforeHash); // Exact original includes SECURITY DEFINER/INVOKER, config and body.

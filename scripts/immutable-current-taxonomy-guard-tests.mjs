@@ -1,3 +1,4 @@
+import {removeCurrentOc24RestoreSource,oc24RestoreIdentity} from './immutable-current-oc24-restore-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,6 +7,8 @@ import {completionSourceFenceClause,taxonomyGuardClause,taxonomyGuardPredecessor
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.equal(program.recipes.pop().identity,oc24RestoreIdentity);
+statement.sql=removeCurrentOc24RestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('only the unchanged completion validator is admitted and the entire previous Source program is recoverable',()=>{
  assert.equal(verifyOriginalTaxonomySource(),true);
  const previous=removeCurrentTaxonomyGuard(statement.sql);assert.equal(sha(previous),taxonomyGuardPredecessorSha);

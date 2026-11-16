@@ -1,3 +1,4 @@
+import {removeCurrentOc24RestoreSource,oc24RestoreIdentity} from './immutable-current-oc24-restore-source.mjs';
 import {removeCurrentTaxonomyGuard} from './immutable-current-taxonomy-guard-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,6 +8,8 @@ import {currentLeadershipRestoreRecipe,leadershipRestoreIdentity,extendCurrentLe
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentLeadershipRestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.equal(program.recipes.pop().identity,oc24RestoreIdentity);
+statement.sql=removeCurrentOc24RestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 statement.sql=removeCurrentTaxonomyGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('leadership original-row Source preserves the complete exact previous program and normal generation guard',()=>{
  assert.equal(recipe.identity,leadershipRestoreIdentity);assert.equal(program.recipes.length,25);assert.deepEqual(program.recipes.at(-1),recipe);
