@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {cpSync,existsSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync,unlinkSync} from 'node:fs';
+import {cpSync,existsSync,lstatSync,fstatSync,readlinkSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync,unlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {assertFixtureCgroupMemory} from './fixture-cgroup-memory-contract.mjs';
@@ -55,4 +55,18 @@ test('original or contract drift refuses but can still clean the exact owned der
 test('same-byte derived-file replacement cannot be adopted or deleted as the original owned file',async()=>world(async root=>{
  let path;await assert.rejects(()=>withCanonical304KernelResourceDriver(root,async file=>{path=file;const bytes=readFileSync(file);unlinkSync(file);writeFileSync(file,bytes,{flag:'wx',mode:0o400});}));
  assert.equal(existsSync(path),true,'uncertain replaced input retained for its enclosing test owner');
+}));
+
+test('atomic creator descriptor pins the original inode until uncertain replacement cleanup has refused',async()=>world(async root=>{
+ let replaced;
+ await assert.rejects(()=>withCanonical304KernelResourceDriver(root,async file=>{
+  replaced=file;const bytes=readFileSync(file),original=lstatSync(file,{bigint:true});
+  const held=readdirSync('/proc/self/fd').filter(id=>{try{return readlinkSync('/proc/self/fd/'+id)===file;}catch{return false;}});
+  assert.equal(held.length,1,'the helper retains exactly its original creator handle');const originalFd=Number(held[0]);
+  unlinkSync(file);writeFileSync(file,bytes,{flag:'wx',mode:0o400});
+  assert.equal(fstatSync(originalFd,{bigint:true}).ino,original.ino);
+  assert.equal(fstatSync(originalFd,{bigint:true}).nlink,0n);
+  assert.notEqual(lstatSync(file,{bigint:true}).ino,original.ino);
+ }));
+ assert.equal(existsSync(replaced),true);
 }));

@@ -1,7 +1,7 @@
 // Exact current resource-observer successor; original frozen Source/SQL stays.
 import assert from 'node:assert/strict';
 import {createHash,randomBytes} from 'node:crypto';
-import {lstatSync,readFileSync,realpathSync,writeFileSync,unlinkSync} from 'node:fs';
+import {lstatSync,readFileSync,realpathSync,writeFileSync,unlinkSync,openSync,closeSync,fstatSync,fsyncSync,constants} from 'node:fs';
 import {dirname,resolve} from 'node:path';
 const originalSha='fbf7fce4da266a3dd07cae3c1fc9edc6fdaef3a8c2836a0034dab6e01a67da51';
 const contractSha='6809f2075d489359a35af840db0bf09ae58a0995d6d3b93b6ab0e3fd352e8d86';
@@ -34,8 +34,15 @@ export async function withCanonical304KernelResourceDriver(root,run){
  const originalBytes=readFileSync(original);assert.equal(sha(readFileSync(contract)),contractSha,'Exact current memory contract required');
  const {driver,proof}=deriveCanonical304KernelResourceDriver(originalBytes);
  const path=resolve(root,'scripts/.canonical304-kernel-cgroup-'+randomBytes(12).toString('hex')+'.mjs');
- writeFileSync(path,driver,{flag:'wx',mode:0o400});const identity=lstatSync(path,{bigint:true});
- const owned=()=>{const st=lstatSync(path,{bigint:true});assert.ok(st.isFile()&&!st.isSymbolicLink());
+ // Retain the atomic creator's descriptor through callback and cleanup. An
+ // unlinked inode cannot be reused while this handle remains open, even on
+ // filesystems whose birth/ctime granularity makes same-tick rewrites equal.
+ const fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_RDWR|constants.O_NOFOLLOW,0o400);
+ try{writeFileSync(fd,driver);fsyncSync(fd);const identity=fstatSync(fd,{bigint:true});
+ const held=()=>{const st=fstatSync(fd,{bigint:true});assert.ok(st.isFile()&&st.nlink===1n);
+  assert.deepEqual([st.dev,st.ino,st.uid,st.mode,st.size,st.birthtimeNs,st.ctimeNs],
+   [identity.dev,identity.ino,identity.uid,identity.mode,identity.size,identity.birthtimeNs,identity.ctimeNs]);};
+ const owned=()=>{held();const st=lstatSync(path,{bigint:true});assert.ok(st.isFile()&&!st.isSymbolicLink());
   assert.deepEqual([st.dev,st.ino,st.uid,st.mode&0o777n,st.birthtimeNs,st.ctimeNs],
    [identity.dev,identity.ino,BigInt(process.getuid()),0o400n,identity.birthtimeNs,identity.ctimeNs]);
   assert.equal(sha(readFileSync(path)),proof.derived_driver_sha256);};
@@ -43,4 +50,5 @@ export async function withCanonical304KernelResourceDriver(root,run){
   assert.equal(sha(readFileSync(contract)),contractSha);};
  try{current();const value=await run(path,proof);current();return value;}
  finally{owned();unlinkSync(path);}
+ }finally{closeSync(fd);}
 }
