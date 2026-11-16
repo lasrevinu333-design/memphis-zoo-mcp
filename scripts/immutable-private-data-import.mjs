@@ -697,10 +697,14 @@ export async function stageVerifiedImmutableFreshData(options) {
   freshStage='INITIALIZE_SOURCE';
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
+  const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?26
+    :initializedOwner.id==='immutable-private-legacy-supabase-admin'&&initializedOwner.actor==='supabase_admin'?25:null;
   if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
     ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false
     ||initialized.restore_complete!==false||initialized.admission_resumed!==false
-    ||initialized.guard_recipes!==25||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
+    ||initializedRecipeCount===null||initialized.guard_recipes!==initializedRecipeCount
+    ||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
   freshStage='PREPARE_RESTORE_CONTROL';
   const prepared=await prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent});
   const captured=current(),intent=captured.intent;
