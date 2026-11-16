@@ -10,6 +10,7 @@ import {readVerifiedPrivateImportSource,openVerifiedRestoreTableData,decodeResto
   createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding,readVerifiedImmutableBootstrapInventory,
   assertRestoreRowMutationFidelity,assertVerifiedLegacyRestoreDataCurrent} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
+import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
 import {deriveOriginalAuthEnumDescriptors} from './immutable-original-enum-source.mjs';
 import {splitSchemaStatements} from './isolated-event-owner-schema.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapSourceRows,
@@ -869,7 +870,7 @@ export async function inspectCommittedImmutableFreshData(options) {
       if(!isDeepStrictEqual(last,before))unavailable();
       const values=nativeData(reply,'rows');
       if(nativeData(reply,'command')!=='SELECT'||nativeData(reply,'rowCount')!==nativeData(values,'length'))unavailable();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     // Only this privately admitted SAME original's genuine signed table tags
     // choose the pure DATA profile. V1-only workflows have no new query.
@@ -1551,7 +1552,7 @@ export async function inspectCommittedImmutableFreshAuthorityData(options){
       await readCommittedAuthorityFrame(db,verifiedArchive,descriptor);current();
       const values=nativeData(reply,'rows');
       if(nativeData(reply,'command')!=='SELECT'||nativeData(reply,'rowCount')!==nativeData(values,'length'))unavailable();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     const hasTextColumns=state.original.selection.databaseTables.some(table=>table.data_encoding===postgresTextColumnsLineEncoding);
     if(hasTextColumns){readPhase='TEXT_HELPER_SOURCE';await textHelpersCurrent();current();}
@@ -1685,7 +1686,8 @@ const immutableTextHelperSourceSql = `select p.oid::pg_catalog.text oid,p.pronam
     join pg_catalog.pg_language l on l.oid=p.prolang
     where n.nspname='custodial_dr' and p.proname in ('immutable_import_text_projection','immutable_import_text_record')
     order by p.proname collate pg_catalog."C",p.oid`;
-function immutableTextHelperSource(values,previous){
+function immutableTextHelperSource(values,previous,verifiedArchive){
+  const hashes=immutableTextCodecSourceHashes(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive));
   const dense=value=>{
     if(!value||types.isProxy(value)||!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype
       ||Reflect.ownKeys(value).length!==value.length+1)fail();
@@ -1694,9 +1696,9 @@ function immutableTextHelperSource(values,previous){
   const keys=['oid','name','arguments','returns','argument_names','body','definition','config','source_attributes'];
   const expected=[
     ['immutable_import_text_projection','2283','25',['original_record'],
-      '814c1bfe130b62bbd6ffbd278b6b7b1b23546d4942a2dccbec29083d1a65c3b8'],
+      hashes.projection],
     ['immutable_import_text_record','2283 25','2283',['prototype','original_row_utf8'],
-      '030a130aa642d5517aa4acc154de267c16034d94a6ead01b299f7653fdff1fcb'],
+      hashes.record],
   ];
   const config=['search_path=pg_catalog','extra_float_digits=3','datestyle=ISO, YMD',
     'timezone=UTC','intervalstyle=postgres','bytea_output=hex'];
@@ -1868,7 +1870,7 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
     let originalTextHelpers;
     const textHelpersCurrent=async()=>{
       const values=await read(immutableTextHelperSourceSql);source();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     await boundary();
     const originalCatalog=await read(catalogSql);
@@ -2199,7 +2201,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     let originalTextHelpers;
     const textHelpersCurrent=async()=>{
       const values=await read(immutableTextHelperSourceSql);source();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     const catalog=await read(catalogSql,enumParameters),byId=new Map();
     for(const row of catalog){

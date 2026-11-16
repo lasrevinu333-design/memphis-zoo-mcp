@@ -1,3 +1,4 @@
+import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
 import { createHash, createHmac } from "node:crypto";
 import { isProxy } from "node:util/types";
 import { pipeline } from "node:stream/promises";
@@ -240,11 +241,12 @@ export async function compareVerifiedStorageTableData(options) {
   // Fixed pure DATA recipes from immutable-private-owner-context.sql f0c870ea...
   // (including the initial/trailing body newlines). No context-dependent
   // decoder, caller-selected recipe, or currently observed body is an oracle.
+  const textCodecHashes=immutableTextCodecSourceHashes(privateOwnerProfile??{id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'});
   const textHelpers = [
     ["immutable_import_text_projection", "2283", "25", ["original_record"],
-      "814c1bfe130b62bbd6ffbd278b6b7b1b23546d4942a2dccbec29083d1a65c3b8"],
+      textCodecHashes.projection],
     ["immutable_import_text_record", "2283 25", "2283", ["prototype", "original_row_utf8"],
-      "030a130aa642d5517aa4acc154de267c16034d94a6ead01b299f7653fdff1fcb"],
+      textCodecHashes.record],
   ];
   const textHelperConfig = ["search_path=pg_catalog", "extra_float_digits=3", "datestyle=ISO, YMD",
     "timezone=UTC", "intervalstyle=postgres", "bytea_output=hex"];

@@ -2,23 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope} from './immutable-current-data-schema-scope.mjs';
+import {currentDataSchemaScopeStatements,extendCurrentPostgresDataSchemaScope,currentDataSchemaDependencyStatements,rebindCurrentDataSchemaDependencies} from './immutable-current-data-schema-scope.mjs';
+import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const oldFull="('public','auth','storage','custodial_release_identity')",oldOrdinary="('public','auth','storage')";
 const full="('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')";
 const ordinary="('public','auth','storage','custodial_employment','custodial_coverall','custodial_leadership_private')";
+const pairs=[
+ ['030a130aa642d5517aa4acc154de267c16034d94a6ead01b299f7653fdff1fcb','4833f9a0e02e3dd180221ef09f7240dd4511c5d406456e78401e538e377c2363'],
+ ['814c1bfe130b62bbd6ffbd278b6b7b1b23546d4942a2dccbec29083d1a65c3b8','3b33effac412985b3f137d458960ae382387659f4f87ed9372335dde6589596b'],
+ ['884485499c6f2c893407e809f5a32200c5b4abe48c8eca944130babdff9d5b15','e89263e58487fc1dcbc08c31f5428130bc05cce726cd15ae162f03a3bc6aae36'],
+];
+const originalSql=sql=>pairs.reduce((s,[old,next])=>s.replaceAll(next,old),sql).replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 test('all authenticated data schemas are included in exact current import, codec and readback predicates',()=>{
  const prior=structuredClone(program);let count=0;
  for(const statement of prior.statements){
   const name=statement.sourcePath.slice('proposals/'.length);
-  if(!currentDataSchemaScopeStatements.includes(name))continue;
+  if(!currentDataSchemaScopeStatements.includes(name)&&!currentDataSchemaDependencyStatements.includes(name))continue;
   assert.ok(!statement.sql.includes(oldFull)&&!statement.sql.includes(oldOrdinary));
-  const original=statement.sql.replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
-  assert.equal(extendCurrentPostgresDataSchemaScope(name,original),statement.sql);
+  const original=originalSql(statement.sql);
+  let compiled=currentDataSchemaScopeStatements.includes(name)?extendCurrentPostgresDataSchemaScope(name,original):original;
+  if(currentDataSchemaDependencyStatements.includes(name))compiled=rebindCurrentDataSchemaDependencies(name,compiled);
+  assert.equal(compiled,statement.sql);
   statement.sql=original;statement.sourceSha256=sha(original);count++;
  }
- assert.equal(count,3);
+ assert.equal(count,4);
  // The complete former program, including every guard recipe, ACL, actor,
  // fence, typed codec, original-data comparison and all remaining statements.
  const originalBytes=JSON.stringify(prior,null,2)+'\n';
@@ -28,11 +37,45 @@ test('all authenticated data schemas are included in exact current import, codec
 test('modified predecessors, unrecognized schemas and unknown scope selectors cannot compile',()=>{
  for(const statement of program.statements){
   const name=statement.sourcePath.slice('proposals/'.length);if(!currentDataSchemaScopeStatements.includes(name))continue;
-  const original=statement.sql.replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
+  const original=originalSql(statement.sql);
   for(const changed of [original+'\n',original.replace('custodial_release_identity','unknown_private'),original.replace('FOR UPDATE','FOR SHARE')]){
    if(changed!==original)assert.throws(()=>extendCurrentPostgresDataSchemaScope(name,changed));
   }
   assert.throws(()=>extendCurrentPostgresDataSchemaScope('unknown.sql',original));
+ }
+});
+function functionBody(sql,name){
+ const marker='CREATE FUNCTION custodial_dr.'+name+'(';assert.equal(sql.split(marker).length,2);
+ const start=sql.indexOf('AS $fn$',sql.indexOf(marker))+'AS $fn$'.length,end=sql.indexOf('$fn$;',start);
+ assert.ok(start>=marker.length&&end>start);return sql.slice(start,end);
+}
+test('all dependent SQL and both native readback consumers bind the actual derived helper bodies',()=>{
+ const current=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql').sql;
+ const legacy=readFileSync(new URL('../proposals/immutable-private-owner-context.sql',import.meta.url),'utf8');
+ for(const [profile,source] of [[{id:'immutable-private-current-postgres',actor:'postgres'},current],
+  [{id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'},legacy]]){
+  const hashes=immutableTextCodecSourceHashes(profile);
+  assert.equal(hashes.projection,sha(functionBody(source,'immutable_import_text_projection')));
+  assert.equal(hashes.record,sha(functionBody(source,'immutable_import_text_record')));
+ }
+ assert.equal(sha(functionBody(current,'immutable_import_matches_ordinary_staged')),pairs[2][1]);
+ const dependencies=program.statements.filter(s=>currentDataSchemaDependencyStatements.includes(s.sourcePath.slice('proposals/'.length)));
+ for(const [old,next] of pairs){assert.equal(dependencies.filter(s=>s.sql.includes(next)).length,1);assert.ok(dependencies.every(s=>!s.sql.includes(old)));}
+ for(const filename of ['immutable-private-data-import.mjs','disaster-recovery-storage.mjs']){
+  const source=readFileSync(new URL('./'+filename,import.meta.url),'utf8');
+  assert.match(source,/immutableTextCodecSourceHashes\(/);
+  assert.ok(!source.includes(pairs[0][0])&&!source.includes(pairs[1][0]),'no stale literal native codec pins');
+ }
+});
+test('profile and dependency mismatches refuse rather than accepting both current and historical bodies',()=>{
+ for(const value of [{id:'unknown',actor:'postgres'},{id:'immutable-private-current-postgres',actor:'supabase_admin'},
+  {id:'immutable-private-legacy-supabase-admin',actor:'postgres'},{id:'immutable-private-current-postgres',actor:'postgres',extra:true}])assert.throws(()=>immutableTextCodecSourceHashes(value));
+ let traps=0;const value={id:'immutable-private-current-postgres'};Object.defineProperty(value,'actor',{get(){traps++;return 'postgres';}});
+ assert.throws(()=>immutableTextCodecSourceHashes(value));assert.equal(traps,0);assert.throws(()=>immutableTextCodecSourceHashes(new Proxy({},{})));
+ for(const statement of program.statements){const name=statement.sourcePath.slice('proposals/'.length);
+  if(!currentDataSchemaDependencyStatements.includes(name))continue;
+  const previous=pairs.reduce((s,[old,next])=>s.replaceAll(next,old),statement.sql);
+  assert.throws(()=>rebindCurrentDataSchemaDependencies(name,previous+'\n'));assert.throws(()=>rebindCurrentDataSchemaDependencies('unknown.sql',previous));
  }
 });
 test('historical SQL stays pinned and the two identity originals keep their dedicated guard path',()=>{

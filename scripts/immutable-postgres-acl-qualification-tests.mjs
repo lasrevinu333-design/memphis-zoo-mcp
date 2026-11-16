@@ -96,7 +96,13 @@ const stdinArgs=cid=>['exec','-i',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',
 
 test('75-case batch keeps69 valid Boolean rows and six separately bound exact invalid-array SELECTs',()=>{
  const fixture=immutablePostgresAclFixtureSql();assert.equal(fixture.checks,69);assert.equal(fixture.total_checks,75);assert.equal(fixture.expected_error_cases.length,6);
- assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'b903af3e203c31670bf4c3e531eee0ec75c9ced2f7dce28018f3941eee3928c6');
+ assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'7ec41e9a42a2f0e9e9e1c1861bd71776c3861f7fc2a6f796ff1baf58ac734908');
+ // Only the current manager statement's complete Source hash changed when
+ // its unchanged invoker checks were rebound to the derived ordinary matcher.
+ const priorBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
+  expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,
+   source_sha256:case_id==='MANAGER_CURRENT_EMPTY_ACL'?'5181d13fae8cac9e7c4093be78dc1e02142ebf7588893804c7f2ba60afe020bf':source_sha256,sql_sha256}))};
+ assert.equal(hash(JSON.stringify(priorBatch)),'b903af3e203c31670bf4c3e531eee0ec75c9ced2f7dce28018f3941eee3928c6');
  assert.equal((fixture.sql.match(/'\{postgres=\/postgres\}'::aclitem\[\]/g)||[]).length,6);
  assert.ok(!fixture.sql.includes("'{}'::aclitem[]"));
  assert.deepEqual(fixture.expected_error_cases.map(x=>x.case_id),['DEVICE_CURRENT_EMPTY_ACL','DEVICE_LEGACY_EMPTY_ACL','MANAGER_CURRENT_EMPTY_ACL','MANAGER_LEGACY_EMPTY_ACL','EMPLOYEE_PUSH_CURRENT_EMPTY_ACL','EMPLOYEE_PUSH_LEGACY_EMPTY_ACL']);
