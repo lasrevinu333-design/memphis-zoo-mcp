@@ -96,7 +96,8 @@ export function classifyImmutableImportGuard(error,tables){
  if(own(error,'code')!=='55000'||own(error,'message')!=='IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED')return Object.freeze({});
  const raw=own(error,'detail');if(typeof raw!=='string'||Buffer.byteLength(raw)>8192||types.isProxy(tables)||!Array.isArray(tables))return Object.freeze({});
  let d;try{d=JSON.parse(raw);}catch{return Object.freeze({});}
- const keys=['schema','table','trigger','function_identity','tgtype','enabled','owner','function_sha256'];
+ const keys=['schema','table','trigger','function_identity','tgtype','enabled','owner','function_sha256',
+  ...(Object.hasOwn(d??{},'receipt_guard_checks')?['receipt_guard_checks']:[])];
  if(!d||typeof d!=='object'||Array.isArray(d)||Object.getPrototypeOf(d)!==Object.prototype||
   !keys.every(k=>Object.hasOwn(d,k))||Object.keys(d).length!==keys.length)return Object.freeze({});
  const identifier=v=>typeof v==='string'&&/^[A-Za-z_][A-Za-z0-9_$]*$/.test(v)&&Buffer.byteLength(v)<=63;
@@ -110,8 +111,15 @@ export function classifyImmutableImportGuard(error,tables){
  }
  if(matches!==1)return Object.freeze({});
  const sha=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ if(Object.hasOwn(d,'receipt_guard_checks')&&d.receipt_guard_checks!==null&&(!Array.isArray(d.receipt_guard_checks)
+  ||d.receipt_guard_checks.length!==9||d.receipt_guard_checks.some(v=>typeof v!=='boolean')))return Object.freeze({});
+ if(d.receipt_guard_checks&&(d.schema!=='custodial_coverall'||!([
+  ['activation_operations','complete_coverall_activation','public.static_weekly_coverall_require_activation_receipt()'],
+  ['recurring_materialization_operations','complete_recurring_receipt','public.static_weekly_manual_recurring_require_receipt()'],
+ ].some(([table,trigger,identity])=>table===d.table&&trigger===d.trigger&&identity===d.function_identity))))return Object.freeze({});
  return Object.freeze({guard_schema:d.schema,guard_relation_sha256:sha([d.schema,d.table]),guard_trigger_sha256:sha([d.schema,d.table,d.trigger]),
-  ...(d.function_sha256?{guard_function_sha256:d.function_sha256}:{})});
+  ...(d.function_sha256?{guard_function_sha256:d.function_sha256}:{}),
+  ...(d.receipt_guard_checks?{guard_receipt_checks:d.receipt_guard_checks.map(v=>v?'1':'0').join('')}:{})});
 }
 export function immutableFreshDiagnosticFields(value){
  const result={};
@@ -119,6 +127,7 @@ export function immutableFreshDiagnosticFields(value){
  const digest=key=>{const v=own(value,key);return typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)?v:undefined;};
  if(result.guard_schema&&digest('guard_relation_sha256')&&digest('guard_trigger_sha256')){
   for(const key of ['guard_relation_sha256','guard_trigger_sha256','guard_function_sha256'])if(digest(key))result[key]=digest(key);
+  const checks=own(value,'guard_receipt_checks');if(typeof checks==='string'&&/^[01]{9}$/.test(checks))result.guard_receipt_checks=checks;
  }else delete result.guard_schema;
  // An ordinal is meaningful only inside the pinned installer loop.
  if(result.initializer_stage!=='INSTALL_PINNED_STATEMENT')delete result.source_statement;

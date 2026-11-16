@@ -30,6 +30,21 @@ test('unsupported INSERT guard diagnosis exports only catalog-bound schema and d
  const projected=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);assert.deepEqual(projectPrivateRestoreDiagnostic(projected),projected);
  const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[projected]})));
  assert.deepEqual(receipt.restore_diagnostics,[projected]);
+ const observed={...detail,schema:'custodial_coverall',table:'activation_operations',trigger:'complete_coverall_activation',
+  function_identity:'public.static_weekly_coverall_require_activation_receipt()',receipt_guard_checks:[true,true,true,true,true,true,true,true,false]};
+ const observedTables=[{schema_name:observed.schema,table_name:observed.table}];
+ const diagnose=change=>classifyImmutableImportGuard(Object.assign(new Error(cause.message),{code:'55000',detail:JSON.stringify({...observed,...change})}),observedTables);
+ const diagnosed=diagnose({});assert.equal(diagnosed.guard_receipt_checks,'111111110');
+ const qualifiedError=Object.assign(new Error('PRIVATE'),{code:error.code,sql_state:error.sql_state,import_refusal:cause.message});
+ recordImmutableFreshFailure(qualifiedError,{import_operation:'BEGIN_IMPORT',...diagnosed});
+ const diagnosedProjection=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',qualifiedError);
+ assert.deepEqual(projectPrivateRestoreDiagnostic(diagnosedProjection),diagnosedProjection);
+ assert.equal(privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[diagnosedProjection]}))).restore_diagnostics[0].guard_receipt_checks,'111111110');
+ for(const invalid of [[true],Array(9).fill('true'),Array(10).fill(true),null]){
+  if(invalid===null)assert.equal(diagnose({receipt_guard_checks:null}).guard_receipt_checks,undefined);
+  else assert.deepEqual(diagnose({receipt_guard_checks:invalid}),{});
+ }
+ assert.deepEqual(classifyImmutableImportGuard(Object.assign(new Error(cause.message),{code:'55000',detail:JSON.stringify({...detail,receipt_guard_checks:Array(9).fill(true)})}),tables),{});
  for(const change of [{function_sha256:'PRIVATE'},{row:'PRIVATE ROW'},{tgtype:-1},{schema:'unknown'},{table:'not_in_catalog'},{enabled:'D'}]){
   const invalid=Object.assign(new Error(cause.message),{code:'55000',detail:JSON.stringify({...detail,...change})});assert.deepEqual(classifyImmutableImportGuard(invalid,tables),{});
  }

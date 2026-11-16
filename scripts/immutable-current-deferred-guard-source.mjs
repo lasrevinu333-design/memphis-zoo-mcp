@@ -6,6 +6,31 @@ import {readFileSync} from 'node:fs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 export const deferredGuardPredecessorSha='7e870367cbadce546c678dd239cb2ee8d9c829e059e06a29a45b88c7693f105a';
 const anchor='     AND NOT EXISTS(\n      SELECT 1 FROM (VALUES\n';
+const diagnosticAnchor=' END AS function_sha256\n    INTO unsupported_insert_guard\n';
+const diagnosticSelect=` END AS function_sha256,
+    CASE WHEN guard_relation_namespace.nspname='custodial_coverall'
+      AND ((guard_relation.relname='activation_operations' AND t.tgname='complete_coverall_activation')
+       OR (guard_relation.relname='recurring_materialization_operations' AND t.tgname='complete_recurring_receipt'))
+     THEN jsonb_build_array(
+      current_user=session_user AND session_user='postgres',
+      guard_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=session_user),
+      EXISTS(SELECT 1 FROM pg_catalog.pg_constraint rc WHERE rc.oid=t.tgconstraint AND rc.conname=t.tgname
+       AND rc.conrelid=t.tgrelid AND rc.contype='t' AND rc.condeferrable AND rc.condeferred),
+      t.tgdeferrable AND t.tginitdeferred AND t.tgconstraint<>0,
+      t.tgtype=5,
+      t.tgenabled::text=CASE guard_relation.relname WHEN 'activation_operations' THEN 'O' ELSE 'A' END,
+      t.tgqual IS NULL AND t.tgnargs=0 AND octet_length(t.tgargs)=0 AND t.tgattr=''::int2vector
+       AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL,
+      guard_function.prokind='f' AND guard_function.pronargs=0
+       AND guard_function.prorettype='pg_catalog.trigger'::regtype AND guard_function.prosecdef,
+      EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory ri
+       WHERE ri.object_kind='function' AND ri.definition_sql=pg_get_functiondef(guard_function.oid)
+        AND ri.definition_sha256=public.static_weekly_digest_text(pg_get_functiondef(guard_function.oid))))
+     END AS receipt_guard_checks
+    INTO unsupported_insert_guard
+`;
+const detailAnchor="'function_sha256',unsupported_insert_guard.function_sha256)::text,8192);";
+const detailWithChecks="'function_sha256',unsupported_insert_guard.function_sha256,\n      'receipt_guard_checks',unsupported_insert_guard.receipt_guard_checks)::text,8192);";
 export const deferredReceiptGuardClause=`     -- These exact original constraint triggers still execute at COMMIT.
      -- They only verify the matching original receipt exists; missing receipts
      -- remain fatal. Never admit another deferred or side-effecting trigger.
@@ -53,10 +78,14 @@ export function extendCurrentDeferredReceiptGuards(name,sql){
   const definition='CREATE OR REPLACE FUNCTION '+identity+'\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO \'pg_catalog\', \'public\'\nAS $function$'+source.slice(start,end)+'$function$\n';
   assert.equal(sha(definition),expected);
  }
- const next=sql.replace(anchor,()=>deferredReceiptGuardClause+anchor);
- assert.equal(next.replace(deferredReceiptGuardClause,''),sql);return next;
+ assert.equal(sql.split(diagnosticAnchor).length,2);assert.equal(sql.split(detailAnchor).length,2);
+ const next=sql.replace(anchor,()=>deferredReceiptGuardClause+anchor)
+  .replace(diagnosticAnchor,()=>diagnosticSelect).replace(detailAnchor,()=>detailWithChecks);
+ assert.equal(removeCurrentDeferredReceiptGuards(next),sql);return next;
 }
 export function removeCurrentDeferredReceiptGuards(sql){
  assert.equal(typeof sql,'string');assert.equal(sql.split(deferredReceiptGuardClause).length,2);
- const previous=sql.replace(deferredReceiptGuardClause,'');assert.equal(sha(previous),deferredGuardPredecessorSha);return previous;
+ assert.equal(sql.split(diagnosticSelect).length,2);assert.equal(sql.split(detailWithChecks).length,2);
+ const previous=sql.replace(deferredReceiptGuardClause,'').replace(diagnosticSelect,()=>diagnosticAnchor).replace(detailWithChecks,()=>detailAnchor);
+ assert.equal(sha(previous),deferredGuardPredecessorSha);return previous;
 }
