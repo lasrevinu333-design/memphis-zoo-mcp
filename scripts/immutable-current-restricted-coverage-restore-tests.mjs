@@ -1,3 +1,4 @@
+import {removeCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,6 +7,7 @@ import {currentRestrictedCoverageRestoreRecipe,restrictedCoverageRestoreIdentity
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentRestrictedCoverageRestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+statement.sql=removeCurrentSeparationGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('exact archived coverage template branch preserves every operational restriction rule and the complete previous program',()=>{
  assert.equal(recipe.identity,restrictedCoverageRestoreIdentity);assert.equal(recipe.registry_identity,'sch_guard_restricted_coverage_template()');assert.equal(program.recipes.length,28);assert.deepEqual(program.recipes.at(-1),recipe);
  const before=removeCurrentRestrictedCoverageRestoreSource(statement.sql);assert.equal(extendCurrentRestrictedCoverageRestoreSource(before),statement.sql);
