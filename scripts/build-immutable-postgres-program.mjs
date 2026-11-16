@@ -1,3 +1,4 @@
+import {extendCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import {extendCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
 import {currentRestrictedCoverageRestoreRecipe,extendCurrentRestrictedCoverageRestoreSource} from './immutable-current-restricted-coverage-restore-source.mjs';
 // Offline deterministic Source compiler. Never connects to a database or reads an archive.
@@ -109,6 +110,7 @@ const statements=order.map(name=>{
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentCoverageRestoreSource(sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentRestrictedCoverageRestoreSource(sql);
  if(name==='immutable-private-owner-context.sql')sql=extendCurrentSeparationGuard(sql);
+ if(name==='immutable-private-owner-context.sql')sql=extendCurrentScanGuard(sql);
  const wrapper=name==='immutable-original-employee-push-authority-restore.sql'?'DO_ONLY':
  ['immutable-private-owner-context.sql','immutable-original-employee-restore.sql','immutable-original-device-boundary-restore.sql','immutable-original-authority-reconciliation.sql','immutable-original-manager-push-restore.sql'].includes(name)?'OUTER_TRANSACTION':'NONE';
  return {sourcePath:old.sourcePath,originalSourceSha256:old.sourceSha256,sourceSha256:sha(sql),wrapper,sql};

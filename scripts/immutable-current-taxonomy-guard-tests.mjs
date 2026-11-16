@@ -1,3 +1,4 @@
+import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import {removeCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
 import {removeCurrentRestrictedCoverageRestoreSource,restrictedCoverageRestoreIdentity} from './immutable-current-restricted-coverage-restore-source.mjs';
 import {removeCurrentCoverageRestoreSource,coverageRestoreIdentity} from './immutable-current-coverage-restore-source.mjs';
@@ -10,6 +11,7 @@ import {completionSourceFenceClause,taxonomyGuardClause,taxonomyGuardPredecessor
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+statement.sql=removeCurrentScanGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 statement.sql=removeCurrentSeparationGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 assert.equal(program.recipes.pop().identity,restrictedCoverageRestoreIdentity);
 statement.sql=removeCurrentRestrictedCoverageRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);

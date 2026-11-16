@@ -1,3 +1,4 @@
+import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,6 +7,7 @@ import {separationGuardClause,verifyOriginalSeparationGuardSource,extendCurrentS
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+statement.sql=removeCurrentScanGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 test('full previous program is byte-exact and original rejection function still executes',()=>{
  const prior=structuredClone(program),s=prior.statements.find(s=>s.sourcePath===statement.sourcePath);s.sql=removeCurrentSeparationGuard(s.sql);s.sourceSha256=sha(s.sql);
  assert.equal(extendCurrentSeparationGuard(s.sql),statement.sql);
