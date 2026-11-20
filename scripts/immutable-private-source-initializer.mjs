@@ -164,14 +164,15 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  initializerStage='RECONCILE_ARCHIVED_ACLS';
  const acl=await reconcileVerifiedImmutableBootstrapAcls(db,source,verifiedArchive);await readContext();
  const recipeIdentities=Object.freeze(source.recipes.map(recipe=>recipe.identity));
- const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?30:25;
+ const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?31:25;
  assert.equal(recipeIdentities.length,recipeCount);assert.equal(new Set(recipeIdentities).size,recipeCount);
- if(recipeCount===30){
-  assert.equal(recipeIdentities.at(-5),'custodial_coverall.bind_manual_delivery_after_acceptance()');
-  assert.equal(recipeIdentities.at(-4),'custodial_leadership_private.bind_registration_generation()');
-  assert.equal(recipeIdentities.at(-3),'public.custodial_oc24_completion_selection_guard()');
-  assert.equal(recipeIdentities.at(-2),'public.sch_guard_operational_coverage_template()');
-  assert.equal(recipeIdentities.at(-1),'public.sch_guard_restricted_coverage_template()');
+ if(recipeCount===31){
+  assert.equal(recipeIdentities.at(-6),'custodial_coverall.bind_manual_delivery_after_acceptance()');
+  assert.equal(recipeIdentities.at(-5),'custodial_leadership_private.bind_registration_generation()');
+  assert.equal(recipeIdentities.at(-4),'public.custodial_oc24_completion_selection_guard()');
+  assert.equal(recipeIdentities.at(-3),'public.sch_guard_operational_coverage_template()');
+  assert.equal(recipeIdentities.at(-2),'public.sch_guard_restricted_coverage_template()');
+ assert.equal(recipeIdentities.at(-1),'public.sch_daily_absence_override_regenerate_trigger()');
  }
  // One fresh, ordered native catalog read per side, never a cached verdict.
  // LEFT JOIN retains a missing overload as a refused row rather than omitting it.

@@ -1,3 +1,4 @@
+import {removeCurrentAbsenceRestoreSource as undoAbsence,currentAbsenceRestoreRecipe as absenceRecipe} from './immutable-current-absence-restore-source.mjs';
 import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import {removeCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
 import test from 'node:test';
@@ -7,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {currentRestrictedCoverageRestoreRecipe,restrictedCoverageRestoreIdentity,extendCurrentRestrictedCoverageRestoreSource,removeCurrentRestrictedCoverageRestoreSource} from './immutable-current-restricted-coverage-restore-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentRestrictedCoverageRestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+{ assert.deepEqual(program.recipes.pop(),absenceRecipe());const s=program.statements.find(x=>x.sourcePath==='proposals/immutable-private-owner-context.sql');s.sql=undoAbsence(s.sql);s.sourceSha256=sha(s.sql); }
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
 statement.sql=removeCurrentScanGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 statement.sql=removeCurrentSeparationGuard(statement.sql);statement.sourceSha256=sha(statement.sql);

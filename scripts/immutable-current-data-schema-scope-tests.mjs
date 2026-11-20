@@ -1,3 +1,4 @@
+import {removeCurrentAbsenceRestoreSource as undoAbsence,currentAbsenceRestoreRecipe as absenceRecipe} from './immutable-current-absence-restore-source.mjs';
 import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import {removeCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
 import {removeCurrentRestrictedCoverageRestoreSource,restrictedCoverageRestoreIdentity} from './immutable-current-restricted-coverage-restore-source.mjs';
@@ -24,6 +25,7 @@ const pairs=[
 ];
 const originalSql=sql=>pairs.reduce((s,[old,next])=>s.replaceAll(next,old),sql).replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+{ assert.deepEqual(program.recipes.pop(),absenceRecipe());const s=program.statements.find(x=>x.sourcePath==='proposals/immutable-private-owner-context.sql');s.sql=undoAbsence(s.sql);s.sourceSha256=sha(s.sql); }
 const leadershipContext=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
 leadershipContext.sql=removeCurrentScanGuard(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);
 leadershipContext.sql=removeCurrentSeparationGuard(leadershipContext.sql);leadershipContext.sourceSha256=sha(leadershipContext.sql);

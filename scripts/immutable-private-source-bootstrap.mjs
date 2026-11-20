@@ -191,7 +191,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
  const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
  const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
- const recipeCount=postgresProgram?30:25;
+ const recipeCount=postgresProgram?31:25;
  assert.equal(allRecipes.length,recipeCount);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,recipeCount);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
@@ -219,7 +219,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   assert.ok(!Object.hasOwn(registrySource,found[0].object_identity));
   registrySource[found[0].object_identity]=Object.freeze({definition_sql:recipe.after,definition_sha256:recipe.afterHash});
  }
- assert.equal(Object.keys(registrySource).length,postgresProgram?28:24);
+ assert.equal(Object.keys(registrySource).length,postgresProgram?29:24);
  sourcePhase='SOURCE_STATEMENTS';
  const statements=postgresProgram?postgresProgram.statements.map(({sourcePath,sourceSha256,sql})=>({sourcePath,sourceSha256,sql})):[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
   ...authority.map(({sourcePath,sourceSha256,sql})=>Object.freeze({sourcePath,sourceSha256,sql}))];
