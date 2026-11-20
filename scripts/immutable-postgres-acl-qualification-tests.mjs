@@ -1,3 +1,4 @@
+import {removeCurrentCyclicCohorts} from './immutable-current-cyclic-cohort-source.mjs';
 import {removeCurrentRestoreGuardCohort} from './immutable-current-restore-guard-cohort.mjs';
 // Connection-free tests of the shipping synthetic qualifier. Never calls Docker.
 import test from 'node:test';
@@ -97,16 +98,21 @@ const stdinArgs=cid=>['exec','-i',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',
 
 test('75-case batch keeps69 valid Boolean rows and six separately bound exact invalid-array SELECTs',()=>{
  const fixture=immutablePostgresAclFixtureSql();assert.equal(fixture.checks,69);assert.equal(fixture.total_checks,75);assert.equal(fixture.expected_error_cases.length,6);
- assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'60f43e1ec4c1fa8eaa3bd83384dc073d8eeff5f6e52928c12b64496d5323a351');
+ assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'4b15cba1c876eca3a2f3c1ed1c65b0eef96843ad2f02ffd9b4d5b96e94100334');
  // The cohort is appended to the last fixed Source statement; the exact ACL
  // predicates and all six hostile-array SQL bytes remain unchanged. Reverse
  // that layer before the earlier manager-statement predecessor check.
  const currentProgram=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+ const beforeCyclic=removeCurrentCyclicCohorts(currentProgram);
+ const originalManager=beforeCyclic.statements[11].sourceSha256;
+ const beforeCyclicBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
+  expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,source_sha256:case_id==='MANAGER_CURRENT_EMPTY_ACL'?originalManager:source_sha256,sql_sha256}))};
+ assert.equal(hash(JSON.stringify(beforeCyclicBatch)),'60f43e1ec4c1fa8eaa3bd83384dc073d8eeff5f6e52928c12b64496d5323a351');
  const beforeCohort=removeCurrentRestoreGuardCohort(currentProgram);
  const originalEmployeePush=beforeCohort.statements.find(s=>s.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql').sourceSha256;
  const previousBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
   expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,
-   source_sha256:case_id==='EMPLOYEE_PUSH_CURRENT_EMPTY_ACL'?originalEmployeePush:source_sha256,sql_sha256}))};
+   source_sha256:case_id==='EMPLOYEE_PUSH_CURRENT_EMPTY_ACL'?originalEmployeePush:case_id==='MANAGER_CURRENT_EMPTY_ACL'?originalManager:source_sha256,sql_sha256}))};
  assert.equal(hash(JSON.stringify(previousBatch)),'7ec41e9a42a2f0e9e9e1c1861bd71776c3861f7fc2a6f796ff1baf58ac734908');
  const priorBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
   expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,

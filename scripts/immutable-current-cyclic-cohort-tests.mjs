@@ -22,9 +22,22 @@ test('hosted prerequisite selectors retain exact predecessor bytes through repos
 test('complete genuine previous program survives fixed original cyclic cohort composition',()=>{
  assert.equal(sha(JSON.stringify(previous,null,2)+'\n'),'ba07026628726ae35f12522520c31a19bd1883cdbae9326fa711b9f551a0297a');
  assert.deepEqual(extendCurrentCyclicCohorts(previous),program);assert.deepEqual(program.recipes,previous.recipes);
- assert.deepEqual(program.statements.slice(1),previous.statements.slice(1));
+ for(let i=1;i<program.statements.length;i++)if(i!==11)assert.deepEqual(program.statements[i],previous.statements[i]);
+ const priorDependency=previous.statements[11],currentDependency=program.statements[11];
+ assert.equal(currentDependency.sql.replace('fcc10ad492f75625408bbf94f0da90c238b22e1e95a2d81b6d284f3990b54a95','e89263e58487fc1dcbc08c31f5428130bc05cce726cd15ae162f03a3bc6aae36'),priorDependency.sql);
+ assert.equal(sha(currentDependency.sql),currentDependency.sourceSha256);
  assert.equal(program.statements[0].originalSourceSha256,previous.statements[0].originalSourceSha256);
  assert.equal(program.statements.length,13);assert.equal(program.recipes.length,49);
+});
+test('manager restore validates the complete actual composed staged matcher body',()=>{
+ const sql=program.statements[0].sql;
+ const name='CREATE FUNCTION custodial_dr.immutable_import_matches_ordinary_staged(table_oid oid,original_row json)';
+ const start=sql.indexOf(name);assert.ok(start>0);
+ const bodyStart=sql.indexOf('AS $fn$',start)+'AS $fn$'.length,bodyEnd=sql.indexOf('$fn$',bodyStart);
+ const current=sql.slice(bodyStart,bodyEnd);
+ assert.equal(sha(current),'fcc10ad492f75625408bbf94f0da90c238b22e1e95a2d81b6d284f3990b54a95');
+ assert.ok(program.statements[11].sql.includes("='"+sha(current)+"'"));
+ assert.ok(!program.statements[11].sql.includes('e89263e58487fc1dcbc08c31f5428130bc05cce726cd15ae162f03a3bc6aae36'));
 });
 test('only two literal fixed groups and private invoker functions are composed',()=>{
  const sql=currentCyclicCohortSql();assert.throws(()=>currentCyclicCohortSql('caller'));
@@ -45,6 +58,7 @@ test('only the exact original application INSERT table predicate gains the fixed
  assert.throws(()=>extendCurrentCyclicStatementFence(prior+prior));assert.throws(()=>extendCurrentCyclicStatementFence(prior.replace('custodial_dr.guard_application_mutation','public.foreign_guard')));
 });
 for(const mutate of [
+ p=>p.statements[11].sql=p.statements[11].sql.replace('fcc10ad492f75625408bbf94f0da90c238b22e1e95a2d81b6d284f3990b54a95','e89263e58487fc1dcbc08c31f5428130bc05cce726cd15ae162f03a3bc6aae36'),
  p=>p.recipes[0].after+=' ',p=>p.statements[1].sql+=' ',p=>p.statements[0].sql=p.statements[0].sql.replace('AND s.table_oid=$1 AND s.typed_original_text=original_row::text','AND true'),
  p=>p.statements[0].sql=p.statements[0].sql.replace('current_user<>session_user OR current_user<>\'postgres\'','false'),
  p=>p.statements[0].sql=p.statements[0].sql.replace('pg_catalog.pg_trigger_depth()<>1','false'),

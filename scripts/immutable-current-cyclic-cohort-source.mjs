@@ -11,6 +11,13 @@ const oldFence='c.active_table_oid = TG_RELID';
 const newFence='(c.active_table_oid = TG_RELID OR custodial_dr.immutable_import_active_cohort_relation(TG_RELID))';
 const matcherAnchor=" IF ctx.phase NOT IN('INSERTING_ORDINARY','INSERTING_ORDINARY_SET') OR table_oid IS DISTINCT FROM ctx.active_table_oid\n";
 const matcherBranch=" IF ctx.phase='INSERTING_ORDINARY_SET' AND custodial_dr.immutable_import_active_cohort_relation(table_oid) IS TRUE THEN\n  RETURN custodial_dr.immutable_import_matches_cohort_staged(table_oid,original_row);\n END IF;\n";
+const priorMatcherPin='e89263e58487fc1dcbc08c31f5428130bc05cce726cd15ae162f03a3bc6aae36';
+const cohortMatcherPin='fcc10ad492f75625408bbf94f0da90c238b22e1e95a2d81b6d284f3990b54a95';
+function rebindManagerMatcher(program,from,to){
+ const s=program.statements[11];
+ assert.equal(s.sourcePath,'proposals/immutable-original-manager-push-restore.sql');
+ s.sql=once(s.sql,from,to);s.sourceSha256=sha(s.sql);
+}
 const marker='-- Only two fixed original table cohorts; no constraint timing or trigger change.\n';
 export function currentCyclicCohortSql(){
  assert.equal(arguments.length,0);
@@ -31,6 +38,7 @@ export function extendCurrentCyclicCohorts(prior){
  s.sql=once(s.sql,matcherAnchor,matcherBranch+matcherAnchor);
  assert.ok(s.sql.endsWith('COMMIT;\n'));
  s.sql=s.sql.slice(0,-'COMMIT;\n'.length)+currentCyclicCohortSql()+'\nCOMMIT;\n';s.sourceSha256=sha(s.sql);
+ rebindManagerMatcher(p,priorMatcherPin,cohortMatcherPin);
  assert.deepEqual(removeCurrentCyclicCohorts(p),prior);return p;
 }
 export function removeCurrentCyclicCohorts(program){
@@ -38,5 +46,6 @@ export function removeCurrentCyclicCohorts(program){
  if(!s.sql.includes(marker))return p;
  s.sql=once(s.sql,currentCyclicCohortSql()+'\nCOMMIT;\n','COMMIT;\n');
  s.sql=once(s.sql,matcherBranch+matcherAnchor,matcherAnchor);s.sql=once(s.sql,newFence,oldFence);s.sourceSha256=sha(s.sql);
+ rebindManagerMatcher(p,cohortMatcherPin,priorMatcherPin);
  assert.equal(sha(serial(p)),priorPin,'entire genuine program before fixed cyclic cohorts required');return p;
 }
