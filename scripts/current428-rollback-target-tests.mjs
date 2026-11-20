@@ -61,7 +61,7 @@ function fixture(options = {}) {
         const rows = ['16','17','18','19','20','21','22'].map(day => ({
           today: '2026-11-20', service_date: '2026-11-' + day, governed: true, projection_status: 'current',
           roster_employees: 8, current_employees: 8, reader_execute: true,
-          employees_with_assignments: 5, lunch_document_current: true,
+          normal_assignments: 26, assignment_differences: 0, employees_missing_assignments: 0, lunch_coverage_current: true,
           employee_days_sha256: (this.changes && options.changedSchedule ? 'b' : 'a').repeat(64),
           ...options.days?.[day],
         }));
@@ -131,13 +131,13 @@ test('the original three forwards run only after signed-state and exact baseline
 
 test('unchanged missing schedule or lunch data proves preservation without proving working coverage', async () => {
   const missingProjection = {
-    projection_status: 'missing_projection', current_employees: 0, employees_with_assignments: 0, lunch_document_current: false,
+    projection_status: 'missing_projection', current_employees: 0, normal_assignments: 0, lunch_coverage_current: false,
   };
   const unit = fixture({days: {
     '19': missingProjection,
     '20': missingProjection,
-    '21': {employees_with_assignments: 0},
-    '22': {lunch_document_current: false},
+    '21': {normal_assignments: 0},
+    '22': {lunch_coverage_current: false},
   }});
   const receipt = await unit.run();
   assert.equal(receipt.rollback_verified, true);
@@ -147,6 +147,11 @@ test('unchanged missing schedule or lunch data proves preservation without provi
   });
   const pastOnly = await fixture({days: {'19': missingProjection}}).run();
   assert.equal(pastOnly.target.current_chicago_week_coverage.working_coverage, true);
+  const partial = await fixture({days: {
+    '20': { assignment_differences: 1 },
+    '21': { employees_missing_assignments: 1 },
+  }}).run();
+  assert.deepEqual(partial.target.current_chicago_week_coverage.dates_missing_coverage, ['2026-11-20', '2026-11-21']);
   const wrongWeek = fixture({days: {'21': {service_date: '2026-11-28'}}});
   await assert.rejects(wrongWeek.run, error => current428CaptureRefusal(error)?.stage === 'VERIFY_CURRENT_WEEK');
 });

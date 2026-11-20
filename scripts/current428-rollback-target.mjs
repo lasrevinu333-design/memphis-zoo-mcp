@@ -69,10 +69,10 @@ export const currentWeekReadbackSql = `with week as (
 ), days as (
  select today,monday+i service_date from week cross join generate_series(0,6) i
 ), authority_days as materialized (
- select d.*,a.governed,a.projection_status,a.projection_id,
-        case when a.governed and a.projection_status='current'
-             then public.static_weekly_v8_read_lunch_document(d.service_date) end lunch
+ select d.*,a.governed,a.projection_status,a.projection_id
  from days d cross join lateral public.static_weekly_v6_schedule_authority_state(d.service_date) a
+), current_days as materialized (
+ select * from authority_days where governed and projection_status='current'
 ), employee_days as materialized (
  select d.service_date, r.employee_id,
         public.static_weekly_v5_read_employee_day(d.service_date,r.employee_id,transaction_timestamp()) payload
@@ -81,22 +81,45 @@ export const currentWeekReadbackSql = `with week as (
   select distinct roster.employee_id from public.static_weekly_v6_read_roster(d.service_date) roster
   where roster.employee_id is not null
  ) r
-), employee_facts as (
+), employee_facts as materialized (
  select e.*,e.payload->>'projection_status'='current'
         and e.payload->>'governed'='true' and e.payload->>'service_date'=d.service_date::text
         and e.payload->>'employee_id'=e.employee_id::text and e.payload->>'projection_id'=d.projection_id::text is_current
  from employee_days e join authority_days d using(service_date)
+), employee_items as materialized (
+ select e.service_date,e.employee_id::text employee_id,
+        item->>'occurrence_id' occurrence_id,
+        case when item->>'source_type'='static_weekly_lunch_coverage' then item->>'responsibility_id' else '' end responsibility_id,
+        (item->>'coverage_start')::time coverage_start,(item->>'coverage_end')::time coverage_end
+ from employee_facts e cross join lateral jsonb_array_elements(
+  case when jsonb_typeof(e.payload->'all_items')='array' then e.payload->'all_items' else '[]'::jsonb end
+ ) item
+ where e.is_current and item->>'status'='ASSIGNED'
+   and item->>'source_type' in ('static_weekly_projection','static_weekly_lunch_coverage')
+), authority_items as materialized (
+ select d.service_date,s.assigned_employee_id::text employee_id,s.segment_id::text occurrence_id,''::text responsibility_id,
+        s.coverage_start::time coverage_start,s.coverage_end::time coverage_end
+ from current_days d cross join lateral public.static_weekly_v6_read_schedule_segments(d.service_date) s
+ where s.projection_id=d.projection_id and s.owner_type='EMPLOYEE'
+   and s.status='ASSIGNED' and s.source_type='static_weekly_projection'
+ union all
+ select d.service_date,l.coverer_id::text,l.normal_occurrence_id::text,l.responsibility_id,l.coverage_start,l.coverage_end
+ from current_days d cross join lateral public.static_weekly_v8_read_lunch_segments(d.service_date) l
+ where l.projection_id=d.projection_id
+), assignment_differences as (
+ (select * from authority_items except all select * from employee_items)
+ union all
+ (select * from employee_items except all select * from authority_items)
 )
 select d.today::text,d.service_date::text,d.governed,d.projection_status,
        count(e.employee_id)::int roster_employees,
        count(e.employee_id) filter(where e.is_current)::int current_employees,
-       count(e.employee_id) filter(where e.is_current and exists(select 1 from jsonb_array_elements(
-          case when jsonb_typeof(e.payload->'all_items')='array' then e.payload->'all_items' else '[]'::jsonb end
-        ) item where item->>'source_type'='static_weekly_projection' and item->>'status'='ASSIGNED'))::int employees_with_assignments,
-       coalesce(d.lunch->>'persistence_status'='PERSISTED'
-        and d.lunch->>'projection_id'=d.projection_id::text and d.lunch->>'service_date'=d.service_date::text
-        and d.lunch->>'document_identity'~'^[a-f0-9]{64}$' and jsonb_typeof(d.lunch->'loans')='array'
-        and jsonb_typeof(d.lunch->'responsibilities')='array',false) lunch_document_current,
+       (select count(*)::int from authority_items i where i.service_date=d.service_date and i.responsibility_id='') normal_assignments,
+       (select count(*)::int from assignment_differences i where i.service_date=d.service_date) assignment_differences,
+       count(e.employee_id) filter(where e.is_current and
+        (e.payload->>'schedule_status'='missing_assignments' or e.payload->>'phase'='schedule_missing'))::int employees_missing_assignments,
+       coalesce(bool_and(e.payload->>'lunch_coverage_status' is not distinct from 'PERSISTED')
+        filter(where e.is_current),false) lunch_coverage_current,
        encode(extensions.digest(convert_to(coalesce(string_agg(
         encode(extensions.digest(convert_to(e.payload::text,'UTF8'),'sha256'),'hex'),''
         order by e.employee_id),''),'UTF8'),'sha256'),'hex') employee_days_sha256,
@@ -104,7 +127,7 @@ select d.today::text,d.service_date::text,d.governed,d.projection_status,
         'public.static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)','EXECUTE') reader_execute
 from authority_days d
 left join employee_facts e on e.service_date=d.service_date
-group by d.today,d.service_date,d.governed,d.projection_status,d.projection_id,d.lunch
+group by d.today,d.service_date,d.governed,d.projection_status
 order by d.service_date`;
 
 export function summarizeCurrentWeekCoverage(rows) {
@@ -120,9 +143,11 @@ export function summarizeCurrentWeekCoverage(rows) {
     assert.ok(typeof row.projection_status === 'string' && /^[a-z0-9_]{1,80}$/.test(row.projection_status));
     assert.ok(Number.isSafeInteger(row.roster_employees) && row.roster_employees >= 0);
     assert.ok(Number.isSafeInteger(row.current_employees) && row.current_employees >= 0 && row.current_employees <= row.roster_employees);
-    assert.ok(Number.isSafeInteger(row.employees_with_assignments) && row.employees_with_assignments >= 0
-      && row.employees_with_assignments <= row.current_employees);
-    assert.equal(typeof row.lunch_document_current, 'boolean');
+    assert.ok(Number.isSafeInteger(row.normal_assignments) && row.normal_assignments >= 0);
+    assert.ok(Number.isSafeInteger(row.assignment_differences) && row.assignment_differences >= 0);
+    assert.ok(Number.isSafeInteger(row.employees_missing_assignments) && row.employees_missing_assignments >= 0
+      && row.employees_missing_assignments <= row.current_employees);
+    assert.equal(typeof row.lunch_coverage_current, 'boolean');
     assert.match(row.employee_days_sha256, sha256);
     assert.equal(typeof row.reader_execute, 'boolean');
   }
@@ -130,7 +155,8 @@ export function summarizeCurrentWeekCoverage(rows) {
   const remaining = rows.filter(row => row.service_date >= today);
   const missing = remaining.filter(row => !row.governed || row.projection_status !== 'current'
     || !row.reader_execute || row.current_employees !== row.roster_employees
-    || row.employees_with_assignments === 0 || !row.lunch_document_current);
+    || row.normal_assignments === 0 || row.assignment_differences !== 0
+    || row.employees_missing_assignments !== 0 || !row.lunch_coverage_current);
   return { today, dates_checked: remaining.map(row => row.service_date),
     dates_missing_coverage: missing.map(row => row.service_date), working_coverage: missing.length === 0 };
 }
