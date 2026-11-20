@@ -197,6 +197,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
   assert.ok(/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/.test(recipe.identity)
    ||postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
+    'custodial_coverall.reconcile_manual_delivery_after_lunch()',
     'custodial_leadership_private.bind_registration_generation()'].includes(recipe.identity));
   for(const key of ['before','after'])assert.equal(typeof recipe[key],'string');
   for(const key of ['beforeHash','afterHash','beforeBodyHash','afterBodyHash'])assert.match(recipe[key],/^[a-f0-9]{64}$/);

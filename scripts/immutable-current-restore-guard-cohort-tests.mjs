@@ -26,6 +26,17 @@ test('all24 original definitions and every consumer are closed fixed Source, nev
  }
  for(const x of ["current_user<>session_user OR current_user<>'postgres'",'Original cohort requires fresh DATA',"normalized_triggers IS DISTINCT FROM p->'triggers'",'after_triggers IS DISTINCT FROM original_triggers',"to_jsonb(after_row)-'prosrc' IS DISTINCT FROM to_jsonb(original)-'prosrc'"])assert.ok(last.includes(x),x);
 });
+test('shipping bootstrap recipe projection accepts every current recipe and refuses an unknown private callback',()=>{
+ const source=readFileSync(new URL('./immutable-private-source-bootstrap.mjs',import.meta.url),'utf8');
+ const a=source.indexOf(' const recipes=allRecipes.map(recipe=>{'),z=source.indexOf(" sourcePhase='ORIGINAL_REGISTRY';",a);assert.ok(a>0&&z>a);
+ const closed=(v,keys)=>assert.deepEqual(Object.keys(v).sort(),[...keys].sort());
+ const bodyOf=s=>s.split('AS $function$')[1].slice(0,-'$function$\n'.length);
+ const run=new Function('allRecipes','postgresProgram','assert','closed','sha','bodyOf',source.slice(a,z)+'return recipes;');
+ assert.equal(run(program.recipes,true,assert,closed,sha,bodyOf).length,49);
+ const altered=structuredClone(program.recipes);altered[0].identity='custodial_coverall.unselected_callback()';
+ assert.throws(()=>run(altered,true,assert,closed,sha,bodyOf));
+ assert.throws(()=>run(program.recipes,false,assert,closed,sha,bodyOf));
+});
 for(const id of sources.filter(f=>f.identity!=='public.static_weekly_v15_lock_recurring_mutation()').map(f=>f.identity))test('only exact archived INSERT branch for '+id,()=>{
  const r=program.recipes.find(r=>r.identity===id),a=r.after.indexOf('-- Exact authenticated archived INSERT only.'),z=r.after.indexOf('  END IF;\n',a)+'  END IF;\n'.length;assert.ok(a>0&&z>a);
  const branch=r.after.slice(a,z);
