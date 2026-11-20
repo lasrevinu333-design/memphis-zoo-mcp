@@ -57,6 +57,14 @@ function fixture(options = {}) {
         return { rowCount: 1, rows: [row] };
       }
       if (sql.startsWith('select version::text')) return { rows: [...this.ledger] };
+      if (sql.startsWith('with week as')) {
+        const rows = ['16','17','18','19','20','21','22'].map(day => ({
+          today: '2026-11-20', service_date: '2026-11-' + day, governed: true, projection_status: 'current',
+          roster_employees: 8, current_employees: 8, reader_execute: true,
+          employee_days_sha256: (this.changes && options.changedSchedule ? 'b' : 'a').repeat(64),
+        }));
+        return {rowCount: rows.length, rows};
+      }
       if (sql === 'fixture before' || /^(set local |select set_config|select pg_advisory_xact_lock|lock table)/.test(sql)) return {};
       if (sql.includes('disable trigger')) { this.disabled = true; return {}; }
       if (sql.includes('enable always trigger')) { this.disabled = false; return {}; }
@@ -107,6 +115,9 @@ test('the original three forwards run only after signed-state and exact baseline
   assert.equal(receipt.rollback_verified, true);
   assert.equal(receipt.target.catalog.fingerprint, 'target');
   assert.equal(receipt.target.ledger_count, 4);
+  assert.equal(receipt.target.current_chicago_week.length, 7);
+  assert.equal(receipt.target.current_chicago_week[0].service_date, '2026-11-16');
+  assert.equal(unit.calls.filter(sql => sql.startsWith('with week as')).length, 2);
   assert.deepEqual(unit.calls.filter(sql => sql.startsWith('fixture ') && sql !== 'fixture before'), pending.map(row => row.body));
   assert.deepEqual(unit.calls.filter(sql => /^(commit|rollback)/i.test(sql)), ['rollback','rollback']);
   assert.deepEqual(unit.client.ledger, baseLedger);
@@ -125,14 +136,15 @@ test('foreign host, unresolved reconciliation, changed restore registry and inco
 });
 
 test('mid-batch SQL refusal and changed data take the same rollback and independent readback', async () => {
-  for (const options of [{refuse: pending[1].body}, {dataChanged:true}]) {
+  for (const options of [{refuse: pending[1].body}, {dataChanged:true}, {changedSchedule:true}]) {
     const unit = fixture(options);
     await assert.rejects(unit.run, error => {
       const proof = current428CaptureRefusal(error);
       assert.deepEqual(proof, options.refuse ? {
         stage:'APPLY_FORWARD', sqlstate:'23514', migration:pending[1].version, rollback_readback_verified:true,
       } : {
-        stage:'VERIFY_TARGET', sqlstate:null, migration:null, rollback_readback_verified:true,
+        stage:options.changedSchedule ? 'VERIFY_CURRENT_WEEK' : 'VERIFY_TARGET',
+        sqlstate:null, migration:null, rollback_readback_verified:true,
       });
       return true;
     });
