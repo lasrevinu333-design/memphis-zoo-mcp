@@ -538,8 +538,13 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   // Reuse the existing EOF-gated staged consumer only when batching cannot
   // change noninternal INSERT-trigger business effects. Self-FK routing is
   // unchanged. Fixed bootstrap metadata is always consumed without DATA SQL.
+  // Only the authenticated current postgres program installs the bounded
+  // typed-text staging entry. Legacy archives retain their exact row path.
+  const typedCurrent=selected.some(table=>table.data_encoding==='postgres-text-columns-line.v2')
+    &&isDeepStrictEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),{id:'immutable-private-current-postgres',actor:'postgres'});
+  const safeSetSchemas=typedCurrent?['public','auth','storage','custodial_employment','custodial_coverall','custodial_leadership_private']:['public','auth','storage'];
   const setTables=new Set(),setCandidates=ordered.filter(table=>
-    ['public','auth','storage'].includes(table.schema_name)&&BigInt(table.row_count)>1n
+    safeSetSchemas.includes(table.schema_name)&&BigInt(table.row_count)>1n
     &&!selfTables.has(identity(table.schema_name,table.table_name))&&!cohortGroups.has(identity(table.schema_name,table.table_name))
     &&!(table.schema_name==='public'&&['release_deployment_manifest','custodial_release_authority_restore_inventory'].includes(table.table_name)));
   importValidation='PLANNER_BATCH_CATALOG';
@@ -599,7 +604,9 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     const key=identity(table.schema_name,table.table_name);
     if(!selfTables.has(key)&&!setTables.has(key)&&!cohortGroups.has(key))return table;
     const selected=Object.freeze({schema_name:table.schema_name,table_name:table.table_name});
-    selfOrdinaryConsumers.set(selected,Object.freeze({verifiedArchive,original,table,...(cohortGroups.has(key)?{cohort:cohortGroups.get(key)}:{})}));return selected;
+    selfOrdinaryConsumers.set(selected,Object.freeze({verifiedArchive,original,table,
+      boundedTypedStage:typedCurrent&&table.data_encoding==='postgres-text-columns-line.v2',
+      ...(cohortGroups.has(key)?{cohort:cohortGroups.get(key)}:{})}));return selected;
   }));
   } catch(error){recordImmutableFreshFailure(error,{import_validation:importValidation});throw error;}
 }
@@ -607,7 +614,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
 // Internal DATA consumer, not a target admission or alternate client port.
 // The only shipping caller supplies its original pg.Client/context below.
 async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext) {
-  const staged=selfOrdinaryConsumers.get(selected),cohort=staged?.cohort;
+  const staged=selfOrdinaryConsumers.get(selected),cohort=staged?.cohort,boundedTypedStage=staged?.boundedTypedStage===true;
   if(staged){
     selfOrdinaryConsumers.delete(selected); // Includes failed/ambiguous consumption; no retry.
     if(cohort){
@@ -635,7 +642,7 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
     if(sourceOnlyEmpty&&staged)fail(); // An empty original never stages or inserts a set.
     if(!bootstrap&&!columns.length&&table.row_count!=='0')fail();
     guard=createRestoreRowUtf8Guard();
-    if(bootstrap){
+    if(bootstrap||boundedTypedStage){
       batchInput=createRestoreRowLineBatchDecoder();input=batchInput;
       settled=pipeline(data.stream,guard,batchInput);settled.catch(()=>{});
     }else{
@@ -646,13 +653,13 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
     // admission occurs. Bind context before reading and again after complete
     // authenticated EOF. Do not recompute the entire target/registry twice
     // per metadata row; a changed context still refuses before consumption
-    // returns. Ordinary and staged mutation fences remain per-row below.
+    // returns. Ordinary mutation fences remain on every fixed SQL effect.
     if(bootstrap){await assertContext();sameSource(verifiedArchive,original);}
     // The fixed owner-context entry owns generated/identity projection and
     // exact typed readback; no dynamic DML or caller SQL selector here.
     sameSource(verifiedArchive,original);
     if(bootstrap){
-      // Only the fixed no-effect metadata tables use batch yields. Each
+      // The fixed no-effect metadata tables use batch yields. Each
       // actual yield is source-checked; decoding/counting within a batch is
       // synchronous and neither grants permission nor executes target SQL.
       for await(const batch of input){
@@ -665,6 +672,38 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
           count++;
         }
         sameSource(verifiedArchive,original);
+      }
+    }else if(boundedTypedStage){
+      // Decode only the owning reader's frozen dense yields. Each bounded
+      // SQL effect checks the original witness and full context before and
+      // after staging, without changing the final table/cohort INSERT.
+      let pending=[],pendingBytes=0,firstOrdinal=1;
+      const flush=async()=>{
+        if(!pending.length)return;
+        sameSource(verifiedArchive,original);
+        await mutate('select custodial_dr.stage_immutable_ordinary_rows($1::text,$2::text,$3::bigint,$4::text[],$5::jsonb) as context',
+          [table.schema_name,table.table_name,String(firstOrdinal),pending]);
+        sameSource(verifiedArchive,original);pending=[];pendingBytes=0;
+      };
+      for await(const batch of input){
+        sameSource(verifiedArchive,original);
+        if(types.isProxy(batch)||!Array.isArray(batch)||!Object.isFrozen(batch)
+          ||Object.getPrototypeOf(batch)!==Array.prototype||Reflect.ownKeys(batch).length!==batch.length+1)fail();
+        for(const line of batch){
+          if(BigInt(count)>=declaredRows)fail();
+          const raw=decodeRestoreTableRowLine(line,table),bytes=Buffer.byteLength(raw,'utf8');
+          if(bytes>65536){
+            await flush();sameSource(verifiedArchive,original);
+            await mutate('select custodial_dr.stage_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context',
+              [table.schema_name,table.table_name,raw]);sameSource(verifiedArchive,original);
+          }else{
+            if(pendingBytes+bytes>65536)await flush();
+            if(!pending.length)firstOrdinal=count+1;
+            pending.push(raw);pendingBytes+=bytes;
+          }
+          count++;
+        }
+        await flush();sameSource(verifiedArchive,original);
       }
     }else{
     for await(const line of input){

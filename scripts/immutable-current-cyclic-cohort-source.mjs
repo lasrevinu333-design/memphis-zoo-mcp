@@ -1,4 +1,5 @@
 // Fixed offline composition only. No runtime caller chooses SQL or a cohort.
+import {removeCurrentBoundedOrdinaryStage} from './immutable-current-bounded-stage-source.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -42,7 +43,7 @@ export function extendCurrentCyclicCohorts(prior){
  assert.deepEqual(removeCurrentCyclicCohorts(p),prior);return p;
 }
 export function removeCurrentCyclicCohorts(program){
- assert.equal(arguments.length,1);const p=structuredClone(program),s=p.statements[0];
+ assert.equal(arguments.length,1);const p=removeCurrentBoundedOrdinaryStage(program),s=p.statements[0];
  if(!s.sql.includes(marker))return p;
  s.sql=once(s.sql,currentCyclicCohortSql()+'\nCOMMIT;\n','COMMIT;\n');
  s.sql=once(s.sql,matcherBranch+matcherAnchor,matcherAnchor);s.sql=once(s.sql,newFence,oldFence);s.sourceSha256=sha(s.sql);

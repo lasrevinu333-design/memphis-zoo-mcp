@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {removeCurrentBoundedOrdinaryConsumerSource} from './immutable-current-bounded-stage-source.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,openSync,fsyncSync,closeSync,mkdtempSync,readdirSync,rmSync,existsSync,mkdirSync,symlinkSync,renameSync,chmodSync,lstatSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -919,6 +920,7 @@ test('bounded substage checkpoints survive both privacy layers without changing 
  const hash=v=>createHash('sha256').update(v).digest('hex');
  for(const [path,pin]of [['immutable-private-source-initializer.mjs','43d7d9af01713b72979b466d503be333ba4b6665e5e4f2340b602b22b5475d79'],['immutable-private-data-import.mjs','3bb989f9b40ab83ef16330f6f79bb36355db5118810ed201cd797b5ee3590558']]){
   let source=readFileSync(new URL('./'+path,import.meta.url),'utf8');
+  if(path==='immutable-private-data-import.mjs')source=removeCurrentBoundedOrdinaryConsumerSource(source);
   assert.ok(source.includes('recordImmutableFreshProgress({'));
   source=source.replace(/^[ \t]*recordImmutableFreshProgress\(\{[^;\n]+\}\);\n/gm,'').replace('recordImmutableFreshFailure,recordImmutableFreshProgress','recordImmutableFreshFailure');
   assert.equal(hash(source),pin,'every validation, SQL, refusal, cleanup and deadline byte survives: '+path);

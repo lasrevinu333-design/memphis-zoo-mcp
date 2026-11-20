@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {currentCyclicCohortSql,extendCurrentCyclicCohorts,removeCurrentCyclicCohorts,extendCurrentCyclicStatementFence} from './immutable-current-cyclic-cohort-source.mjs';
+import {removeCurrentBoundedOrdinaryStage} from './immutable-current-bounded-stage-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
-const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
+const program=removeCurrentBoundedOrdinaryStage(JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url))));
 const previous=removeCurrentCyclicCohorts(program);
 test('hosted prerequisite selectors retain exact predecessor bytes through repository relative fixtures',()=>{
  const source=readFileSync(new URL('./immutable-private-source-bootstrap-tests.mjs',import.meta.url),'utf8');
