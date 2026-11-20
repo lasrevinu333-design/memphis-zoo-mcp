@@ -2675,7 +2675,7 @@
       {
         "path": "release/installed-source/20261120_private_context_cost_source_inverse.json",
         "mode": "100644",
-        "object_id": "d23740f63d52cdc9660af113bb4ab97a9ddd47ab"
+        "object_id": "4676ac14705b125254e7e23e4a7719753f083350"
       },
       {
         "path": "release/installed-source/20261120_private_function_cost_observational_inverse.json",
@@ -4475,12 +4475,12 @@
       {
         "path": "scripts/current428-forward-readback-tests.mjs",
         "mode": "100644",
-        "object_id": "02202bfba536135da9f683ad60e2b0c3ae84bd50"
+        "object_id": "5b1b149dcf23e69658123871758e48bca8ed2331"
       },
       {
         "path": "scripts/current428-forward-readback.mjs",
         "mode": "100644",
-        "object_id": "ac07e03822e487dcdc7f44833547cf4d15b20762"
+        "object_id": "edf26bb7e17532c0a23324418af34708efffe831"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -8435,7 +8435,7 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "166b2821c2a96f79a748b1eb8ed4bc7540042fe5"
+        "object_id": "1eefa6e5e851831366859dbca995beac8135ab5e"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
@@ -9050,7 +9050,7 @@
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "c4070bd97c1ddc46bc770f0e4483fe1f695c8f4b"
+        "object_id": "d834f3b0d0d29df346844601a63e3300427ac9e5"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
