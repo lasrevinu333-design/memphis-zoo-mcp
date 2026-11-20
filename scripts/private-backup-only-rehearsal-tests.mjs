@@ -330,7 +330,7 @@ test('private parent cancels only owned pending inspectors before target cleanup
   const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   const start=source.indexOf('  const run=(command,args,'),end=source.indexOf('  const docker=',start);
   assert.ok(start>0&&end>start);const children=new Set();
-  const factory=new Function('ports',`const {stopping,root,baseEnv,spawn,children,phase}=ports;${source.slice(start,end)}return run;`);
+  const factory=new Function('ports',`const contextDiagnosticOnly=false;const {stopping,root,baseEnv,spawn,children,phase}=ports;${source.slice(start,end)}return run;`);
   const run=factory({stopping:false,root:tmpdir(),baseEnv:{},spawn,children,phase:'OFFLINE_INSPECTOR_CANCEL'});
   const controller=new AbortController(),started=Date.now();
   const pending=run(process.execPath,['-e','setInterval(()=>{},1000);'],{timeout:60000,abortSignal:controller.signal});
@@ -373,7 +373,7 @@ test('creation diagnostics distinguish startup assertions using only bounded boo
 test('creation subprocess diagnostic survives refusal and cleanup without leaking raw output',async()=>{
   const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   const start=source.indexOf('  const run=(command,args,'),end=source.indexOf('  const docker=',start);
-  const factory=new Function('ports',`const {root,spawn,targetCreationOperation}=ports;const stopping=false,baseEnv={},children=new Set(),phase='create_owned_target';
+  const factory=new Function('ports',`const contextDiagnosticOnly=false;const {root,spawn,targetCreationOperation}=ports;const stopping=false,baseEnv={},children=new Set(),phase='create_owned_target';
     let creationOperation='START_OWNED_POSTGRES',creationProcess=null;${source.slice(start,end)}return {run,receipt:()=>creationProcess};`);
   const {run,receipt}=factory({root:tmpdir(),spawn,targetCreationOperation});
   const payload=privateSentinels.join('\n'),program=`process.stdout.write(${JSON.stringify(payload)});process.stderr.write(${JSON.stringify(payload)});process.exitCode=17;`;
@@ -448,7 +448,7 @@ test('private PG accepts only two unpublished runtime maps with independent conf
 test('schema and provider child failures retain closed operation/status only and cleanup cannot overwrite',async()=>{
   const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   const start=source.indexOf('  const run=(command,args,'),end=source.indexOf('  const docker=',start);
-  const factory=new Function('ports',`const {root,spawn,privateSubprocessOperation}=ports;const stopping=false,baseEnv={},children=new Set(),phase='prepare_schema_only';
+  const factory=new Function('ports',`const contextDiagnosticOnly=false;const {root,spawn,privateSubprocessOperation}=ports;const stopping=false,baseEnv={},children=new Set(),phase='prepare_schema_only';
     let subprocessFailure=null;${source.slice(start,end)}return {run,receipt:()=>subprocessFailure};`);
   for(const operation of ['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE','RESTORE_AUTHENTICATED_SCHEMA','RESTORE_PRIVATE_DATA_AND_STORAGE']){
     const {run,receipt}=factory({root:tmpdir(),spawn,privateSubprocessOperation});

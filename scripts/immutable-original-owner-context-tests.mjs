@@ -1,3 +1,4 @@
+import {removePrivateContextCostObservation} from './private-context-cost-source-proof.mjs';
 const currentRecipeIdentities=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8')).recipes.map(r=>r.identity);
 import {recordImmutableFreshFailure,recordImmutableFreshProgress,readImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
 import './isolated-current-postgres-cron-setup-tests.mjs';
@@ -252,7 +253,7 @@ test('ACL and committed-frame consumers retain native equality and branded state
  assert.match(importer,/ti.proowner='supabase_admin'::pg_catalog.regrole/);
 });
 function comparatorFixture(profile,kind,mode){
- const code=text('./immutable-private-data-import.mjs'),name=kind==='private'?'compareVerifiedImmutablePrivateTableData':'compareVerifiedImmutableOrdinaryTableData';
+ const code=removePrivateContextCostObservation('scripts/immutable-private-data-import.mjs',text('./immutable-private-data-import.mjs')),name=kind==='private'?'compareVerifiedImmutablePrivateTableData':'compareVerifiedImmutableOrdinaryTableData';
  const start=code.indexOf('export async function '+name+'('),end=kind==='private'?code.indexOf('// Ordinary original DATA only',start):code.length;
  assert.ok(start>0&&end>start);
  const archive={},sourceBinding={},column={name:'id',data_type:'text',generated:'',identity:''};

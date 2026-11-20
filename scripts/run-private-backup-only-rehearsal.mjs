@@ -20,6 +20,7 @@ import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';
 import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
+import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';
 
 const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -223,6 +224,7 @@ function authenticate(){
 
 export async function runPrivate(){
   assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
+  const contextDiagnosticOnly=selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER);
   assert.match(process.env.GITHUB_RUN_ID||'',/^[1-9][0-9]*$/);
   assert.match(process.env.BACKUP_RUN_ID||'',/^[1-9][0-9]*$/);
   const tmp=realpathSync(process.env.RUNNER_TEMP),owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));
@@ -231,7 +233,7 @@ export async function runPrivate(){
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
   let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null;
-  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null,catalogPrivileges=null;
+  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null,catalogPrivileges=null,contextCost=null,contextCostFailure=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
@@ -271,6 +273,11 @@ export async function runPrivate(){
           subprocessFailure??=Object.freeze({operation:privateOperation,...diagnostic,...(cronFailure?{cron_setup_failure:cronFailure}:{})});
         }
       }
+      if(contextDiagnosticOnly&&command===process.execPath&&args.length===1&&args[0]==='scripts/private-context-cost-diagnostic.mjs'&&(code!==0||failed)&&stdoutBytes<=2048){
+        try{contextCostFailure=projectPrivateContextCostFailure(JSON.parse(stdout.trim()));}catch{}
+        subprocessFailure??=Object.freeze({operation:'OBSERVE_PRIVATE_CONTEXT_COST',exit_code:Number.isInteger(code)?code:null,
+          signal:['SIGTERM','SIGKILL','SIGINT'].includes(signal)?signal:null,stdout_bytes:stdoutBytes,stderr_bytes:stderrBytes,timed_out:timedOut,output_limit_exceeded:outputLimit,cancelled,spawn_error:spawnError});
+      }
       if(code!==0||failed)no(new Error('Owned subprocess refused during '+phase));else yes(stdout.trim());});
   });
   const docker=(args,options)=>run('docker',args,options);
@@ -283,6 +290,7 @@ export async function runPrivate(){
     // Fail on absent source/ACL/guard recipes before resources are created.
     const bootstrapSource=await prepareVerifiedImmutableBootstrapSource(archive);
     ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
+    if(contextDiagnosticOnly)assert.deepEqual(ownerProfile,{id:'immutable-private-current-postgres',actor:'postgres'});
     // Same pinned 2GiB allowance already used by the populated native-text rehearsal.
     const pgMemory=pinnedPgMemory(ownerProfile.id==='immutable-private-current-postgres'?'immutable-private-fresh-postgres':'immutable-private-fresh-supabase-admin');
     const requireOwnerProfile=()=>{const current=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
@@ -295,7 +303,7 @@ export async function runPrivate(){
       RESTORE_ARCHIVE_VERIFY_KEY:process.env.RESTORE_ARCHIVE_VERIFY_KEY,RESTORE_ARCHIVE_VERIFY_KEY_ID:process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID,
       RESTORE_INTENT_VERIFY_KEY:key,RESTORE_INTENT_VERIFY_KEY_ID:keyId,RESTORE_INTENT_JSON:JSON.stringify(envelope),
       RESTORE_APPLY:'true',RESTORE_DATABASE_ONLY:'true',SUPABASE_PROJECT_REF:source.sourceBinding.project_ref,
-      RESTORE_CONFIRM_PROJECT_REF:source.sourceBinding.project_ref};
+      RESTORE_CONFIRM_PROJECT_REF:source.sourceBinding.project_ref,...(contextDiagnosticOnly?{PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY:'true'}:{})};
     requireOwnerProfile();phase='create_owned_target';
     creationOperation='CHECK_TARGET_ABSENCE';
     assert.equal(await docker(['ps','-aq','--filter','name=^/'+name+'$']),'','Never reuse an existing target');
@@ -383,6 +391,11 @@ export async function runPrivate(){
     }
     phase='private_original_restore_and_storage';await verifyTarget();
     const restoreOriginal=async()=>{
+      if(contextDiagnosticOnly){
+        phase='private_current_context_cost_only';await verifyTarget();
+        contextCost=projectPrivateContextCost(JSON.parse(await run(process.execPath,['scripts/private-context-cost-diagnostic.mjs'],{env:secretEnv,timeout:300000})));
+        assert.ok(contextCost);assert.equal(contextCost.archive_digest,source.sourceBinding.archive_digest);await verifyTarget();return null;
+      }
       const restored=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:privateRestoreWorkTimeoutMs,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
       assertPrivateResult(restored,source,envelope.intent);await verifyTarget();return restored;
     };
@@ -430,9 +443,9 @@ export async function runPrivate(){
     try{archive?.cleanup();rmSync(owned,{recursive:true,force:true});}catch(e){failure??=e;}
     clearTimeout(cancelTimer);process.off('SIGTERM',stop);process.off('SIGINT',stop);
     const receipt={schema:'custodial.private-backup-only-rehearsal.v1',ok:!failure&&!stopping,
-      scope:'backup_only',backup_run_id:process.env.BACKUP_RUN_ID,qualification_run_id:process.env.GITHUB_RUN_ID,
+      scope:contextDiagnosticOnly?'context_cost_only':'backup_only',context_cost_diagnostic_only:contextDiagnosticOnly,context_cost:contextCost,context_cost_failure:contextCostFailure,backup_run_id:process.env.BACKUP_RUN_ID,qualification_run_id:process.env.GITHUB_RUN_ID,
       archive_digest:source?.sourceBinding.archive_digest??null,
-      disposable_database_restore_outcome:result?'RESULT_RETURNED':'NOT_ESTABLISHED',production_restore_performed:false,
+      disposable_database_restore_outcome:contextDiagnosticOnly?'NOT_ATTEMPTED':result?'RESULT_RETURNED':'NOT_ESTABLISHED',production_restore_performed:false,
       production_provider_verified:false,forward_migrations_applied:false,runtime_admission:false,
       mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent,
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
@@ -467,6 +480,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
       const archive=authenticate();let profile;
       try{profile=selectPrivateProfile(readVerifiedPrivateImportSource(archive));}finally{archive.cleanup();}
+      if(selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER))assert.equal(profile,'private');
       if(mode==='--profile')console.log(profile);
       else if(profile==='native')process.exitCode=3; // The only legacy-path continuation status.
       else await runPrivate();

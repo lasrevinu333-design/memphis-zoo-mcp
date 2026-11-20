@@ -1,3 +1,4 @@
+import {removePrivateContextCostObservation} from './private-context-cost-source-proof.mjs';
 // Exact historical source-proof inverse only. No target, SQL or effect port.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -10,6 +11,7 @@ export function removeOrdinaryProgressObservations(name,source){
  const data=JSON.parse(raw);assert.equal(data.format,'custodial.ordinary-progress-observational-source-inverse.v1');
  const file=data.files.find(f=>f.file===name);assert.ok(file,'Only the two fixed observation sources may be normalized');
  if(sha(source)===file.previousSha256)return source;
+ if(name==='immutable-private-data-import.mjs')source=removePrivateContextCostObservation('scripts/'+name,source);
  assert.equal(sha(source),file.currentSha256,'Whole exact source required before observational normalization');
  for(const hunk of file.hunks){assert.equal(source.split(hunk.after).length,2);source=source.replace(hunk.after,()=>hunk.before);}
  assert.equal(sha(source),file.previousSha256,'Every predecessor control, SQL, deadline and cleanup byte must survive');return source;

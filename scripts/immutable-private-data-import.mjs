@@ -2603,3 +2603,134 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     return unknown();
   } finally {for(const rows of loans)rows.length=0;} // Strings are not claimed wipeable.
 }
+
+// Finite diagnostic: same original gates, always discarded by its closed caller.
+export async function diagnoseVerifiedImmutableFreshContextCost(options) {
+  let freshStage='ADMIT_FRESH_STAGE';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
+  try{
+  const {db,verifiedArchive,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId}=closed(options,
+    ['db','verifiedArchive','originalIntentEnvelope','intentVerifyKey','intentVerifyKeyId']);
+  const native=()=>{
+    if(!db||types.isProxy(db)||Object.getPrototypeOf(db)!==Client.prototype
+      ||Object.hasOwn(db,'query')||Client.prototype.query!==query)fail();
+  };
+  native();
+  const originalNativePort=captureFreshNativePort(db);
+  if(nativeData(db,'_txStatus')!=='T')fail();
+  if(!verifiedArchive||typeof verifiedArchive!=='object'||types.isProxy(verifiedArchive)
+    ||freshClients.has(db)||freshArchives.has(verifiedArchive))fail();
+  freshClients.add(db);freshArchives.add(verifiedArchive);
+  let original,freshIntent;
+  try{
+    original=readVerifiedPrivateImportSource(verifiedArchive);
+    freshIntent=captureVerifiedImmutableFreshRestoreIntent({verifiedArchive,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId});
+  }catch(error){fail(error);}
+  // Carry the importer's supported private-table/encoding boundary BEFORE
+  // any new initializer DDL, not merely before the later DATA staging call.
+  if(!isDeepStrictEqual(original.selection.privateTables.map(table=>table.table_name).sort(),identities)
+    ||original.privateDataMembers.length!==identities.length
+    ||original.privateDataMembers.some(member=>![postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding].includes(member.data_encoding)))fail();
+  const expectedPrivateRows=original.privateDataMembers.reduce((total,member)=>total+BigInt(member.row_count),0n).toString();
+  const current=()=>{
+    native();sameFreshNativePort(db,originalNativePort);sameSource(verifiedArchive,original);
+    const captured=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
+    if(captured.sourceBinding!==original.sourceBinding)fail();
+    return captured;
+  };
+  current();
+  if(!isDeepStrictEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),{id:'immutable-private-current-postgres',actor:'postgres'}))fail();
+  freshStage='VERIFY_ORIGINAL_FIDELITY';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
+  await requireLegacyOriginalDataFidelity(verifiedArchive,original,current);
+  current();
+  if(original.selection.databaseTables.some(table=>table.data_encoding!==postgresTextColumnsLineEncoding))
+    try{assertVerifiedLegacyRestoreDataCurrent(verifiedArchive);}catch(error){fail(error,'IMMUTABLE_LEGACY_DATA_FIDELITY_UNPROVEN');}
+  freshStage='INITIALIZE_SOURCE';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
+  const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
+  current();
+  const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?51
+    :initializedOwner.id==='immutable-private-legacy-supabase-admin'&&initializedOwner.actor==='supabase_admin'?25:null;
+  if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
+    ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false
+    ||initialized.restore_complete!==false||initialized.admission_resumed!==false
+    ||initializedRecipeCount===null||initialized.guard_recipes!==initializedRecipeCount
+    ||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
+  freshStage='PREPARE_RESTORE_CONTROL';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
+  const prepared=await prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent});
+  const captured=current(),intent=captured.intent;
+  const expected=Object.freeze({database_oid:initialized.database_oid,backend_pid:initialized.backend_pid,
+    transaction_id:initialized.transaction_id,restore_id:intent.restore_id,
+    authority_generation:String(intent.authority_generation),archive_digest:original.sourceBinding.archive_digest});
+  if(!isDeepStrictEqual(closed(prepared,witnessKeys),expected))fail();
+  // Save the first target state under this SAME authenticated original and
+  // native transaction before archive DATA can replace ordinary authority.
+  // These protected rows are reconciliation DATA, never effect admission.
+  freshStage='CAPTURE_PRE_RESTORE_STATE';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
+  await capturePreRestoreState(db,{restoreId:intent.restore_id,generation:intent.authority_generation});
+  current();
+
+  // Finite same-source, same-owner performance observation only. The caller
+  // MUST roll this entire transaction back. No archive application/private
+  // DATA is consumed, no freshStaged token is created, and no commit/resume
+  // or migration authority is returned.
+  const binding=original.sourceBinding;
+  const manifest=Object.freeze({schema:'custodial.immutable-private-import-manifest.v1',archive_digest:binding.archive_digest,
+    source_identity_sha256:binding.source_identity_sha256,source_project_ref:binding.project_ref,target_project_ref:intent.target_project_ref,
+    actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,
+    target_release_identity:intent.target_release_identity,catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers});
+  const sql=async(text,args=[])=>{current();const r=await Reflect.apply(query,db,[text,args]);current();return r;};
+  const initial=await sql('select custodial_dr.begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb) as context',
+    [intent.restore_id,String(intent.authority_generation),binding.archive_digest,JSON.stringify(manifest)]);
+  if(!isDeepStrictEqual(contextWitness(initial),expected))fail();
+  const contextWhere='database_oid=(select oid from pg_catalog.pg_database where datname=current_database()) and backend_pid=pg_backend_pid() and transaction_id=txid_current()';
+  const sizeResult=await sql(`select pg_column_size(target_shape)::text stored_shape_bytes,octet_length(target_shape::text)::text shape_text_bytes,
+   pg_column_size(original_manifest)::text stored_manifest_bytes,octet_length(original_manifest::text)::text manifest_text_bytes,
+   coalesce(pg_column_size(catalog_epoch),0)::text stored_epoch_bytes,(catalog_epoch is not null and catalog_epoch=custodial_dr.immutable_import_catalog_epoch()) certificate_current,
+   (select count(*)::text from pg_catalog.pg_locks where pid=pg_backend_pid()) held_locks,
+   (select count(*)::text from public.employees) employee_rows,
+   (select count(*)::text from custodial_release_identity.group_original_creations) group_original_rows,
+   (select count(*)::text from custodial_release_identity.employee_message_original_outcomes) message_original_rows
+   from custodial_dr.immutable_private_import_context where ${contextWhere}`);
+  if(sizeResult.rowCount!==1||sizeResult.rows.length!==1)fail();
+  const sizes=closed(sizeResult.rows[0],['stored_shape_bytes','shape_text_bytes','stored_manifest_bytes','manifest_text_bytes','stored_epoch_bytes','certificate_current','held_locks','employee_rows','group_original_rows','message_original_rows']);
+  if(typeof sizes.certificate_current!=='boolean'||['employee_rows','group_original_rows','message_original_rows'].some(k=>sizes[k]!=='0'))fail();
+  for(const [k,v]of Object.entries(sizes))if(k!=='certificate_current'&&(typeof v!=='string'||!/^(0|[1-9][0-9]{0,11})$/.test(v)))fail();
+  const contextFrom=' from custodial_dr.immutable_private_import_context c where '+contextWhere;
+  const selections=Object.freeze([
+   ['owner_fence','select custodial_dr.immutable_import_owner_fence()'],
+   ['catalog_epoch','select custodial_dr.immutable_import_catalog_epoch()'],
+   ['inventory_state','select custodial_dr.immutable_import_source_inventory_state()'],
+   ['target_shape','select custodial_dr.immutable_import_target_shape()'],
+   ['catalog_matches','select custodial_dr.immutable_import_catalog_matches(c.target_shape,c.catalog_epoch)'+contextFrom],
+   ['assert_context','select custodial_dr.immutable_import_assert_context()'],
+   ['read_context','select pg_column_size(c)'+contextFrom],
+   ['extract_three_data_fields',"select jsonb_build_object('migration_head',c.target_shape->'migration_head','release',c.target_shape->'release','recovery_inventory',c.target_shape->'recovery_inventory')"+contextFrom],
+  ]);
+  const timings={};
+  for(const [name,selection]of selections){
+   try{
+   const correlated=selection+(selection.includes(' where ')?' and ':' where ')+'iteration>=1';
+   const r=await sql(`with started as materialized(select clock_timestamp() at), measured as materialized(
+    select q.* from started cross join generate_series(1,10) iteration cross join lateral(${correlated} offset 0)q)
+    select round((extract(epoch from(clock_timestamp()-started.at))*1000)::numeric,3)::text elapsed_ms,count(*)::text calls
+    from started cross join measured group by started.at`);
+   if(r.rowCount!==1||r.rows.length!==1)fail();const v=closed(r.rows[0],['elapsed_ms','calls']);
+   if(v.calls!=='10'||typeof v.elapsed_ms!=='string'||!/^(0|[1-9][0-9]{0,8})\.[0-9]{3}$/.test(v.elapsed_ms))fail();
+   timings[name]=v.elapsed_ms;
+   }catch(error){
+    const code=error&&typeof error==='object'&&!types.isProxy(error)?Object.getOwnPropertyDescriptor(error,'code')?.value:null;
+    throw Object.assign(new Error('Finite context probe refused'),{context_cost_probe:name,sql_state:typeof code==='string'&&/^[A-Z0-9]{5}$/.test(code)?code:null});
+   }
+  }
+  const final=await sql("select jsonb_build_object('database_oid',c.database_oid,'backend_pid',c.backend_pid,'transaction_id',c.transaction_id::text,'restore_id',c.restore_id,'authority_generation',c.authority_generation::text,'archive_digest',c.archive_digest) as context from custodial_dr.immutable_import_assert_context() c");
+  if(!isDeepStrictEqual(contextWitness(final),expected))fail();current();
+  return Object.freeze({schema:'custodial.private-current-context-cost.v1',scope:'SIGNED_CURRENT_SCHEMA_CONTEXT_ONLY_NOT_DATA_RESTORE',
+    archive_digest:binding.archive_digest,calls_per_probe:10,sizes:Object.freeze(sizes),timings:Object.freeze(timings),
+    application_data_imported:false,private_data_imported:false,transaction_authority:false,restore_complete:false,admission_resumed:false});
+  }catch(error){recordImmutableFreshFailure(error,{fresh_stage:freshStage});throw error;}
+}

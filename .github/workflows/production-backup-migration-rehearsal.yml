@@ -23,6 +23,12 @@ on:
         type: string
         default: ""
 
+      private_context_cost_diagnostic_only:
+        description: Finite current-schema context timing with complete rollback; does not qualify DATA restore
+        required: false
+        type: boolean
+        default: false
+
       official_local_storage_provider:
         description: Explicit backup_only same-original official local Storage provider qualification
         required: false
@@ -53,6 +59,7 @@ jobs:
       - name: Check isolated private rehearsal contracts
         run: |
           node scripts/build-immutable-postgres-program.mjs --check
+          node --test scripts/private-context-cost-tests.mjs scripts/current428-forward-qualification-source-tests.mjs
           node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-current-restore-guard-cohort-tests.mjs scripts/immutable-current-cyclic-cohort-tests.mjs scripts/immutable-postgres-acl-qualification-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs scripts/private-restore-function-diagnostic-tests.mjs scripts/immutable-current-bounded-stage-tests.mjs scripts/immutable-ordinary-progress-tests.mjs scripts/immutable-current-catalog-stability-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs scripts/private-catalog-lease-runner-tests.mjs
           node scripts/disaster-recovery-archive-tests.mjs --native-text-columns-archive-only --text-archive-case=bootstrap
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-raw-source-only
@@ -73,6 +80,7 @@ jobs:
         env:
           REHEARSAL_SCOPE: ${{ inputs.rehearsal_scope || 'full_candidate' }}
           OFFICIAL_LOCAL_STORAGE_PROVIDER: ${{ inputs.official_local_storage_provider }}
+          PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY: ${{ inputs.private_context_cost_diagnostic_only }}
           BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
           REVIEWED_DISPOSITION_SHA256: ${{ inputs.reviewed_disposition_sha256 }}
           GH_TOKEN: ${{ github.token }}
@@ -91,6 +99,7 @@ jobs:
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY_ID"
           case "$REHEARSAL_SCOPE" in full_candidate|backup_only|target_capture|reviewed_target_capture) ;; *) exit 1 ;; esac
+          if test "$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY" = true; then test "$REHEARSAL_SCOPE" = backup_only; test "$OFFICIAL_LOCAL_STORAGE_PROVIDER" = true; fi
           [[ "$BACKUP_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET"
           test -n "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"

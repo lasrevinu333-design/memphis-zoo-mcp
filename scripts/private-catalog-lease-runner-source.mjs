@@ -1,3 +1,4 @@
+import {removePrivateContextCostObservation} from './private-context-cost-source-proof.mjs';
 // Fixed complete byte inverse of the current-only disposable catalog lease.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -10,6 +11,7 @@ export function removePrivateCatalogLeaseRunner(source){
  const inverse=JSON.parse(raw);assert.equal(inverse.format,'custodial.private-catalog-lease-runner-inverse.v1');assert.equal(inverse.hunks.length,4);
  assert.equal(inverse.previousSha256,'05902eaa885fa652590ac056658715691ed13df2265fcd10aee51bed0b69f586');
  if(sha(source)===inverse.previousSha256)return source;
+ source=removePrivateContextCostObservation('scripts/run-private-backup-only-rehearsal.mjs',source);
  assert.equal(sha(source),inverse.currentSha256);
  for(const hunk of inverse.hunks){assert.equal(source.split(hunk.after).length,2);source=source.replace(hunk.after,()=>hunk.before);}
  assert.equal(sha(source),inverse.previousSha256);return source;
