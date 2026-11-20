@@ -15,7 +15,7 @@ import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fr
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
-import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
+import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 
@@ -282,7 +282,7 @@ export async function runPrivate(){
     const bootstrapSource=await prepareVerifiedImmutableBootstrapSource(archive);
     ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
     // Same pinned 2GiB allowance already used by the populated native-text rehearsal.
-    const pgMemory=ownerProfile.id==='immutable-private-current-postgres'?'2g':'1g';
+    const pgMemory=pinnedPgMemory(ownerProfile.id==='immutable-private-current-postgres'?'immutable-private-fresh-postgres':'immutable-private-fresh-supabase-admin');
     const requireOwnerProfile=()=>{const current=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
       assert.deepEqual(current,ownerProfile);return current;};
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;

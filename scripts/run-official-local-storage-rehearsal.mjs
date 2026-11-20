@@ -97,9 +97,12 @@ export function assertPrivateNetworkMembers(value,identity,providerId=null){
   insist(stable(Object.keys(value.Containers).sort())===stable(expected.sort()),'Foreign member in private provider network.');
   return true;
 }
-export function assertPinnedPgResources(value,cid,name,profile){
+export function pinnedPgMemory(profile){
   insist(['native-text-v4-fresh-supabase-admin','immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres'].includes(profile),'Closed PG resource profile required.');
-  const memory=(profile==='immutable-private-fresh-supabase-admin'?1:2)*1024**3;
+  return profile==='immutable-private-fresh-supabase-admin'?'1g':'2g';
+}
+export function assertPinnedPgResources(value,cid,name,profile){
+  const memory=Number(pinnedPgMemory(profile).slice(0,-1))*1024**3;
   insist(value.Id===cid && value.Name==='/'+name && value.Config.Image===PG_IMAGE
     && value.HostConfig.Memory===memory && value.HostConfig.MemorySwap===memory
     && value.HostConfig.NanoCpus===1e9 && value.HostConfig.PidsLimit===256,'Provider-only PG resource pin refused.');
@@ -651,7 +654,7 @@ async function host(){
       privateNetwork=Object.freeze({networkId,networkName:network,owner:pg.Config.Labels['custodial.private-backup-rehearsal'],pgid,pgName,address:endpoint.IPAddress});
       assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
     }
-    mark('BOUND_OWNED_POSTGRES');const pgMemory=a.source_profile==='native-text-v4-fresh-supabase-admin'?'2g':'1g';
+    mark('BOUND_OWNED_POSTGRES');const pgMemory=pinnedPgMemory(a.source_profile);
     if(pgMemory==='2g')memoryFloor(4*1024**3);
     await run(['docker','update','--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',pgid]);
     const boundedPg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgid]));
