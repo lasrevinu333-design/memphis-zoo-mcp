@@ -89,6 +89,12 @@ test('the existing primary key bounds batch lookups and final insertion still re
  assert.match(insert,/Immutable staged original changed/);
  assert.match(insert,/Immutable staged typed original changed/);
  assert.match(insert,/Immutable ordinary set readback differs/);
+ assert.match(insert,/WHEN 'postgres-text-columns-line\.v2' THEN\s+decode_function:='immutable_import_text_record'; projection_function:='immutable_import_text_projection'/);
+ assert.match(insert,/WHEN 'postgres-json-text-line\.v1' THEN\s+decode_function:='immutable_import_decode_record'; projection_function:='immutable_import_row_projection'/);
+ assert.match(insert,/bool_or\(s\.original_row_sha256 IS DISTINCT FROM encode/);
+ assert.match(insert,/custodial_dr\.%I\(r\) IS DISTINCT FROM s\.typed_original_text/);
+ assert.equal(insert.split('OVERRIDING SYSTEM VALUE').length,2);
+ assert.equal(insert.split('EXCEPT ALL').length,3);
 });
 test('entire actual preceding importer survives the six exact source hunks',()=>{
  const prior=removeCurrentBoundedOrdinaryConsumerSource(text);

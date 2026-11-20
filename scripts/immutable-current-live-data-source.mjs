@@ -18,6 +18,13 @@ const indexedStageInverse = () => {
   return JSON.parse(bytes);
 };
 
+const typedInsertMarker = '-- Choose the fixed codec once from the authenticated member.';
+const typedInsertInverse = () => {
+  const bytes = readFileSync(new URL('../release/installed-source/20261120_typed_ordinary_set_insert_inverse.json', import.meta.url));
+  assert.equal(sha256(bytes), 'f71a56f032f10989f2c9481235bd8d4f8bd51317f10db50efed3d8e2d73b8c20');
+  return JSON.parse(bytes);
+};
+
 function transform(original, reverse, proof) {
   const { previousProgramSha256, currentProgramSha256, previousStatementSha256, currentStatementSha256, hunks } = proof;
   assert.equal(sha256(serialize(original)), reverse ? currentProgramSha256 : previousProgramSha256);
@@ -43,9 +50,16 @@ export function extendIndexedOrdinaryStage(program) {
   return transform(program, false, indexedStageInverse());
 }
 
+export function extendTypedOrdinarySetInsert(program) {
+  return transform(program, false, typedInsertInverse());
+}
+
 export function removeCurrentLiveDataSnapshot(program) {
-  const prior = program.statements[0].sql.includes(indexedStageMarker)
-    ? transform(program, true, indexedStageInverse())
+  const indexed = program.statements[0].sql.includes(typedInsertMarker)
+    ? transform(program, true, typedInsertInverse())
     : program;
+  const prior = indexed.statements[0].sql.includes(indexedStageMarker)
+    ? transform(indexed, true, indexedStageInverse())
+    : indexed;
   return prior.statements[0].sql.includes(marker) ? transform(prior, true, inverse()) : prior;
 }
