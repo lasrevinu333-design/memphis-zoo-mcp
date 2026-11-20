@@ -9,6 +9,7 @@ import {createServer,createConnection,isIP} from 'node:net';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import pg from 'pg';
 import {materializeVerifiedArchive,readVerifiedPrivateImportSource,readVerifiedArchiveSourceBinding,readVerifiedImmutableBootstrapInventory} from './disaster-recovery-archive.mjs';
 import {requireSigningKey,signBinding,restoreIntentBinding} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
@@ -21,6 +22,8 @@ import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus
 import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';
 import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
 import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';
+import {CURRENT428_ARCHIVE_DIGEST} from './current428-forward-qualification-source.mjs';
+import {readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';
 
 const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -233,7 +236,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null;
+  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null,current428Baseline=null;
   let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null,catalogPrivileges=null,contextCost=null,contextCostFailure=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -416,6 +419,22 @@ export async function runPrivate(){
       const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreWithCatalogLease);
       vendorPrivileges=qualified.receipt;assert.equal(vendorPrivileges.retirement_verified,true);result=qualified.value;
     }else result=await restoreOriginal();
+    if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST){
+      phase='current428_post_restore_readback';
+      assert.equal(vendorPrivileges?.retirement_verified,true);
+      assert.equal(catalogPrivileges?.retirement_verified,true);
+      await verifyTarget();
+      const reader=new pg.Client({connectionString:secretEnv.SUPABASE_DB_URL,
+        connectionTimeoutMillis:10000,statement_timeout:60000,application_name:'custodial-current428-readback'});
+      try{
+        await reader.connect();
+        await reader.query('begin isolation level repeatable read read only');
+        await reader.query("set local search_path=pg_catalog; set local row_security=off");
+        current428Baseline=await readCurrent428RestoredBaseline({client:reader,archive,bootstrapSource,restore:result});
+        assert.equal((await reader.query('rollback')).command,'ROLLBACK');
+      }finally{await reader.end();}
+      await verifyTarget();
+    }
     phase='verified_waiting_cleanup';
   }catch(e){failure=e;
     if(e&&typeof e==='object'&&!isProxy(e))vendorPrivileges=projectIsolatedVendorPrivilegeStatus(Object.getOwnPropertyDescriptor(e,'vendor_privileges')?.value)??vendorPrivileges;
@@ -454,6 +473,7 @@ export async function runPrivate(){
       mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent,
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
+      current428_baseline:!failure&&!stopping?current428Baseline:null,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
       postgres_process:finalPostgresProcess,

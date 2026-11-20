@@ -1,0 +1,163 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { stableJson, stableJsonFileSha256 } from './disaster-recovery-crypto.mjs';
+
+const source = readFileSync(new URL('./current428-forward-readback.mjs', import.meta.url), 'utf8')
+  .replace(/^import .*;\n/gm, '')
+  .replace('export async function', 'async function');
+const archive = Object.freeze({});
+const archiveDigest = 'a'.repeat(64);
+const manifestDigest = 'b'.repeat(64);
+const restoreId = '12345678-1234-1234-1234-123456789abc';
+const projectRef = 'rqquvtjdmugpigbndmne';
+const database = 'mz_schema_rebuild_5481';
+const digest = s => createHash('sha256').update(s).digest('hex');
+const ledger = [
+  { version: '20261115155201', name: 'first', statements: ['select 1;'] },
+  { version: '20261115162648', name: 'tail', statements: ['select 2;'] },
+];
+const result = rows => ({ rows, rowCount: rows.length });
+const discrepancy = {
+  category: 'release_identity', status: 'OPEN', authority_generation: '1',
+  before_sha256: digest('before row projection'), restored_sha256: digest('after row projection'),
+  before_count: '0', restored_count: '10', details_json: { identity: 'synthetic private data' },
+};
+
+function fixture(options = {}) {
+  const calls = [];
+  const profile = {
+    database_name: database, database_owner: 'postgres', actor: 'postgres', original_actor: 'postgres',
+    superuser: false, read_only: 'on', isolation: 'repeatable read', replication: 'origin',
+    row_security: 'off', search_path: 'pg_catalog', cron_active: 'off', cron_database: database,
+    snapshot: '80:81:', backend_pid: 42, ...options.profile,
+  };
+  const state = {
+    state: 'PAUSED_RECONCILIATION', mutations_paused: true, restore_id: restoreId, authority_generation: '1',
+    archive_digest: archiveDigest, target_project_ref: projectRef, database_verified: true, storage_verified: true,
+    authority_invalidated: true, post_restore_verified: true, final_manifest_sha256: manifestDigest,
+    mutation_leases: '0', ...options.state,
+  };
+  const guards = Array.from({ length: 51 }, (_, i) => ({
+    identity: 'public.fixture' + i + '()', owner: 'postgres', definition: 'after ' + i, body: 'body ' + i,
+  }));
+  const bootstrapSource = {
+    recipes: guards.map(g => ({ identity: g.identity, afterHash: digest(g.definition), afterBodyHash: digest(g.body) })),
+    registryRows: ['{"object_kind":"function","object_identity":"public.fixture0()","definition_sql":"before 0"}'],
+    registrySource: { 'public.fixture0()': { definition_sql: 'after 0', definition_sha256: digest('after 0') } },
+  };
+  class Client {
+    connectionParameters = { host: '127.0.0.1', database, user: 'postgres', ...options.connection };
+    _txStatus = 'T';
+    async query(sql, params) {
+      calls.push({ sql, params });
+      if (sql.includes('pg_current_snapshot()')) {
+        return result([calls.length > 1 && options.lastProfile ? { ...profile, ...options.lastProfile } : profile]);
+      }
+      if (sql.includes('restore_manifests m')) return result([state]);
+      if (sql.includes('schema_migrations')) return result(options.ledger ?? ledger);
+      if (sql.includes('pg_get_functiondef')) {
+        assert.deepEqual(params, [guards.map(g => g.identity)]);
+        return result(guards.map((row, index) => index === 3 && options.guard ? { ...row, ...options.guard } : row));
+      }
+      if (sql.includes('immutable_import_text_record')) {
+        assert.deepEqual(params, ['[' + bootstrapSource.registryRows.join(',') + ']', JSON.stringify(bootstrapSource.registrySource)]);
+        return result([{ expected_rows: '1', actual_rows: '1', different_rows: '0', always_guard_count: '1', ...options.registry }]);
+      }
+      if (sql.includes('restore_discrepancies')) {
+        assert.deepEqual(params, [restoreId]);
+        return result(options.discrepancies ?? [discrepancy]);
+      }
+      assert.fail('Unexpected query');
+    }
+  }
+  let sourceReads = 0;
+  const port = new Function('assert', 'createHash', 'pg', 'stableJson', 'stableJsonFileSha256', 'assertVerifiedImmutableBootstrapSource',
+    'readVerifiedCurrent428ForwardQualificationSource', 'process', source + '\nreturn readCurrent428RestoredBaseline;')(
+    assert, createHash, { Client }, stableJson, stableJsonFileSha256,
+    (actual, original) => {
+      assert.equal(actual, bootstrapSource);
+      assert.equal(original, archive);
+      if (++sourceReads > 1 && options.sourceChanged) throw new Error('source no longer current');
+    },
+    actual => {
+      assert.equal(actual, archive);
+      return {
+        assertCurrent() {}, archive_digest: archiveDigest, source_ledger_count: ledger.length,
+        source_ledger_head: ledger.at(-1).version, source_ledger_file_sha256: stableJsonFileSha256(ledger),
+      };
+    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } });
+  const restore = {
+    ok: true, database_only: true, state: 'PAUSED_RECONCILIATION', archive_digest: archiveDigest,
+    storage: { provider_verified: true, scope: 'OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL' },
+    authority_observation: { outcome: 'AUTHORITY_COMPLETION_OBSERVED' }, mutations_paused: true,
+    resume_allowed: false, remaining_phases: ['SIGNED_RECONCILIATION'],
+    target_project_ref: projectRef, restore_id: restoreId, authority_generation: 1,
+    final_manifest_sha256: manifestDigest, unresolved_discrepancies: 1, ...options.restore,
+  };
+  return { calls, run: () => port({ client: new Client(), archive, bootstrapSource, restore }) };
+}
+
+test('observes only the owning paused, verified copy and reports exact reconciliation categories', async () => {
+  const unit = fixture();
+  const evidence = await unit.run();
+  assert.equal(evidence.restored_recipes, 51);
+  assert.equal(evidence.registry_rows, 1);
+  assert.deepEqual(evidence.open_categories, ['release_identity']);
+  const { authority_generation, details_json, ...publicFields } = discrepancy;
+  const snapshot = [{ ...publicFields, details_sha256: digest(stableJson(details_json)) }];
+  assert.deepEqual(evidence.open_discrepancies, snapshot);
+  assert.equal(evidence.discrepancy_snapshot_sha256, digest(stableJson(snapshot)));
+  assert.equal(JSON.stringify(evidence).includes('synthetic private data'), false);
+  assert.equal(evidence.reconciliation_required, true);
+  assert.equal(evidence.forwards_applied, false);
+  assert.ok(unit.calls.every(({ sql }) => /^(select|with archived)/.test(sql)), 'no DDL, writes, reconciliation or commit');
+});
+
+test('rejects foreign connections and unverified receipts before invoking native SQL', async () => {
+  for (const options of [
+    { connection: { host: 'production.example' } }, { connection: { user: 'supabase_admin' } },
+    { connection: { database: 'mz_schema_rebuild_42' } }, { restore: { state: 'COMPLETE' } },
+    { restore: { storage: { provider_verified: false } } }, { restore: { archive_digest: 'c'.repeat(64) } },
+  ]) {
+    const unit = fixture(options);
+    await assert.rejects(unit.run);
+    assert.deepEqual(unit.calls, []);
+  }
+});
+
+test('rejects restore, registry, ledger, source and transaction drift without issuing effects', async () => {
+  for (const options of [
+    { profile: { read_only: 'off' } }, { profile: { cron_active: 'on' } },
+    { state: { mutation_leases: '1' } }, { state: { final_manifest_sha256: 'd'.repeat(64) } },
+    { state: { archive_digest: 'c'.repeat(64) } }, { state: { storage_verified: false } },
+    { guard: { owner: 'supabase_admin' } }, { guard: { body: 'different' } }, { guard: { definition: 'different' } },
+    { registry: { different_rows: '1' } }, { registry: { always_guard_count: '0' } },
+    { ledger: [ledger[0], { ...ledger[1], statements: ['select 3;'] }] },
+    { discrepancies: [] }, { discrepancies: [{ ...discrepancy, category: 'space in category' }] },
+    { discrepancies: [{ ...discrepancy, authority_generation: '2' }] },
+    { discrepancies: [{ ...discrepancy, status: 'RESOLVED' }] },
+    { discrepancies: [{ ...discrepancy, before_count: '01' }] },
+    { discrepancies: [{ ...discrepancy, restored_sha256: 'bad' }] },
+    { lastProfile: { snapshot: '81:82:' } }, { sourceChanged: true },
+  ]) {
+    const unit = fixture(options);
+    await assert.rejects(unit.run, undefined, JSON.stringify(options));
+    assert.ok(unit.calls.every(({ sql }) => /^(select|with archived)/.test(sql)));
+  }
+});
+
+test('the owning runner reads the exact archive only after its temporary privilege leases are retired', () => {
+  const runner = readFileSync(new URL('./run-private-backup-only-rehearsal.mjs', import.meta.url), 'utf8');
+  const start = runner.indexOf('if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST)');
+  const end = runner.indexOf("phase='verified_waiting_cleanup';", start);
+  assert.ok(start > 0 && end > start);
+  const readback = runner.slice(start, end);
+  for (const lease of ['vendorPrivileges', 'catalogPrivileges']) {
+    assert.ok(readback.indexOf(lease + '?.retirement_verified') < readback.indexOf('await reader.connect()'));
+    assert.ok(readback.includes(lease + '?.retirement_verified'));
+  }
+  assert.match(readback, /reader\.query\('begin isolation level repeatable read read only'\)[\s\S]*readCurrent428RestoredBaseline\(\{client:reader,archive,bootstrapSource,restore:result\}\)/);
+  assert.match(readback, /reader\.query\('rollback'\)[\s\S]*finally\{await reader\.end\(\);\}/);
+});

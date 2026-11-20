@@ -6,7 +6,7 @@ import {join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {assertCurrent428ForwardMetadata,readVerifiedCurrent428ForwardQualificationSource} from './current428-forward-qualification-source.mjs';
+import {assertCurrent428ForwardMetadata,qualificationTransactionBody,readVerifiedCurrent428ForwardQualificationSource} from './current428-forward-qualification-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const declaration=JSON.parse(readFileSync(new URL('../release/production-backup-source-extension-v2.native428.candidate.json',import.meta.url)));
 // Explicit synthetic source descriptor using previously observed428 ledger
@@ -37,6 +37,33 @@ test('exact current source files and historical235 target gate remain separately
  const historical=readFileSync(new URL('./release-migration-target-capture.mjs',import.meta.url));
  assert.equal(sha(historical),'3e06d8b3bd1f627da54b98cdb5dde236e7485868510b12cf4b0f0adfa90f43c1');
  assert.ok(historical.toString().includes('Signed archive must match the finite observed235 source declaration'));
+});
+
+test('the three exact forwards leave commit and rollback to the caller', () => {
+ const load = name => readFileSync(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8');
+ const schedule = load('20261115205201_accepted_seven_pattern_update_reuse_existing_capacity.sql');
+ assert.equal(qualificationTransactionBody('20261115205201', schedule), schedule.split('\nBEGIN;')[1].split('\nCOMMIT;')[0] + '\n');
+ const reopen = load('20261120002521_messenger_direct_reopen_intents_v2.sql');
+ assert.equal(qualificationTransactionBody('20261120002521', reopen), reopen);
+ const cleanup = load('20261120010931_messenger_direct_intent_cleanup.sql');
+ assert.match(cleanup, /BEGIN; SET LOCAL statement_timeout.*COMMIT;/);
+ assert.equal(qualificationTransactionBody('20261120010931', cleanup), cleanup,
+  'Quoted SQL in the cleanup job must remain byte-for-byte exact');
+});
+
+test('unexpected top-level transaction commands and psql directives refuse', () => {
+ for (const sql of [
+  'BEGIN; SELECT 1;', 'SELECT 1; COMMIT;', 'BEGIN; COMMIT;',
+  'BEGIN; SELECT 1; COMMIT; SELECT 2; COMMIT;',
+  'BEGIN; START TRANSACTION; SELECT 1; COMMIT;',
+  "BEGIN; PREPARE TRANSACTION 'unit'; COMMIT;",
+  'BEGIN; ROLLBACK; SELECT 1; COMMIT;',
+  'BEGIN; SAVEPOINT unit; SELECT 1; COMMIT;',
+ ]) assert.throws(() => qualificationTransactionBody('20261115205201', sql));
+ for (const sql of [
+  'BEGIN; SELECT 1; COMMIT;', 'SELECT 1; END AND CHAIN;',
+  '\\restrict unit\nSELECT 1;\n\\unrestrict unit\n',
+ ]) assert.throws(() => qualificationTransactionBody('20261120010931', sql));
 });
 
 // Extract only the unchanged file-custody closure. Its URL is redirected to

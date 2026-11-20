@@ -13,8 +13,28 @@
     },
     "scripts/run-private-backup-only-rehearsal.mjs": {
       "previousSha256": "bca81f466de6733d5968fc23742ce11e765809cb272164dd264e7ff03a37f4b1",
-      "currentSha256": "7fb224f6ea64833550b0390c9496fd49249ceff01eb8ca4d3b2899e4f781bb15",
+      "currentSha256": "16ba63d17e4872dfa724f85bbea674c5d523eb5d996cf81955bbe1e3ca0deb7f",
       "hunks": [
+        {
+          "after": "import {fileURLToPath} from 'node:url';\nimport pg from 'pg';\n",
+          "before": "import {fileURLToPath} from 'node:url';\n"
+        },
+        {
+          "after": "import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';\nimport {CURRENT428_ARCHIVE_DIGEST} from './current428-forward-qualification-source.mjs';\nimport {readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';\n",
+          "before": "import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';\n"
+        },
+        {
+          "after": "  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null,current428Baseline=null;\n",
+          "before": "  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null;\n"
+        },
+        {
+          "after": "    }else result=await restoreOriginal();\n    if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST){\n      phase='current428_post_restore_readback';\n      assert.equal(vendorPrivileges?.retirement_verified,true);\n      assert.equal(catalogPrivileges?.retirement_verified,true);\n      await verifyTarget();\n      const reader=new pg.Client({connectionString:secretEnv.SUPABASE_DB_URL,\n        connectionTimeoutMillis:10000,statement_timeout:60000,application_name:'custodial-current428-readback'});\n      try{\n        await reader.connect();\n        await reader.query('begin isolation level repeatable read read only');\n        await reader.query(\"set local search_path=pg_catalog; set local row_security=off\");\n        current428Baseline=await readCurrent428RestoredBaseline({client:reader,archive,bootstrapSource,restore:result});\n        assert.equal((await reader.query('rollback')).command,'ROLLBACK');\n      }finally{await reader.end();}\n      await verifyTarget();\n    }\n",
+          "before": "    }else result=await restoreOriginal();\n"
+        },
+        {
+          "after": "      provider_verified:!failure&&result?.storage?.provider_verified===true,\n      current428_baseline:!failure&&!stopping?current428Baseline:null,\n",
+          "before": "      provider_verified:!failure&&result?.storage?.provider_verified===true,\n"
+        },
         {
           "before": "socket_timeout_ms:privateRestoreWorkTimeoutMs}",
           "after": "socket_timeout_ms:restoreTimeoutMs}"
@@ -91,8 +111,12 @@
     },
     ".github/workflows/production-backup-migration-rehearsal.yml": {
       "previousSha256": "e3352172fac50e799262819801d1c4f6396ae45e8664fee92272d445bbf5bcfa",
-      "currentSha256": "7b35aa8210822c4e494b2f0fd9d3ee56be9251b0c5648295461713fe9a17532c",
+      "currentSha256": "c26f98b0fce489b2397a76d366228a2b3fed96c4cb7b36e070b432fd07656d75",
       "hunks": [
+        {
+          "after": "          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs scripts/current428-forward-readback-tests.mjs\n",
+          "before": "          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs\n"
+        },
         {
           "before": "scripts/immutable-current-catalog-stability-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs",
           "after": "scripts/immutable-current-catalog-stability-tests.mjs scripts/immutable-current-live-data-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs"

@@ -8,7 +8,8 @@ import {createHash} from 'node:crypto';
 import {readVerifiedMigrationTargetCaptureSource} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {verifyArchivedLedgerV2} from './backup-ledger-binding-v2.mjs';
-const archiveDigest='241d1cd711d41708d00d3e61334275f0adde07d85d230d2c0d03fa9c5ff86da5';
+import {splitSchemaStatements} from './isolated-event-owner-schema.mjs';
+export const CURRENT428_ARCHIVE_DIGEST='241d1cd711d41708d00d3e61334275f0adde07d85d230d2c0d03fa9c5ff86da5';
 const ledgerFileDigest='7ee71df7d6e99fbe508721c7e4508fcd4a9f10c02a67f3769fa54d5b6a4077e7';
 const ledgerTupleDigest='c0bbf827afc1f73338cbed414b2e83b82e5525802cc1cbef35c219dcc4f9ae14';
 const refs=Object.freeze([
@@ -17,6 +18,28 @@ const refs=Object.freeze([
  Object.freeze({file:'20261120010931_messenger_direct_intent_cleanup.sql',version:'20261120010931',bytes:2836,sha256:'1aed43cb28f280d7a42ac2764795c94b6cf8643954b9dfc2076f85b23283bee4'}),
 ]);
 const sha=value=>createHash('sha256').update(value).digest('hex');
+export function qualificationTransactionBody(version, sql) {
+ const {statements, psqlGuards} = splitSchemaStatements(sql);
+ assert.equal(psqlGuards, 0, 'A forward must contain only server SQL');
+ const keyword = token => token?.kind === 'identifier' && !token.quoted ? token.value : null;
+ const isBoundary = (statement, word) => statement?.tokens.length === 2 && keyword(statement.tokens[0]) === word;
+ const wrapped = version === '20261115205201';
+ if (wrapped) {
+  assert.ok(isBoundary(statements[0], 'begin') && isBoundary(statements.at(-1), 'commit'),
+   'The accepted-seven forward must retain its exact transaction envelope');
+ }
+ const body = wrapped ? statements.slice(1, -1) : statements;
+ assert.ok(body.length > 0, 'The exact forward must contain work');
+ for (const statement of body) {
+  const first = keyword(statement.tokens[0]);
+  const second = keyword(statement.tokens[1]);
+  assert.ok(!['begin', 'start', 'commit', 'end', 'rollback', 'abort', 'savepoint', 'release'].includes(first)
+   && !(first === 'prepare' && second === 'transaction'),
+  'Forward SQL may not control the owning rehearsal transaction');
+ }
+ // Preserve every source byte between the transaction boundary statements.
+ return wrapped ? sql.slice(statements[0].end, statements.at(-1).tokens[0].start) : sql;
+}
 const identity=s=>[s.dev,s.ino,s.mode,s.uid,s.gid,s.nlink,s.size,s.mtimeNs,s.ctimeNs];
 function sourceFile(ref){
  const path=fileURLToPath(new URL('../supabase/migrations/'+ref.file,import.meta.url));
@@ -37,7 +60,7 @@ function sourceFile(ref){
 // ledger, catalog and actual original owner through the established readers.
 export function assertCurrent428ForwardMetadata(source){
  const {sourceBinding:s,binding:b,ledger}=source;
- assert.equal(s.format,'memphis-zoo-disaster-recovery.v4');assert.equal(s.project_ref,'rqquvtjdmugpigbndmne');assert.equal(s.archive_digest,archiveDigest);
+ assert.equal(s.format,'memphis-zoo-disaster-recovery.v4');assert.equal(s.project_ref,'rqquvtjdmugpigbndmne');assert.equal(s.archive_digest,CURRENT428_ARCHIVE_DIGEST);
  assert.equal(s.source_identity.migration_ledger_count,428);assert.equal(s.source_identity.migration_head,'20261115162648');
  assert.equal(s.source_identity.migration_ledger_sha256,ledgerFileDigest);
  assert.equal(b.schema,'custodial.backup-schema-extension.v2');assert.equal(b.captured_ledger_count,428);assert.equal(b.captured_migration_head,'20261115162648');assert.equal(b.ledger_sha256,ledgerTupleDigest);
@@ -60,9 +83,9 @@ export function readVerifiedCurrent428ForwardQualificationSource(archive){
  };
  assertCurrent();
  return Object.freeze({schema:'custodial.current428-three-forward-source.v1',scope:'SOURCE_ONLY_NOT_TARGET_OR_MIGRATION_ADMISSION',
-  archive_digest:archiveDigest,source_ledger_count:428,source_ledger_head:'20261115162648',source_ledger_file_sha256:ledgerFileDigest,source_ledger_tuple_sha256:ledgerTupleDigest,
+  archive_digest:CURRENT428_ARCHIVE_DIGEST,source_ledger_count:428,source_ledger_head:'20261115162648',source_ledger_file_sha256:ledgerFileDigest,source_ledger_tuple_sha256:ledgerTupleDigest,
   source_catalog_fingerprint:original.binding.catalog_fingerprint,
-  pending:Object.freeze(files.map(f=>Object.freeze({...f.ref,sql:f.sql}))),expected_target_ledger_count:431,
+  pending:Object.freeze(files.map(f=>Object.freeze({...f.ref,sql:f.sql,body:qualificationTransactionBody(f.ref.version,f.sql)}))),expected_target_ledger_count:431,
   expected_target_ledger_head:refs.at(-1).version,actual_target_fingerprint:null,
   signed_reconciliation_required:true,production_mutation_authorized:false,assertCurrent});
 }
