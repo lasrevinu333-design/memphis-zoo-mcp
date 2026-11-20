@@ -281,6 +281,8 @@ export async function runPrivate(){
     // Fail on absent source/ACL/guard recipes before resources are created.
     const bootstrapSource=await prepareVerifiedImmutableBootstrapSource(archive);
     ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
+    // Same pinned 2GiB allowance already used by the populated native-text rehearsal.
+    const pgMemory=ownerProfile.id==='immutable-private-current-postgres'?'2g':'1g';
     const requireOwnerProfile=()=>{const current=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
       assert.deepEqual(current,ownerProfile);return current;};
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
@@ -304,7 +306,7 @@ export async function runPrivate(){
     creationOperation='START_OWNED_POSTGRES';
     cid=await docker(['run','-d','--name',name,'--label',label+'='+owner,'--label','custodial.private-owner-profile='+ownerProfile.id,
       '--label','custodial.private-owner-actor='+ownerProfile.actor,'--network',networkName,
-      '--memory','1g','--memory-swap','1g','--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size=1g',
+      '--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size='+pgMemory,
       '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',PG_IMAGE,'postgres','-D','/etc/postgresql',
       '-c',"listen_addresses=*",'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
       '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off']);

@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {PG_IMAGE,privatePostgresProcessDiagnostic,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
-import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,assertPinnedPgResources,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -859,4 +859,21 @@ test('private PostgreSQL process observation distinguishes backend death and cgr
  const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
  assert.ok(source.indexOf('finalPostgresProcess=privatePostgresProcessDiagnostic')<source.indexOf("await docker(['rm','-f',cid]"));
  assert.ok(source.includes("['exec',cid,'cat','/sys/fs/cgroup/memory.events']"));
+});
+
+
+test('current original-owner PostgreSQL copy uses existing pinned 2GiB resources while legacy stays at1GiB',()=>{
+ const fixture=memory=>({Id:'a'.repeat(64),Name:'/unit_owned',Config:{Image:PG_IMAGE},HostConfig:{Memory:memory*1024**3,MemorySwap:memory*1024**3,NanoCpus:1e9,PidsLimit:256,Tmpfs:{'/var/lib/postgresql/data':'rw,size='+memory+'g'}}});
+ for(const profile of ['native-text-v4-fresh-supabase-admin','immutable-private-fresh-postgres']){
+  assert.equal(assertPinnedPgResources(fixture(2),'a'.repeat(64),'unit_owned',profile),true);
+  for(const memory of [1,3])assert.throws(()=>assertPinnedPgResources(fixture(memory),'a'.repeat(64),'unit_owned',profile));
+  for(const mutate of [v=>v.HostConfig.MemorySwap=3*1024**3,v=>v.HostConfig.NanoCpus=2e9,v=>v.HostConfig.PidsLimit=512,v=>v.HostConfig.Tmpfs['/var/lib/postgresql/data']='rw,size=3g',v=>v.Id='b'.repeat(64),v=>v.Config.Image='unpinned']){const v=fixture(2);mutate(v);assert.throws(()=>assertPinnedPgResources(v,'a'.repeat(64),'unit_owned',profile));}
+ }
+ assert.equal(assertPinnedPgResources(fixture(1),'a'.repeat(64),'unit_owned','immutable-private-fresh-supabase-admin'),true);
+ assert.throws(()=>assertPinnedPgResources(fixture(2),'a'.repeat(64),'unit_owned','immutable-private-fresh-supabase-admin'));
+ assert.throws(()=>assertPinnedPgResources(fixture(2),'a'.repeat(64),'unit_owned','caller-selected'));
+ const runner=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+ assert.ok(runner.includes("const pgMemory=ownerProfile.id==='immutable-private-current-postgres'?'2g':'1g'"));
+ assert.ok(runner.includes("'--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size='+pgMemory"));
+ assert.ok(runner.indexOf('ownerProfile=readVerifiedImmutableBootstrapOwnerProfile')<runner.indexOf('const pgMemory='));
 });

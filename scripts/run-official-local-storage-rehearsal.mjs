@@ -99,11 +99,11 @@ export function assertPrivateNetworkMembers(value,identity,providerId=null){
 }
 export function assertPinnedPgResources(value,cid,name,profile){
   insist(['native-text-v4-fresh-supabase-admin','immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres'].includes(profile),'Closed PG resource profile required.');
-  const memory=(profile==='native-text-v4-fresh-supabase-admin'?2:1)*1024**3;
+  const memory=(profile==='immutable-private-fresh-supabase-admin'?1:2)*1024**3;
   insist(value.Id===cid && value.Name==='/'+name && value.Config.Image===PG_IMAGE
     && value.HostConfig.Memory===memory && value.HostConfig.MemorySwap===memory
     && value.HostConfig.NanoCpus===1e9 && value.HostConfig.PidsLimit===256,'Provider-only PG resource pin refused.');
-  if(profile==='native-text-v4-fresh-supabase-admin')insist(value.HostConfig.Tmpfs?.['/var/lib/postgresql/data']==='rw,size=2g','Exact native PG tmpfs2GiB required.');
+  if(profile!=='immutable-private-fresh-supabase-admin')insist(value.HostConfig.Tmpfs?.['/var/lib/postgresql/data']==='rw,size=2g','Exact native PG tmpfs2GiB required.');
   return true;
 }
 export function validatePinnedOfficialImage(value){
