@@ -68,6 +68,11 @@ export const currentWeekReadbackSql = `with week as (
         date_trunc('week',transaction_timestamp() at time zone 'America/Chicago')::date monday
 ), days as (
  select today,monday+i service_date from week cross join generate_series(0,6) i
+), authority_days as materialized (
+ select d.*,a.governed,a.projection_status,a.projection_id,
+        case when a.governed and a.projection_status='current'
+             then public.static_weekly_v8_read_lunch_document(d.service_date) end lunch
+ from days d cross join lateral public.static_weekly_v6_schedule_authority_state(d.service_date) a
 ), employee_days as materialized (
  select d.service_date, r.employee_id,
         public.static_weekly_v5_read_employee_day(d.service_date,r.employee_id,transaction_timestamp()) payload
@@ -76,40 +81,64 @@ export const currentWeekReadbackSql = `with week as (
   select distinct roster.employee_id from public.static_weekly_v6_read_roster(d.service_date) roster
   where roster.employee_id is not null
  ) r
-)
-select d.today::text,d.service_date::text,authority.governed,authority.projection_status,
-       count(e.employee_id)::int roster_employees,
-       count(e.employee_id) filter(where e.payload->>'projection_status'='current'
+), employee_facts as (
+ select e.*,e.payload->>'projection_status'='current'
         and e.payload->>'governed'='true' and e.payload->>'service_date'=d.service_date::text
-        and e.payload->>'employee_id'=e.employee_id::text and e.payload->>'projection_id' is not null)::int current_employees,
+        and e.payload->>'employee_id'=e.employee_id::text and e.payload->>'projection_id'=d.projection_id::text is_current
+ from employee_days e join authority_days d using(service_date)
+)
+select d.today::text,d.service_date::text,d.governed,d.projection_status,
+       count(e.employee_id)::int roster_employees,
+       count(e.employee_id) filter(where e.is_current)::int current_employees,
+       count(e.employee_id) filter(where e.is_current and exists(select 1 from jsonb_array_elements(
+          case when jsonb_typeof(e.payload->'all_items')='array' then e.payload->'all_items' else '[]'::jsonb end
+        ) item where item->>'source_type'='static_weekly_projection' and item->>'status'='ASSIGNED'))::int employees_with_assignments,
+       coalesce(d.lunch->>'persistence_status'='PERSISTED'
+        and d.lunch->>'projection_id'=d.projection_id::text and d.lunch->>'service_date'=d.service_date::text
+        and d.lunch->>'document_identity'~'^[a-f0-9]{64}$' and jsonb_typeof(d.lunch->'loans')='array'
+        and jsonb_typeof(d.lunch->'responsibilities')='array',false) lunch_document_current,
        encode(extensions.digest(convert_to(coalesce(string_agg(
         encode(extensions.digest(convert_to(e.payload::text,'UTF8'),'sha256'),'hex'),''
         order by e.employee_id),''),'UTF8'),'sha256'),'hex') employee_days_sha256,
        has_function_privilege('custodial_readonly_runtime_20260822',
         'public.static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)','EXECUTE') reader_execute
-from days d cross join lateral public.static_weekly_v6_schedule_authority_state(d.service_date) authority
-left join employee_days e on e.service_date=d.service_date
-group by d.today,d.service_date,authority.governed,authority.projection_status
+from authority_days d
+left join employee_facts e on e.service_date=d.service_date
+group by d.today,d.service_date,d.governed,d.projection_status,d.projection_id,d.lunch
 order by d.service_date`;
 
-async function readCurrentWeek(query) {
-  const result = await query(currentWeekReadbackSql);
-  assert.equal(result.rowCount, 7, 'Schedule authority must report all seven Chicago calendar days');
-  const serviceDates = result.rows.map(row => row.service_date);
-  assert.equal(new Set(serviceDates).size, 7);
-  for (const row of result.rows) {
+export function summarizeCurrentWeekCoverage(rows) {
+  assert.equal(rows.length, 7, 'Schedule authority must report all seven Chicago calendar days');
+  const today = rows[0].today;
+  const monday = new Date(rows[0].service_date + 'T00:00:00Z');
+  assert.equal(monday.getUTCDay(), 1, 'The schedule readback must begin on Monday');
+  for (const [index, row] of rows.entries()) {
     assert.match(row.today, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
-    assert.match(row.service_date, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
+    assert.equal(row.today, today);
+    assert.equal(row.service_date, new Date(monday.getTime() + index * 86400000).toISOString().slice(0, 10));
     assert.equal(typeof row.governed, 'boolean');
     assert.ok(typeof row.projection_status === 'string' && /^[a-z0-9_]{1,80}$/.test(row.projection_status));
     assert.ok(Number.isSafeInteger(row.roster_employees) && row.roster_employees >= 0);
     assert.ok(Number.isSafeInteger(row.current_employees) && row.current_employees >= 0 && row.current_employees <= row.roster_employees);
+    assert.ok(Number.isSafeInteger(row.employees_with_assignments) && row.employees_with_assignments >= 0
+      && row.employees_with_assignments <= row.current_employees);
+    assert.equal(typeof row.lunch_document_current, 'boolean');
     assert.match(row.employee_days_sha256, sha256);
     assert.equal(typeof row.reader_execute, 'boolean');
   }
-  assert.equal(new Set(result.rows.map(row => row.today)).size, 1);
-  assert.ok(serviceDates.includes(result.rows[0].today));
-  return result.rows;
+  assert.ok(rows.some(row => row.service_date === today));
+  const remaining = rows.filter(row => row.service_date >= today);
+  const missing = remaining.filter(row => !row.governed || row.projection_status !== 'current'
+    || !row.reader_execute || row.current_employees !== row.roster_employees
+    || row.employees_with_assignments === 0 || !row.lunch_document_current);
+  return { today, dates_checked: remaining.map(row => row.service_date),
+    dates_missing_coverage: missing.map(row => row.service_date), working_coverage: missing.length === 0 };
+}
+
+export async function readCurrentWeek(query) {
+  const result = await query(currentWeekReadbackSql);
+  assert.equal(result.rowCount, 7);
+  return { days: result.rows, coverage: summarizeCurrentWeekCoverage(result.rows) };
 }
 
 // Invoked by an owning disposable rehearsal after its existing signed
@@ -241,7 +270,8 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
       ledger_count: afterLedger.length,
       ledger_head: afterLedger.at(-1).version,
       ledger_sha256: stableJsonFileSha256(afterLedger),
-      current_chicago_week: weekAfter,
+      current_chicago_week: weekAfter.days,
+      current_chicago_week_coverage: weekAfter.coverage,
     };
     source.assertCurrent();
   } catch (error) {
