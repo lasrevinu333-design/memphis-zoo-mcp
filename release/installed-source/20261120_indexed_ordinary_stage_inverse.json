@@ -1,0 +1,29 @@
+{
+  "format": "custodial.current-indexed-ordinary-stage-inverse.v1",
+  "previousProgramSha256": "39cf55e18a69f41c3f53cdb122dd6245b33cc35a9a2967d85f4be6adbbceb4be",
+  "currentProgramSha256": "48edf8ed7f5589d7a00f8dc19b270533d25ff5f4050e635d64be383549ce95d1",
+  "previousStatementSha256": "c248867b950a4f52727dd74c35be73a2b411aa00e6c013953382658f17cbd489",
+  "currentStatementSha256": "1213ff663922d5414df836817ea971d80834cf4c6ca0462d6bc9d50c19912dea",
+  "hunks": [
+    {
+      "before": " prior_count bigint;prior_first bigint;prior_last bigint;observed bigint;written bigint;after_count bigint;after_last bigint;",
+      "after": " prior_last bigint;observed bigint;written bigint;after_last bigint;"
+    },
+    {
+      "before": " SELECT count(*),min(s.ordinal),max(s.ordinal) INTO prior_count,prior_first,prior_last\n  FROM custodial_dr.immutable_ordinary_import_rows s\n  WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id AND s.table_oid=target_oid;\n IF first_ordinal<>prior_count+1 OR (prior_count>0 AND(prior_first<>1 OR prior_last<>prior_count))\n  OR prior_count+batch_count>(member->>'row_count')::bigint",
+      "after": " -- Read the last staged ordinal from the existing composite primary key.\n -- The complete positive, unique ordinal set is checked before target insertion.\n SELECT s.ordinal INTO prior_last FROM custodial_dr.immutable_ordinary_import_rows s\n  WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id AND s.table_oid=target_oid\n  ORDER BY s.ordinal DESC LIMIT 1;\n prior_last:=coalesce(prior_last,0);\n IF first_ordinal<>prior_last+1\n  OR prior_last+batch_count>(member->>'row_count')::bigint"
+    },
+    {
+      "before": " SELECT count(*),max(s.ordinal) INTO after_count,after_last FROM custodial_dr.immutable_ordinary_import_rows s\n  WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id AND s.table_oid=target_oid;\n IF written<>batch_count OR after_count<>prior_count+batch_count OR after_last<>after_count",
+      "after": " SELECT s.ordinal INTO after_last FROM custodial_dr.immutable_ordinary_import_rows s\n  WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id AND s.table_oid=target_oid\n  ORDER BY s.ordinal DESC LIMIT 1;\n IF written<>batch_count OR after_last IS DISTINCT FROM prior_last+batch_count"
+    },
+    {
+      "before": " observed bigint; columns_sql text; projection text; stage_digest text; mismatches bigint;",
+      "after": " observed bigint; staged_last bigint; columns_sql text; projection text; stage_digest text; mismatches bigint;"
+    },
+    {
+      "before": " SELECT count(*),encode(extensions.digest(convert_to(coalesce(string_agg(s.ordinal::text||':'||s.original_row_sha256,E'\\n' ORDER BY s.ordinal),''),'UTF8'),'sha256'),'hex')\n  INTO observed,stage_digest FROM custodial_dr.immutable_ordinary_import_rows s\n  WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id AND s.table_oid=target_oid;\n IF observed<>(member->>'row_count')::bigint THEN RAISE EXCEPTION 'Immutable ordinary staged source incomplete';END IF;",
+      "after": " -- Positive unique ordinals are dense precisely when count equals max.\n SELECT count(*),coalesce(max(s.ordinal),0),encode(extensions.digest(convert_to(coalesce(string_agg(s.ordinal::text||':'||s.original_row_sha256,E'\\n' ORDER BY s.ordinal),''),'UTF8'),'sha256'),'hex')\n  INTO observed,staged_last,stage_digest FROM custodial_dr.immutable_ordinary_import_rows s\n  WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id AND s.table_oid=target_oid;\n IF observed<>(member->>'row_count')::bigint OR staged_last<>observed\n  THEN RAISE EXCEPTION 'Immutable ordinary staged source incomplete';END IF;"
+    }
+  ]
+}

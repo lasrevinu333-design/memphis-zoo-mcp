@@ -11,8 +11,15 @@ const inverse = () => {
   return JSON.parse(bytes);
 };
 
-function transform(original, reverse) {
-  const { previousProgramSha256, currentProgramSha256, previousStatementSha256, currentStatementSha256, hunks } = inverse();
+const indexedStageMarker = '-- Read the last staged ordinal from the existing composite primary key.';
+const indexedStageInverse = () => {
+  const bytes = readFileSync(new URL('../release/installed-source/20261120_indexed_ordinary_stage_inverse.json', import.meta.url));
+  assert.equal(sha256(bytes), '9155c5ee50e63db11ca19d2dfc28430706904eb46e3871581be0035364ce4489');
+  return JSON.parse(bytes);
+};
+
+function transform(original, reverse, proof) {
+  const { previousProgramSha256, currentProgramSha256, previousStatementSha256, currentStatementSha256, hunks } = proof;
   assert.equal(sha256(serialize(original)), reverse ? currentProgramSha256 : previousProgramSha256);
   const program = structuredClone(original);
   const statement = program.statements[0];
@@ -29,9 +36,16 @@ function transform(original, reverse) {
 }
 
 export function extendCurrentLiveDataSnapshot(program) {
-  return transform(program, false);
+  return transform(program, false, inverse());
+}
+
+export function extendIndexedOrdinaryStage(program) {
+  return transform(program, false, indexedStageInverse());
 }
 
 export function removeCurrentLiveDataSnapshot(program) {
-  return program.statements[0].sql.includes(marker) ? transform(program, true) : program;
+  const prior = program.statements[0].sql.includes(indexedStageMarker)
+    ? transform(program, true, indexedStageInverse())
+    : program;
+  return prior.statements[0].sql.includes(marker) ? transform(prior, true, inverse()) : prior;
 }

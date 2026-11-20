@@ -59,15 +59,36 @@ function fixture(options={}){
 }
 test('whole fd53 predecessor and all51 guard definitions survive exactly',()=>{
  const prior=removeCurrentBoundedOrdinaryStage(program);assert.equal(sha(JSON.stringify(prior,null,2)+'\n'),'fd53fda1891932c4cae89fc1f6f4b1c6116515ad2120aca6c41a1d5302cc84da');
- assert.deepEqual(extendCurrentBoundedOrdinaryStage(prior),removeCurrentCatalogStability(program));assert.deepEqual(program.recipes,prior.recipes);
- assert.equal(program.statements.length,13);assert.equal(program.statements[0].sql.split(currentBoundedOrdinaryStageSql()).length,2);
+ const bounded=removeCurrentCatalogStability(program);
+ assert.deepEqual(extendCurrentBoundedOrdinaryStage(prior),bounded);assert.deepEqual(program.recipes,prior.recipes);
+ assert.equal(program.statements.length,13);assert.equal(bounded.statements[0].sql.split(currentBoundedOrdinaryStageSql()).length,2);
  for(let i=1;i<13;i++)assert.deepEqual(program.statements[i],prior.statements[i]);
 });
 test('mutated predecessor or successor cannot pass the exact inverse',()=>{
- for(const mutate of [p=>p.recipes[0].after+=' ',p=>p.statements[0].sql=p.statements[0].sql.replace('after_count<>prior_count+batch_count','false'),p=>p.statements[1].sql+=' ']){
+ for(const mutate of [p=>p.recipes[0].after+=' ',p=>p.statements[0].sql=p.statements[0].sql.replace('after_last IS DISTINCT FROM prior_last+batch_count','false'),p=>p.statements[1].sql+=' ']){
   const p=structuredClone(program);mutate(p);assert.throws(()=>removeCurrentBoundedOrdinaryStage(p));
  }
  assert.throws(()=>currentBoundedOrdinaryStageSql('caller'));
+});
+test('the existing primary key bounds batch lookups and final insertion still requires an exact ordinal set',()=>{
+ const sql=program.statements[0].sql;
+ const definition=name=>{
+  const start=sql.indexOf('CREATE FUNCTION custodial_dr.'+name+'(');
+  const end=sql.indexOf('END $fn$;',start);
+  assert.ok(start>=0&&end>start);
+  return sql.slice(start,end);
+ };
+ const stage=definition('stage_immutable_ordinary_rows');
+ assert.equal(stage.split('ORDER BY s.ordinal DESC LIMIT 1').length,3);
+ assert.match(stage,/first_ordinal<>prior_last\+1/);
+ assert.match(stage,/written<>batch_count OR after_last IS DISTINCT FROM prior_last\+batch_count/);
+ assert.equal(stage.split('custodial_dr.immutable_import_assert_context()').length,3);
+ const insert=definition('insert_staged_immutable_ordinary_table');
+ assert.ok(insert.indexOf('OR staged_last<>observed')>0);
+ assert.ok(insert.indexOf('OR staged_last<>observed')<insert.indexOf('UPDATE custodial_dr.immutable_private_import_context'));
+ assert.match(insert,/Immutable staged original changed/);
+ assert.match(insert,/Immutable staged typed original changed/);
+ assert.match(insert,/Immutable ordinary set readback differs/);
 });
 test('entire actual preceding importer survives the six exact source hunks',()=>{
  const prior=removeCurrentBoundedOrdinaryConsumerSource(text);

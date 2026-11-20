@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { extendCurrentLiveDataSnapshot, removeCurrentLiveDataSnapshot } from './immutable-current-live-data-source.mjs';
+import { extendCurrentLiveDataSnapshot, extendIndexedOrdinaryStage, removeCurrentLiveDataSnapshot } from './immutable-current-live-data-source.mjs';
 
 const document = JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json', import.meta.url)));
 const prior = removeCurrentLiveDataSnapshot(document);
@@ -14,7 +14,10 @@ const exactFunction = (source, name, delimiter = 'fn') =>
 test('the measured live-data projection changes only the original first statement and has an exact predecessor', () => {
   assert.equal(createHash('sha256').update(JSON.stringify(prior, null, 2) + '\n').digest('hex'),
     '46ca2ea40882ac2c2d649462cceaf558011f9dbeab3d4d40703b5c821c0a1ae5');
-  assert.deepEqual(extendCurrentLiveDataSnapshot(prior), document);
+  const lockedDataProgram = extendCurrentLiveDataSnapshot(prior);
+  assert.equal(createHash('sha256').update(JSON.stringify(lockedDataProgram, null, 2) + '\n').digest('hex'),
+    '39cf55e18a69f41c3f53cdb122dd6245b33cc35a9a2967d85f4be6adbbceb4be');
+  assert.deepEqual(extendIndexedOrdinaryStage(lockedDataProgram), document);
   assert.deepEqual(document.statements.slice(1), prior.statements.slice(1));
   assert.deepEqual(document.recipes, prior.recipes);
   for (const name of ['immutable_import_target_shape', 'insert_immutable_ordinary_row', 'immutable_import_source_inventory_state']) {
