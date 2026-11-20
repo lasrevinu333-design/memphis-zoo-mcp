@@ -829,3 +829,19 @@ test('standalone worker carries its exact read-only helper and refuses missing o
   assert.throws(()=>stageOwnedStorageWorker(dir));
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('owned PostgreSQL relay permits quiet native work up to the existing child deadline and records timeout metadata only',()=>{
+ const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+ assert.ok(source.includes('const privateRestoreWorkTimeoutMs=1900000;'));
+ assert.ok(source.includes('socket.setTimeout(privateRestoreWorkTimeoutMs)'));
+ assert.ok(source.includes("timeout:privateRestoreWorkTimeoutMs,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'"));
+ assert.doesNotMatch(source,/socket\.setTimeout\(30000\)/);
+ assert.ok(source.includes('relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:privateRestoreWorkTimeoutMs}'));
+ const start=source.indexOf("socket.on('timeout',"),end=source.indexOf("socket.on('error',",start);
+ const handlers=new Map(),factory=new Function('ports',`const {socket,Math}=ports;let relaySocketTimeouts=0;${source.slice(start,end)}return ()=>relaySocketTimeouts;`);
+ let destroys=0;const count=factory({socket:{on:(name,callback)=>handlers.set(name,callback),destroy:()=>destroys++},Math});
+ for(let i=0;i<80;i++)handlers.get('timeout')();
+ assert.equal(count(),64);assert.equal(destroys,80);
+ assert.ok(source.includes('await closeOwnedRelay(relay,sockets,Date.now()+15000)'));
+});

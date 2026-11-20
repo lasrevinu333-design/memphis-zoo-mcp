@@ -19,6 +19,7 @@ import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivateP
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 
+const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const privateNames=['employee_message_original_outcomes','group_original_creations'];
@@ -211,6 +212,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
+  let relaySocketTimeouts=0;
   let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -332,8 +334,8 @@ export async function runPrivate(){
       client.pause();const pending=verifyTarget().then(()=>{
         if(stopping||closing||client.destroyed){client.destroy();return;}
         const upstream=createConnection({host:address,port:5432});
-        for(const socket of [client,upstream]){sockets.add(socket);socket.setTimeout(30000);
-          socket.on('timeout',()=>socket.destroy());socket.on('error',()=>{client.destroy();upstream.destroy();});
+        for(const socket of [client,upstream]){sockets.add(socket);socket.setTimeout(privateRestoreWorkTimeoutMs);
+          socket.on('timeout',()=>{relaySocketTimeouts=Math.min(64,relaySocketTimeouts+1);socket.destroy();});socket.on('error',()=>{client.destroy();upstream.destroy();});
           socket.on('close',()=>{sockets.delete(socket);if(socket===client)upstream.destroy();else client.destroy();});}
         client.pipe(upstream);upstream.pipe(client);client.resume();
       }).catch(()=>client.destroy()).finally(()=>pendingConnections.delete(pending));
@@ -359,7 +361,7 @@ export async function runPrivate(){
     }
     phase='private_original_restore_and_storage';await verifyTarget();
     const restoreOriginal=async()=>{
-      const restored=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
+      const restored=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:privateRestoreWorkTimeoutMs,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
       assertPrivateResult(restored,source,envelope.intent);await verifyTarget();return restored;
     };
     if(requireOwnerProfile().id==='immutable-private-current-postgres'){
@@ -398,6 +400,7 @@ export async function runPrivate(){
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
+      relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:privateRestoreWorkTimeoutMs},
       subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
