@@ -47,6 +47,12 @@ export function historicalMigrationNames(root,names){
    const text=current.toString('utf8'),after="OR rec.definition_sql IS DISTINCT FROM (CASE rec.object_kind WHEN 'function' THEN before_definition\n      ELSE public.custodial_release_authority_current_grant_definition(rec.object_identity) END)",before="OR rec.definition_sql IS DISTINCT FROM CASE rec.object_kind WHEN 'function' THEN before_definition\n      ELSE public.custodial_release_authority_current_grant_definition(rec.object_identity) END";
    assert.equal(text.split(after).length,2);current=Buffer.from(text.replace(after,before));
   }
+  if(row.path==='supabase/migrations/20261120002521_messenger_direct_reopen_intents_v2.sql'&&sha(current)==='61789ecdf60c55f953ab234dc6a61f42e83dc86e414e7373f2d8af9f8b3d0848'){
+   const tail=readFileSync(resolve(root,'proposals/messenger-direct-open-recovery.sql'));
+   assert.equal(sha(tail),'48a7c9a2e807654a514134b1e469210d12e5cb0a075d86cf021c8207035a00c1');
+   assert.ok(current.subarray(current.length-tail.length-1).equals(Buffer.concat([Buffer.from('\n'),tail])));
+   current=current.subarray(0,current.length-tail.length-1);
+  }
   assert.equal(sha(current),row.current_sha256);}
  const extra=new Set(overlay.map(r=>r.path.slice('supabase/migrations/'.length)));
  assert.ok([...extra].every(n=>names.includes(n)),'all exact forward overlay members required');

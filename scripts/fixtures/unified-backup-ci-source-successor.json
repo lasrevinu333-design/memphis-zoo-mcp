@@ -100,9 +100,13 @@
   "qualified_sources": [
     {
       "path": "scripts/current-owned-sql-ci-entry.py",
-      "current_sha256": "b3eae9e772f1b8d358682748b6ad06be3094ed59da07d294d4155127bd3cf450",
+      "current_sha256": "731610af2ba1ef450d5ab09d254752d5f1395d253be10ae40716faae68c7222c",
       "prior_sha256": "0b04fcd18011062f2c940dcf675fcb4d34466e09dc7b68d0b44428b559b0c989",
       "hunks": [
+        {
+          "current": " assert sha(profile)=='a3d9010f9bd055834daa86e3a993f5103aaf4658ddd6ad0aa142905dcd8ce5f4'\n",
+          "prior": " assert sha(profile)=='46077a4a1905a8249de45d3440011d0b16f294ead973ece82dfdc14ddcd4b37e'\n"
+        },
         {
           "current": "import json,hashlib,subprocess,shutil,os,sys\nimport argparse\nparser=argparse.ArgumentParser(description='Explicit owned SQL CI fixture, never an app build, deployment, or production migration')\nparser.add_argument('--consumer',choices=['manager','owner','read-only','taxonomy','accepted-seven'],required=True)\nparser.add_argument('--runtime',required=True,help='new absolute owned directory on an existing secondary disk')\nparser.add_argument('--evidence',required=True,help='new absolute durable evidence directory')\nparser.add_argument('--recorded-history',help='exact retained history; required only for the isolated accepted-seven consumer')\nparser.add_argument('--current-week-regression',action='store_true',help='Existing retained-pattern current-week qualification; pending seven transition stays held')\nargs=parser.parse_args()\nassert (args.recorded_history is not None)==(args.consumer=='accepted-seven')\nassert not args.current_week_regression or args.consumer=='accepted-seven'\nB=Path(__file__).resolve().parent.parent\nT=Path(args.runtime);E=Path(args.evidence)\nfor p in [T,E]:\n",
           "prior": "import json,hashlib,subprocess,shutil,os,sys\nimport argparse\nparser=argparse.ArgumentParser(description='Explicit owned SQL CI fixture, never an app build, deployment, or production migration')\nparser.add_argument('--consumer',choices=['manager','owner','read-only','taxonomy'],required=True)\nparser.add_argument('--runtime',required=True,help='new absolute owned directory on an existing secondary disk')\nparser.add_argument('--evidence',required=True,help='new absolute durable evidence directory')\nargs=parser.parse_args()\nB=Path(__file__).resolve().parent.parent\nT=Path(args.runtime);E=Path(args.evidence)\nfor p in [T,E]:\n"

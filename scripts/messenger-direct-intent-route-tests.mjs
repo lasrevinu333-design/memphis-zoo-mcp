@@ -1,3 +1,6 @@
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {historicalMigrationNames} from './fixtures/reminder-timing-source-successor.mjs';
 // Current Express router and real loopback HTTP, synthetic auth/DB dependencies.
 import assert from 'node:assert/strict';
 import express from 'express';
@@ -37,3 +40,21 @@ try{
  await check('revoked fixture session cannot issue or consume',async()=>{revoked=true;assert.equal((await post('/thread/direct-intent',issue)).status,401);assert.equal((await post('/thread/direct',consume)).status,401);assert.equal(calls.length,0);});
  console.log(JSON.stringify({scope:'Current router, loopback HTTP; synthetic credential middleware, cohort bridge and DB; no production or live messages',passed,failed:failures.length,failures},null,2));if(failures.length)process.exitCode=1;
 }finally{server.closeAllConnections?.();await new Promise(resolve=>server.close(resolve));console.log('OWNED_HTTP_SERVER_CLOSED');}
+
+// Source/recovery dependency proof only. Full original-owner SQL remains mandatory.
+{
+ const sha=b=>createHash('sha256').update(b).digest('hex'),root=new URL('../',import.meta.url);
+ const migration=readFileSync(new URL('supabase/migrations/20261120002521_messenger_direct_reopen_intents_v2.sql',root));
+ const tail=readFileSync(new URL('proposals/messenger-direct-open-recovery.sql',root));
+ assert.equal(sha(tail),'48a7c9a2e807654a514134b1e469210d12e5cb0a075d86cf021c8207035a00c1');
+ assert.ok(migration.subarray(-tail.length-1).equals(Buffer.concat([Buffer.from('\n'),tail])));
+ const previous=migration.subarray(0,-tail.length-1);assert.equal(sha(previous),'62b5102a0f0b5fe601d9d67509c199919808001f00f4d88d0faca5f7dac96fe6');
+ const profile=JSON.parse(readFileSync(new URL('scripts/fixtures/accepted-seven-current-week-forward.json',root)));
+ assert.equal(profile.deferred[0].sha256,sha(migration));assert.equal(profile.deferred[0].bytes,migration.length);
+ profile.deferred[0].sha256=sha(previous);profile.deferred[0].bytes=previous.length;
+ assert.equal(sha(JSON.stringify(profile,null,2)+'\n'),'46077a4a1905a8249de45d3440011d0b16f294ead973ece82dfdc14ddcd4b37e');
+ const {readdirSync}=await import('node:fs');const names=readdirSync(new URL('supabase/migrations/',root)).filter(n=>n.endsWith('.sql')).sort();
+ assert.equal(names.length,322);assert.equal(historicalMigrationNames(root.pathname,names).length,315);
+ assert.doesNotMatch(tail.toString(),/\b(?:insert into|update|delete from|truncate) public\.msg_/i);
+ console.log(JSON.stringify({status:'PASS_EXACT_MESSENGER_RECOVERY_SOURCE_DEPENDENCY',originalMigrationPreserved:true,historicalForwardFixturePreserved:true,actualSQL:false,production:false}));
+}

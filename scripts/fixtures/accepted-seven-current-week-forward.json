@@ -56,8 +56,8 @@
   "deferred": [
     {
       "name": "20261120002521_messenger_direct_reopen_intents_v2.sql",
-      "bytes": 11453,
-      "sha256": "62b5102a0f0b5fe601d9d67509c199919808001f00f4d88d0faca5f7dac96fe6"
+      "bytes": 19878,
+      "sha256": "61789ecdf60c55f953ab234dc6a61f42e83dc86e414e7373f2d8af9f8b3d0848"
     },
     {
       "name": "20261120010931_messenger_direct_intent_cleanup.sql",

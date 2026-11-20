@@ -53,7 +53,7 @@ if args.consumer=='accepted-seven':
  assert sha(history)=='a760bc82ee4f15806e84b856a7b7d9920e86d737f89a56d72635da16972d6f65'
  shutil.copy2(history,T/'recorded-history.json')
  profile=B/'scripts/fixtures/accepted-seven-current-week-forward.json'
- assert sha(profile)=='46077a4a1905a8249de45d3440011d0b16f294ead973ece82dfdc14ddcd4b37e'
+ assert sha(profile)=='a3d9010f9bd055834daa86e3a993f5103aaf4658ddd6ad0aa142905dcd8ce5f4'
  selected=json.loads(profile.read_text());assert selected['constructor_migrations']==310 and selected['production'] is False and selected['release_admission'] is False
  actual=sorted(p.name for p in (B/'supabase/migrations').glob('*.sql'))
  assert actual[310:]==[r['name'] for r in selected['forward']+selected['deferred']] and len(actual)==322
