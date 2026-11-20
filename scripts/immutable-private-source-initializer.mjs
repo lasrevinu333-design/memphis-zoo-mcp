@@ -2,7 +2,7 @@
 // The caller owns its normal authenticated connection, transaction and BOTH
 // global fences. This function never begins, commits, resumes or retries one.
 import assert from 'node:assert/strict';
-import {recordImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,recordImmutableFreshProgress} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import pg from 'pg';
@@ -42,6 +42,7 @@ const contextSql=`select current_user actor,session_user session_actor,current_d
 
 export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive}={}){
  let initializerStage='PREPARE_SOURCE',initializerOperation,sourceStatement;
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  try{
  if(!native(db)||attempted.has(db))throw new Error('Original fresh Source initializer is unavailable.');
  attempted.add(db); // No second attempt on a connection with an uncertain write.
@@ -65,6 +66,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   return row;
  };
  initializerStage='VERIFY_NATIVE_CONTEXT';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  originalContext=Object.freeze(await readContext());
  await readContext(); // Autocommit has a different xid; refuse before effects.
  const query=async(sql,params=[])=>{await readContext();checkSource();initializerOperation='EXECUTE_QUERY';const result=await Reflect.apply(nativeQuery,db,[sql,params]);
@@ -85,6 +87,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    :`pg_catalog.json_populate_record(null::public.${name},${expression})`;
  };
  initializerStage='VERIFY_EMPTY_RELATIONS';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const relations=inventory('original-relations.json');assert.ok(Array.isArray(relations)&&relations.length>0);
  const actual=(await query(`select n.nspname schema_name,c.relname table_name,c.relkind::text relation_kind,c.relispartition is_partition,
   pg_get_userbyid(c.relowner) owner_name,c.relrowsecurity,c.relforcerowsecurity
@@ -143,6 +146,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  let seededCron=null;
  if(seededIsolatedCron){
   initializerStage='VERIFY_ISOLATED_CRON_SETUP';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
   const execution=(await query("select current_setting('cron.launch_active_jobs',true) cron_execution")).rows;
   assert.deepEqual(execution,[{cron_execution:'off'}],'Isolated cron execution must remain disabled');
   seededCron=inventory('cron-jobs.json');assert.ok(Array.isArray(seededCron));
@@ -160,8 +164,10 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   to_regclass('custodial_dr.immutable_private_import_context')::text existing_import`)).rows[0];
  assert.deepEqual(before,{controls:0,manifests:0,events:0,migrations:0,jobs:seededIsolatedCron?seededCron.length:0,existing_import:null});
  initializerStage='INITIALIZE_CONTROL';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  await query('insert into custodial_dr.restore_control(singleton) values(true)');
  initializerStage='RECONCILE_ARCHIVED_ACLS';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const acl=await reconcileVerifiedImmutableBootstrapAcls(db,source,verifiedArchive);await readContext();
  const recipeIdentities=Object.freeze(source.recipes.map(recipe=>recipe.identity));
  const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?51:25;
@@ -194,14 +200,17 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   return result.rows;
  };
  initializerStage='VERIFY_PREDECESSORS';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const originalRecipes=await readRecipeCatalog();
  for(const [index,recipe] of source.recipes.entries()){
   const original=originalRecipes[index];assert.equal(original.owner,ownerProfile.actor);
   assert.equal(original.definition,recipe.before);assert.equal(sha(original.prosrc),recipe.beforeBodyHash);
  }
  initializerStage='INSTALL_PINNED_STATEMENT';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  for(const [index,statement] of source.statements.entries()){
   sourceStatement=String(index+1).padStart(2,'0');initializerOperation='READ_PINNED_STATEMENT';
+  recordImmutableFreshProgress({initializer_stage:initializerStage,initializer_operation:initializerOperation,source_statement:sourceStatement});
   await query(readVerifiedImmutableBootstrapStatement(source,verifiedArchive,statement));
  }
  sourceStatement=undefined;
@@ -210,17 +219,21 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  // exists and before the first original import seals target_shape. Existing
  // owner/ACL/definer/config and the normal fence remain unchanged.
  initializerStage='INSTALL_APPLICATION_GUARD';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const applicationGuard=source.recipes.find(recipe=>recipe.identity==='custodial_dr.guard_application_mutation()');
  assert.ok(applicationGuard);await query(applicationGuard.after);
  initializerStage='VERIFY_SUCCESSORS';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const installedRecipes=await readRecipeCatalog();
  for(const [index,recipe] of source.recipes.entries()){
   const installed=installedRecipes[index];assert.equal(installed.owner,ownerProfile.actor);
   assert.equal(installed.definition,recipe.after);assert.equal(sha(installed.prosrc),recipe.afterBodyHash);
  }
  initializerStage='VERIFY_OWNER_FENCE';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  await query('select custodial_dr.immutable_import_owner_fence()');
  initializerStage='RESTORE_METADATA';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  // V2's Source-only precheck cannot normalize native columns in JavaScript.
  // Compare the COMPLETE actual decoded row before any bootstrap DATA write.
  // This JSON view verifies release metadata only; exact typed DATA remains
@@ -234,6 +247,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  const ledgerRaw=source.inventory['inventory/migration-ledger.json'],ledger=inventory('migration-ledger.json');
  assert.ok(Array.isArray(ledger));
  initializerStage='RESTORE_MIGRATION_LEDGER';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const migrations=await query(`insert into supabase_migrations.schema_migrations(version,name,statements)
   select r.version,r.name,r.statements
   from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
@@ -246,6 +260,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  // it neither shadows db.query nor grants later effect authority.
  const cronRaw=source.inventory['inventory/cron-jobs.json'],cron=inventory('cron-jobs.json');assert.ok(Array.isArray(cron));
  initializerStage='RESTORE_CRON';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const sourceDatabase=source.sourceBinding.summary.database_snapshot?.database_name;
  assert.equal(typeof sourceDatabase,'string');assert.ok(sourceDatabase.length>0&&!sourceDatabase.includes('\0'));
  assert.ok(Buffer.byteLength(sourceDatabase,'utf8')<=63);
@@ -268,6 +283,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  assert.equal(verifiedCron.differences.length,0,'Original verified cron state differs');
  const cronExpectedRaw=JSON.stringify(expectedCron); // Closed TEXT/boolean/safe port fields; BIGINT IDs remain TEXT.
  initializerStage='RESTORE_RELEASES';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const releaseOriginals='['+source.releaseRows.join(',')+']';
  const released=await query(`insert into public.release_deployment_manifest
   select r.* from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
@@ -280,6 +296,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    else image end image,ordinality from original)`;
  const args=['['+source.registryRows.join(',')+']',JSON.stringify(source.registrySource)];
  initializerStage='RESTORE_REGISTRY';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const inserted=await query(expected+` insert into public.custodial_release_authority_restore_inventory
   select r.* from expected e cross join lateral ${metadataRecord('custodial_release_authority_restore_inventory','e.image')} r order by e.ordinality`,args);
  assert.equal(inserted.rowCount,source.registryRows.length);
@@ -288,6 +305,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   where t.inventory_id is null or to_jsonb(t) is distinct from to_jsonb(${metadataRecord('custodial_release_authority_restore_inventory','e.image')})`,args)).rows;
  assert.deepEqual(compared,[{n:0}]);
  initializerStage='VERIFY_RESTORED_METADATA';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const metadataCounts=(await query(`select
   (select count(*)::int from public.release_deployment_manifest) releases,
   (select count(*)::int from public.custodial_release_authority_restore_inventory) registry,
@@ -314,6 +332,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
     (select image from actual except all select image from expected)) select count(*)::int n from mismatch`,[cronExpectedRaw])).rows;
  assert.deepEqual(cronCompared,[{n:0}]);
  initializerStage='VERIFY_FINAL_STATE';
+ recordImmutableFreshProgress({initializer_stage:initializerStage});
  const control=(await query(`select authority_generation::text generation,mutations_paused,state,restore_id
   from custodial_dr.restore_control where singleton`)).rows;
  assert.deepEqual(control,[{generation:'0',mutations_paused:false,state:'READY',restore_id:null}]);

@@ -1,5 +1,5 @@
 const currentRecipeIdentities=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8')).recipes.map(r=>r.identity);
-import {recordImmutableFreshFailure,readImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,recordImmutableFreshProgress,readImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
 import './isolated-current-postgres-cron-setup-tests.mjs';
 import './isolated-current-vendor-privileges-tests.mjs';
 import './immutable-current-data-schema-scope-tests.mjs';
@@ -18,7 +18,7 @@ import {readFileSync} from 'node:fs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 const text=file=>readFileSync(new URL(file,import.meta.url),'utf8');
-const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard,...deps};return new Function(...Object.keys(deps),text(file)
+const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,recordImmutableFreshProgress,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard,...deps};return new Function(...Object.keys(deps),text(file)
  .replace(/^import\s[\s\S]*?;\n/gm,'').replaceAll('export async function','async function')+'\nreturn '+result+';')(...Object.values(deps));};
 const profiles=[
  Object.freeze({id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'}),
@@ -326,7 +326,7 @@ test('fresh composition labels original initializer/control/snapshot/import refu
   const captured={sourceBinding:binding,intent,envelope:{}},witness={database_oid:'5',backend_pid:411,transaction_id:'1285',restore_id:'UNIT',authority_generation:'1',archive_digest:binding.archive_digest};
   const enter=key=>{calls.push(key);if(key===failed)throw error;};
   const count=profile.id==='immutable-private-current-postgres'?51:25;
-  const deps={types,isDeepStrictEqual,recordImmutableFreshFailure,Client:dbClass,query:dbClass.prototype.query,closed:v=>v,fail:()=>{assert.ok(['receipt','stale_receipt','profile'].includes(failed));throw error;},captureFreshNativePort:()=>({}),sameFreshNativePort:()=>{},nativeData:()=> 'T',freshClients:new WeakSet(),freshArchives:new WeakSet(),freshStaged:new WeakMap(),sameSource:()=>{},
+  const deps={types,isDeepStrictEqual,recordImmutableFreshFailure,recordImmutableFreshProgress,Client:dbClass,query:dbClass.prototype.query,closed:v=>v,fail:()=>{assert.ok(['receipt','stale_receipt','profile'].includes(failed));throw error;},captureFreshNativePort:()=>({}),sameFreshNativePort:()=>{},nativeData:()=> 'T',freshClients:new WeakSet(),freshArchives:new WeakSet(),freshStaged:new WeakMap(),sameSource:()=>{},
    identities:['employee_message_original_outcomes','group_original_creations'],witnessKeys:Object.keys(witness),postgresJsonTextLineEncoding:'JSON',postgresTextColumnsLineEncoding:'TEXT',
    readVerifiedPrivateImportSource:()=>original,captureVerifiedImmutableFreshRestoreIntent:()=>({}),readVerifiedImmutableFreshRestoreIntent:()=>captured,requireLegacyOriginalDataFidelity:async()=>{},
    readVerifiedImmutableArchiveOwnerProfile:()=>failed==='profile'?{id:profile.id,actor:'unknown'}:profile,

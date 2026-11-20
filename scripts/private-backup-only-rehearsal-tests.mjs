@@ -892,3 +892,37 @@ test('actual rehearsal host binds the same closed PostgreSQL memory allowance it
  }
  assert.throws(()=>pinnedPgMemory('caller-selected'));
 });
+
+test('bounded substage checkpoints survive both privacy layers without changing source execution or admitting work',async()=>{
+ const {recordImmutableFreshProgress}=await import('./immutable-private-stage-diagnostic.mjs?bounded_progress_unit_20261120');
+ const keys=['RESTORE_PRIVATE_DIAGNOSTICS','REHEARSAL_SCOPE','OFFICIAL_LOCAL_STORAGE_PROVIDER','RESTORE_DATABASE_ONLY'];
+ const wanted=['bounded-v1','backup_only','true','true'],saved=keys.map(k=>process.env[k]),originalError=console.error,lines=[];
+ try{
+  console.error=line=>lines.push(line);
+  for(let omit=0;omit<keys.length;omit++){
+   keys.forEach((k,i)=>process.env[k]=wanted[i]);delete process.env[keys[omit]];
+   recordImmutableFreshProgress({fresh_stage:'INITIALIZE_SOURCE'});assert.equal(lines.length,0);
+  }
+  keys.forEach((k,i)=>process.env[k]=wanted[i]);
+  const payload=privateSentinels.join('\n');let traps=0;
+  const proxy=new Proxy({},{getOwnPropertyDescriptor(){traps++;throw Error(payload);},ownKeys(){traps++;throw Error(payload);}});
+  recordImmutableFreshProgress(proxy);assert.equal(traps,0);assert.equal(lines.length,0);
+  for(let i=0;i<80;i++)recordImmutableFreshProgress({initializer_stage:'INSTALL_PINNED_STATEMENT',initializer_operation:'READ_PINNED_STATEMENT',source_statement:String(i%13+1).padStart(2,'0'),unexpected:payload});
+  assert.equal(lines.length,64);
+  const refusal=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'},{fresh_stage:'IMPORT_ORIGINAL_DATA'});
+  const raw=Buffer.from(lines.join('\n')+'\n'+JSON.stringify(refusal)+'\n'+payload);
+  const first=privateRestoreStreamDiagnostic(raw,true),second=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify(first)));
+  assert.equal(second.restore_diagnostics.length,65);assert.deepEqual(second.restore_diagnostics.at(-1),refusal);assertNoPrivate(first);assertNoPrivate(second);
+  const failure=await import('./immutable-private-stage-diagnostic.mjs?bounded_progress_write_failure_unit_20261120');
+  console.error=()=>{throw Error(payload);};assert.doesNotThrow(()=>failure.recordImmutableFreshProgress({fresh_stage:'INITIALIZE_SOURCE'}));
+ }finally{console.error=originalError;keys.forEach((k,i)=>{if(saved[i]===undefined)delete process.env[k];else process.env[k]=saved[i];});}
+ const hash=v=>createHash('sha256').update(v).digest('hex');
+ for(const [path,pin]of [['immutable-private-source-initializer.mjs','43d7d9af01713b72979b466d503be333ba4b6665e5e4f2340b602b22b5475d79'],['immutable-private-data-import.mjs','3bb989f9b40ab83ef16330f6f79bb36355db5118810ed201cd797b5ee3590558']]){
+  let source=readFileSync(new URL('./'+path,import.meta.url),'utf8');
+  assert.ok(source.includes('recordImmutableFreshProgress({'));
+  source=source.replace(/^[ \t]*recordImmutableFreshProgress\(\{[^;\n]+\}\);\n/gm,'').replace('recordImmutableFreshFailure,recordImmutableFreshProgress','recordImmutableFreshFailure');
+  assert.equal(hash(source),pin,'every validation, SQL, refusal, cleanup and deadline byte survives: '+path);
+ }
+ const helper=readFileSync(new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url),'utf8');
+ assert.equal(hash(helper.slice(0,helper.indexOf('\n// Bounded observational checkpoints'))),'bffc1c516cbd8e22fc3527f01a509251ecaeb0b4372977546c1466852730bc8f');
+});

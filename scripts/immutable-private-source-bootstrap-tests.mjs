@@ -18,7 +18,7 @@ import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrap
 function compileObservedSourceFixture(...parameters){
  const body=parameters.pop(),bound=new Set(parameters);
  for(const match of body.matchAll(/const\s+\{([^}]+)\}\s*=\s*(?:ports|p)\s*;/g))for(const name of match[1].split(','))bound.add(name.trim());
- const values={recordImmutableFreshFailure:sourceFixtureDiagnostics.recordImmutableFreshFailure,
+ const values={recordImmutableFreshFailure:sourceFixtureDiagnostics.recordImmutableFreshFailure,recordImmutableFreshProgress:sourceFixtureDiagnostics.recordImmutableFreshProgress,
   classifyImmutableImportPermission:sourceFixtureDiagnostics.classifyImmutableImportPermission,
   classifyImmutableImportPermissionContext:sourceFixtureDiagnostics.classifyImmutableImportPermissionContext,
   classifyImmutableImportGuard:sourceFixtureDiagnostics.classifyImmutableImportGuard,postgresTextColumnsLineEncoding:fixtureTextEncoding};

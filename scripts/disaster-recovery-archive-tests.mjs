@@ -1180,7 +1180,7 @@ if (process.argv.includes('--immutable-fixed-cohort-consumer-source-only') || pr
   // Extracted Source uses the shipping closed observer functions as well as
   // its native validators. These are inert observations, never target ports.
   const sourceDiagnostics=await import('./immutable-private-stage-diagnostic.mjs');
-  const diagnosticNames=['recordImmutableFreshFailure','classifyImmutableImportPermission','classifyImmutableImportPermissionContext','classifyImmutableImportGuard'];
+  const diagnosticNames=['recordImmutableFreshFailure','recordImmutableFreshProgress','classifyImmutableImportPermission','classifyImmutableImportPermissionContext','classifyImmutableImportGuard'];
   const compileRecordedImporterSource=(...parameters)=>{
     const body=parameters.pop(),names=[...diagnosticNames,...['createRestoreRowLineBatchDecoder','postgresTextColumnsLineEncoding'].filter(key=>!parameters.includes(key))];
     const compiled=new Function(...names,...parameters,body);

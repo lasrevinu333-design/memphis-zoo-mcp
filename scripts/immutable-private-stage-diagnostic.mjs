@@ -167,3 +167,19 @@ export function readImmutableFreshFailure(error){
   ?importRefusals.get(own(error,'import_refusal')):undefined;
  return Object.freeze({...saved,...(refusal||importRefusal?{fresh_refusal:refusal??importRefusal}:{})});
 }
+
+// Bounded observational checkpoints for the one explicit private rehearsal.
+// No SQL, row data, retry, validity verdict or admission is produced here.
+let progressRecords=0;
+export function recordImmutableFreshProgress(fields){
+ try{
+  if(process.env.RESTORE_PRIVATE_DIAGNOSTICS!=='bounded-v1'||process.env.REHEARSAL_SCOPE!=='backup_only'
+   ||process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER!=='true'||process.env.RESTORE_DATABASE_ONLY!=='true'
+   ||progressRecords>=64)return;
+  const projected=immutableFreshDiagnosticFields(fields);if(Object.keys(projected).length===0)return;
+  const line=JSON.stringify({schema:'custodial.private-restore-stage.v1',phase:'stage_fresh_private_database',
+   event:'ENTER',private_payload_exported:false,...projected});
+  if(Buffer.byteLength(line)>2048)return;
+  progressRecords++;console.error(line);
+ }catch{} // Observation cannot change source validation, refusal or cleanup.
+}

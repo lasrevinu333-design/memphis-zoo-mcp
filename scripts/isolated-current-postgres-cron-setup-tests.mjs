@@ -1,3 +1,4 @@
+import {recordImmutableFreshProgress} from './immutable-private-stage-diagnostic.mjs';
 // Actual owning function bodies with inert recording connections/Source ports.
 // No cryptographic Source admission, PostgreSQL, Docker or restore is claimed.
 import test from 'node:test';
@@ -80,7 +81,7 @@ assert.ok(start>0&&end>start);const preseedBody=initializer.slice(start,end);
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 async function preseed({profile='immutable-private-current-postgres',host='127.0.0.1',database='mz_schema_rebuild_123',execution='off',difference=false,jobs=1}={}){
  let verifies=0;const source={sourceBinding:{summary:{database_snapshot:{database_name:'postgres'}}}},cron=[{synthetic:true}],db={connectionParameters:{host,database}};
- const deps={assert,types,db,ownerProfile:{id:profile},originalContext:{database},source,
+ const deps={recordImmutableFreshProgress,assert,types,db,ownerProfile:{id:profile},originalContext:{database},source,
   query:async sql=>({rows:sql.includes('cron_execution')?[{cron_execution:execution}]:[{controls:0,manifests:0,events:0,migrations:0,jobs,existing_import:null}]}),
   inventory:()=>cron,verifyRestoredCronJobs:async()=>{verifies++;return{target_database:database,differences:difference?[{}]:[]};},checkSource(){},readContext:async()=>{}};
  const result=await new AsyncFunction(...Object.keys(deps),"let initializerStage='VERIFY_EMPTY_RELATIONS';"+preseedBody+'return{seededIsolatedCron,initializerStage};')(...Object.values(deps));return{...result,verifies};

@@ -1,4 +1,4 @@
-import {recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,recordImmutableFreshProgress,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import {createInterface} from 'node:readline';
@@ -736,6 +736,7 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
 // CLI's pre-connect private APPLY hold remains until that route is qualified.
 export async function stageVerifiedImmutableFreshData(options) {
   let freshStage='ADMIT_FRESH_STAGE';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   try{
   const {db,verifiedArchive,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId}=closed(options,
     ['db','verifiedArchive','originalIntentEnvelope','intentVerifyKey','intentVerifyKeyId']);
@@ -768,11 +769,13 @@ export async function stageVerifiedImmutableFreshData(options) {
   };
   current();
   freshStage='VERIFY_ORIGINAL_FIDELITY';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   await requireLegacyOriginalDataFidelity(verifiedArchive,original,current);
   current();
   if(original.selection.databaseTables.some(table=>table.data_encoding!==postgresTextColumnsLineEncoding))
     try{assertVerifiedLegacyRestoreDataCurrent(verifiedArchive);}catch(error){fail(error,'IMMUTABLE_LEGACY_DATA_FIDELITY_UNPROVEN');}
   freshStage='INITIALIZE_SOURCE';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
   const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
@@ -784,6 +787,7 @@ export async function stageVerifiedImmutableFreshData(options) {
     ||initializedRecipeCount===null||initialized.guard_recipes!==initializedRecipeCount
     ||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
   freshStage='PREPARE_RESTORE_CONTROL';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   const prepared=await prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent});
   const captured=current(),intent=captured.intent;
   const expected=Object.freeze({database_oid:initialized.database_oid,backend_pid:initialized.backend_pid,
@@ -794,15 +798,18 @@ export async function stageVerifiedImmutableFreshData(options) {
   // native transaction before archive DATA can replace ordinary authority.
   // These protected rows are reconciliation DATA, never effect admission.
   freshStage='CAPTURE_PRE_RESTORE_STATE';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   await capturePreRestoreState(db,{restoreId:intent.restore_id,generation:intent.authority_generation});
   current();
   // Never recapture caller objects after the initializer/control awaits. The
   // private intent token supplies the same detached signed original envelope.
   freshStage='IMPORT_ORIGINAL_DATA';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   const imported=await stageVerifiedImmutablePrivateData({db,verifiedArchive,
     originalIntentEnvelope:captured.envelope,intentVerifyKey,intentVerifyKeyId});
   current();
   freshStage='VERIFY_STAGED_DATA';
+  recordImmutableFreshProgress({fresh_stage:freshStage});
   const staged=closed(imported,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);
   for(const key of witnessKeys)if(!isDeepStrictEqual(staged[key],expected[key]))fail();
   if(staged.private_rows!==expectedPrivateRows||staged.transaction_authority!==false||staged.admission_resumed!==false)fail();
@@ -1063,6 +1070,7 @@ export async function stageVerifiedImmutablePrivateData(options) {
     actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,
     target_release_identity:intent.target_release_identity,catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers});
   let importOperation='BEGIN_IMPORT';
+  recordImmutableFreshProgress({import_operation:importOperation});
   try {
   async function sql(text,args=[]) {
     sameSource(verifiedArchive,original);
@@ -1073,6 +1081,7 @@ export async function stageVerifiedImmutablePrivateData(options) {
   const initial=await sql('select custodial_dr.begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb) as context',
     [intent.restore_id,String(intent.authority_generation),binding.archive_digest,JSON.stringify(manifest)]);
   importOperation='VERIFY_INITIAL_WITNESS';
+  recordImmutableFreshProgress({import_operation:importOperation});
   const witness=Object.freeze(contextWitness(initial));
   if(witness.restore_id!==intent.restore_id||witness.authority_generation!==String(intent.authority_generation)
     ||witness.archive_digest!==binding.archive_digest)fail();
@@ -1088,8 +1097,10 @@ export async function stageVerifiedImmutablePrivateData(options) {
     if(!isDeepStrictEqual(contextWitness(result),witness))fail();
   }
   importOperation='PLAN_ORDINARY_ORDER';
+  recordImmutableFreshProgress({import_operation:importOperation});
   const ordinaryOrder=await planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext);
   importOperation='STAGE_PRIVATE_ORIGINALS';
+  recordImmutableFreshProgress({import_operation:importOperation});
   let total=0;
   for(const selected of original.selection.privateTables) {
     sameSource(verifiedArchive,original);
@@ -1115,12 +1126,14 @@ export async function stageVerifiedImmutablePrivateData(options) {
       try{await data.close();}catch(cleanup){if(firstFailure)throw new AggregateError([firstFailure,cleanup],'Immutable private source cleanup failed',{cause:firstFailure});throw cleanup;}}
   }
   importOperation='CONSUME_ORDINARY_ORIGINALS';
+  recordImmutableFreshProgress({import_operation:importOperation});
   for(const selected of ordinaryOrder)
     await consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext);
   // All ORIGINAL EOF/digests/counts precede the only guarded finish/inserts.
   sameSource(verifiedArchive,original);
   await assertContext();sameSource(verifiedArchive,original);
   importOperation='FINISH_IMPORT';
+  recordImmutableFreshProgress({import_operation:importOperation});
   const finished=await sql('select custodial_dr.finish_immutable_private_import() as result');
   if(finished.rowCount!==1)fail();
   const result=closed(finished.rows[0].result,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);
