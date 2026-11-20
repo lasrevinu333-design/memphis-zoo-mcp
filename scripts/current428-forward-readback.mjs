@@ -5,8 +5,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { stableJson, stableJsonFileSha256 } from './disaster-recovery-crypto.mjs';
+import { readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection } from './disaster-recovery-archive.mjs';
 import { assertVerifiedImmutableBootstrapSource } from './immutable-private-source-bootstrap.mjs';
-import { readVerifiedCurrent428ForwardQualificationSource } from './current428-forward-qualification-source.mjs';
+import { nativeTextColumnProjection } from './isolated-release-data-preservation.mjs';
+import { quoteIdentifier } from './isolated-event-owner-schema.mjs';
+import { CURRENT428_ARCHIVE_DIGEST, readVerifiedCurrent428ForwardQualificationSource } from './current428-forward-qualification-source.mjs';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -77,14 +80,14 @@ function one(result, label) {
   return result.rows[0];
 }
 
-function assertProfile(profile, databaseName) {
+function assertProfile(profile, databaseName, transaction = { readOnly: 'on', isolation: 'serializable' }) {
   assert.equal(profile.database_name, databaseName);
   assert.equal(profile.database_owner, 'postgres');
   assert.equal(profile.actor, 'postgres');
   assert.equal(profile.original_actor, 'postgres');
   assert.equal(profile.superuser, false);
-  assert.equal(profile.read_only, 'on');
-  assert.equal(profile.isolation, 'repeatable read');
+  assert.equal(profile.read_only, transaction.readOnly);
+  assert.equal(profile.isolation, transaction.isolation);
   assert.equal(profile.replication, 'origin');
   assert.equal(profile.row_security, 'off');
   assert.equal(profile.search_path, 'pg_catalog');
@@ -95,13 +98,7 @@ function assertProfile(profile, databaseName) {
   assert.ok(Number.isSafeInteger(profile.backend_pid) && profile.backend_pid > 0);
 }
 
-export async function readCurrent428RestoredBaseline({ client, archive, bootstrapSource, restore }) {
-  const forward = readVerifiedCurrent428ForwardQualificationSource(archive);
-  const sourceCurrent = () => {
-    assertVerifiedImmutableBootstrapSource(bootstrapSource, archive);
-    forward.assertCurrent();
-  };
-  sourceCurrent();
+function originalReadbackPort(client) {
   const runId = process.env.GITHUB_RUN_ID;
   assert.equal(process.env.GITHUB_ACTIONS, 'true');
   assert.match(runId ?? '', /^[1-9][0-9]*$/);
@@ -120,6 +117,17 @@ export async function readCurrent428RestoredBaseline({ client, archive, bootstra
     native();
     return result;
   };
+  return { databaseName, query };
+}
+
+export async function readCurrent428RestoredBaseline({ client, archive, bootstrapSource, restore }) {
+  const forward = readVerifiedCurrent428ForwardQualificationSource(archive);
+  const sourceCurrent = () => {
+    assertVerifiedImmutableBootstrapSource(bootstrapSource, archive);
+    forward.assertCurrent();
+  };
+  sourceCurrent();
+  const { databaseName, query } = originalReadbackPort(client);
   assert.equal(restore.ok, true);
   assert.equal(restore.database_only, true);
   assert.equal(restore.storage?.provider_verified, true);
@@ -229,5 +237,67 @@ export async function readCurrent428RestoredBaseline({ client, archive, bootstra
     discrepancy_snapshot_sha256: digest(stableJson(openDiscrepancies)),
     reconciliation_required: true,
     forwards_applied: false,
+  });
+}
+
+export function preservedRowsSql(table) {
+  const relation = quoteIdentifier(table.schema_name) + '.' + quoteIdentifier(table.table_name);
+  const projection = nativeTextColumnProjection(table.columns.map(column => column.name), 'r');
+  return `with source_rows as (
+    select encode(extensions.digest(convert_to(${projection},'UTF8'),'sha256'),'hex') row_sha256
+    from only ${relation} r
+  )
+  select count(*)::text row_count,
+    encode(extensions.digest(convert_to(coalesce(string_agg(row_sha256,'' order by row_sha256 collate pg_catalog."C"),''),'UTF8'),'sha256'),'hex') rows_sha256
+  from source_rows`;
+}
+
+const preservedProfileSql = nativeProfileSql.replace('pg_current_snapshot()::text snapshot', `pg_current_snapshot()::text snapshot,
+ current_setting('extra_float_digits') float_digits,
+ current_setting('DateStyle') date_style,
+ current_setting('TimeZone') timezone,
+ current_setting('IntervalStyle') interval_style,
+ current_setting('bytea_output') bytea_output`);
+
+// Read the original application columns before and after the exact forwards.
+// The restore verifier separately owns Auth and Storage readback, including
+// vendor-owned tables that the ordinary migration owner cannot read once its
+// restore leases retire. The migrations verify their inventory changes.
+export async function readCurrent428PreservedRows({ client, archive }) {
+  const binding = readVerifiedArchiveSourceBinding(archive);
+  assert.equal(binding.archive_digest, CURRENT428_ARCHIVE_DIGEST);
+  const selection = readVerifiedRestoreTableSelection(archive, {databaseOnly: true});
+  const { databaseName, query } = originalReadbackPort(client);
+  const profile = one(await query(preservedProfileSql), 'one original preservation profile');
+  assert.ok(['on', 'off'].includes(profile.read_only));
+  assertProfile(profile, databaseName, { readOnly: profile.read_only, isolation: 'serializable' });
+  assert.equal(profile.float_digits, '3');
+  assert.equal(profile.date_style, 'ISO, YMD');
+  assert.equal(profile.timezone, 'UTC');
+  assert.equal(profile.interval_style, 'postgres');
+  assert.equal(profile.bytea_output, 'hex');
+  const rows = [];
+  let inventory = 0;
+  for (const table of selection.databaseTables) {
+    const relation = table.schema_name + '.' + table.table_name;
+    if (relation === registryRelation) {
+      inventory++;
+      continue;
+    }
+    if (table.schema_name === 'auth' || table.schema_name === 'storage') continue;
+    const counted = one(await query(preservedRowsSql(table)), 'one original table fingerprint');
+    assert.match(counted.row_count, /^(0|[1-9][0-9]{0,18})$/);
+    assert.match(counted.rows_sha256, sha256);
+    rows.push(Object.freeze({ relation, ...counted }));
+  }
+  assert.equal(inventory, 1);
+  assert.equal(new Set(rows.map(row => row.relation)).size, rows.length);
+  assert.deepEqual(one(await query(preservedProfileSql), 'same original preservation profile'), profile);
+  assert.equal(readVerifiedArchiveSourceBinding(archive), binding);
+  assert.equal(readVerifiedRestoreTableSelection(archive, {databaseOnly: true}), selection);
+  return Object.freeze({
+    tables: rows.length,
+    rows_sha256: digest(stableJson(rows)),
+    table_fingerprints: Object.freeze(rows),
   });
 }

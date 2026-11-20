@@ -23,7 +23,8 @@ import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStat
 import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
 import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';
 import {CURRENT428_ARCHIVE_DIGEST} from './current428-forward-qualification-source.mjs';
-import {readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';
+import {readCurrent428PreservedRows,readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';
+import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';
 
 const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -428,10 +429,14 @@ export async function runPrivate(){
         connectionTimeoutMillis:10000,statement_timeout:60000,application_name:'custodial-current428-readback'});
       try{
         await reader.connect();
-        await reader.query('begin isolation level repeatable read read only');
-        await reader.query("set local search_path=pg_catalog; set local row_security=off");
-        current428Baseline=await readCurrent428RestoredBaseline({client:reader,archive,bootstrapSource,restore:result});
+        await reader.query('begin isolation level serializable read only');
+        await reader.query('set local search_path=pg_catalog');
+        for(const [setting,value] of NATIVE_TEXT_PRESERVATION_SETTINGS)
+          await reader.query('select set_config($1,$2,true)',[setting,value]);
+        const baseline=await readCurrent428RestoredBaseline({client:reader,archive,bootstrapSource,restore:result});
+        const originalRows=await readCurrent428PreservedRows({client:reader,archive});
         assert.equal((await reader.query('rollback')).command,'ROLLBACK');
+        current428Baseline={...baseline,application_data_tables:originalRows.tables,application_data_sha256:originalRows.rows_sha256};
       }finally{await reader.end();}
       await verifyTarget();
     }

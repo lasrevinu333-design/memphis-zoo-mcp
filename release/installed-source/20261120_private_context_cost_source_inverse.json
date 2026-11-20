@@ -13,8 +13,20 @@
     },
     "scripts/run-private-backup-only-rehearsal.mjs": {
       "previousSha256": "bca81f466de6733d5968fc23742ce11e765809cb272164dd264e7ff03a37f4b1",
-      "currentSha256": "16ba63d17e4872dfa724f85bbea674c5d523eb5d996cf81955bbe1e3ca0deb7f",
+      "currentSha256": "442de97edd42f44092d189fcdfc293c26208b0bf4da56dbfa70f1199952ee37b",
       "hunks": [
+        {
+          "after": "import {readCurrent428PreservedRows,readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';\nimport {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';\n",
+          "before": "import {readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';\n"
+        },
+        {
+          "after": "        await reader.query('begin isolation level serializable read only');\n        await reader.query('set local search_path=pg_catalog');\n        for(const [setting,value] of NATIVE_TEXT_PRESERVATION_SETTINGS)\n          await reader.query('select set_config($1,$2,true)',[setting,value]);\n        const baseline=await readCurrent428RestoredBaseline({client:reader,archive,bootstrapSource,restore:result});\n        const originalRows=await readCurrent428PreservedRows({client:reader,archive});\n",
+          "before": "        await reader.query('begin isolation level repeatable read read only');\n        await reader.query(\"set local search_path=pg_catalog; set local row_security=off\");\n        current428Baseline=await readCurrent428RestoredBaseline({client:reader,archive,bootstrapSource,restore:result});\n"
+        },
+        {
+          "after": "        assert.equal((await reader.query('rollback')).command,'ROLLBACK');\n        current428Baseline={...baseline,application_data_tables:originalRows.tables,application_data_sha256:originalRows.rows_sha256};\n",
+          "before": "        assert.equal((await reader.query('rollback')).command,'ROLLBACK');\n"
+        },
         {
           "after": "import {fileURLToPath} from 'node:url';\nimport pg from 'pg';\n",
           "before": "import {fileURLToPath} from 'node:url';\n"

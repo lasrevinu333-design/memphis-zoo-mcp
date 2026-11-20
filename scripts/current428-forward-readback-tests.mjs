@@ -3,10 +3,13 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { stableJson, stableJsonFileSha256 } from './disaster-recovery-crypto.mjs';
+import { preservedRowsSql } from './current428-forward-readback.mjs';
+import { nativeTextColumnProjection } from './isolated-release-data-preservation.mjs';
+import { quoteIdentifier } from './isolated-event-owner-schema.mjs';
 
 const source = readFileSync(new URL('./current428-forward-readback.mjs', import.meta.url), 'utf8')
   .replace(/^import .*;\n/gm, '')
-  .replace('export async function', 'async function');
+  .replace(/^export /gm, '');
 const archive = Object.freeze({});
 const archiveDigest = 'a'.repeat(64);
 const manifestDigest = 'b'.repeat(64);
@@ -33,7 +36,7 @@ function fixture(options = {}) {
   const calls = [];
   const profile = {
     database_name: database, database_owner: 'postgres', actor: 'postgres', original_actor: 'postgres',
-    superuser: false, read_only: 'on', isolation: 'repeatable read', replication: 'origin',
+    superuser: false, read_only: 'on', isolation: 'serializable', replication: 'origin',
     row_security: 'off', search_path: 'pg_catalog', cron_active: 'off', cron_database: database,
     snapshot: '80:81:', backend_pid: 42, ...options.profile,
   };
@@ -73,12 +76,25 @@ function fixture(options = {}) {
         assert.deepEqual(params, [restoreId]);
         return result(options.discrepancies ?? [discrepancy]);
       }
+      if (sql.startsWith('with source_rows')) {
+        assert.match(sql, /from only "public"\."msg_thread_visibility"/);
+        return result([{ row_count: '12', rows_sha256: digest('archive-original columns'), ...options.preservedRow }]);
+      }
       assert.fail('Unexpected query');
     }
   }
   let sourceReads = 0;
-  const port = new Function('assert', 'createHash', 'pg', 'stableJson', 'stableJsonFileSha256', 'assertVerifiedImmutableBootstrapSource',
-    'readVerifiedCurrent428ForwardQualificationSource', 'process', source + '\nreturn readCurrent428RestoredBaseline;')(
+  const selection = { databaseTables: [
+    { schema_name: 'public', table_name: 'custodial_release_authority_restore_inventory' },
+    { schema_name: 'public', table_name: 'msg_thread_visibility', columns: [{ name: 'deleted_through' }] },
+    { schema_name: 'auth', table_name: 'users', columns: [{ name: 'id' }] },
+    { schema_name: 'storage', table_name: 'objects', columns: [{ name: 'id' }] },
+  ] };
+  const binding = { archive_digest: archiveDigest };
+  const ports = new Function('assert', 'createHash', 'pg', 'stableJson', 'stableJsonFileSha256', 'assertVerifiedImmutableBootstrapSource',
+    'readVerifiedCurrent428ForwardQualificationSource', 'process', 'CURRENT428_ARCHIVE_DIGEST',
+    'readVerifiedArchiveSourceBinding', 'readVerifiedRestoreTableSelection', 'nativeTextColumnProjection', 'quoteIdentifier',
+    source + '\nreturn { readCurrent428RestoredBaseline, readCurrent428PreservedRows };')(
     assert, createHash, { Client }, stableJson, stableJsonFileSha256,
     (actual, original) => {
       assert.equal(actual, bootstrapSource);
@@ -92,7 +108,10 @@ function fixture(options = {}) {
         source_ledger_head: ledger.at(-1).version, source_ledger_file_sha256: stableJsonFileSha256(ledger),
         source_inventory: sourceInventory,
       };
-    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } });
+    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } }, archiveDigest,
+    original => { assert.equal(original, archive); return binding; },
+    (original, scope) => { assert.equal(original, archive); assert.deepEqual(scope, { databaseOnly: true }); return selection; },
+    nativeTextColumnProjection, quoteIdentifier);
   const restore = {
     ok: true, database_only: true, state: 'PAUSED_RECONCILIATION', archive_digest: archiveDigest,
     storage: { provider_verified: true, scope: 'OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL' },
@@ -101,7 +120,11 @@ function fixture(options = {}) {
     target_project_ref: projectRef, restore_id: restoreId, authority_generation: 1,
     final_manifest_sha256: manifestDigest, unresolved_discrepancies: 1, ...options.restore,
   };
-  return { calls, run: () => port({ client: new Client(), archive, bootstrapSource, restore }) };
+  return {
+    calls,
+    run: () => ports.readCurrent428RestoredBaseline({ client: new Client(), archive, bootstrapSource, restore }),
+    preserve: () => ports.readCurrent428PreservedRows({ client: new Client(), archive }),
+  };
 }
 
 test('observes only the owning paused, verified copy and reports exact reconciliation categories', async () => {
@@ -164,6 +187,38 @@ test('the owning runner reads the exact archive only after its temporary privile
     assert.ok(readback.indexOf(lease + '?.retirement_verified') < readback.indexOf('await reader.connect()'));
     assert.ok(readback.includes(lease + '?.retirement_verified'));
   }
-  assert.match(readback, /reader\.query\('begin isolation level repeatable read read only'\)[\s\S]*readCurrent428RestoredBaseline\(\{client:reader,archive,bootstrapSource,restore:result\}\)/);
+  assert.match(readback, /reader\.query\('begin isolation level serializable read only'\)[\s\S]*readCurrent428RestoredBaseline\(\{client:reader,archive,bootstrapSource,restore:result\}\)/);
   assert.match(readback, /reader\.query\('rollback'\)[\s\S]*finally\{await reader\.end\(\);\}/);
+  assert.ok(readback.indexOf('readCurrent428PreservedRows({client:reader,archive})') < readback.indexOf("reader.query('rollback')"));
+});
+
+test('preservation reads the exact archived columns and preserves multiset cardinality', () => {
+  const sql = preservedRowsSql({
+    schema_name: 'public', table_name: 'msg_thread_visibility',
+    columns: [{ name: 'thread_id' }, { name: 'deleted_through' }],
+  });
+  assert.match(sql, /from only "public"\."msg_thread_visibility" r/);
+  assert.match(sql, /ARRAY\[r\."thread_id"::pg_catalog\.text,r\."deleted_through"::pg_catalog\.text\]/);
+  assert.match(sql, /count\(\*\)::text row_count/);
+  assert.match(sql, /string_agg\(row_sha256,'' order by row_sha256 collate pg_catalog\."C"\)/);
+  assert.doesNotMatch(sql, /list_reopened|distinct row_sha256/);
+});
+
+test('the preservation result binds original rows to the same serializable owner snapshot', async () => {
+  const profile = {
+    read_only: 'off', isolation: 'serializable', float_digits: '3', date_style: 'ISO, YMD',
+    timezone: 'UTC', interval_style: 'postgres', bytea_output: 'hex',
+  };
+  const unit = fixture({ profile });
+  const proof = await unit.preserve();
+  const readOnlyProof = await fixture({ profile: { ...profile, read_only: 'on' } }).preserve();
+  assert.deepEqual(readOnlyProof, proof);
+  assert.equal(proof.tables, 1);
+  assert.deepEqual(proof.table_fingerprints, [{
+    relation: 'public.msg_thread_visibility', row_count: '12', rows_sha256: digest('archive-original columns'),
+  }]);
+  assert.equal(proof.rows_sha256, digest(stableJson(proof.table_fingerprints)));
+  await assert.rejects(fixture({ profile: { ...profile, timezone: 'America/Chicago' } }).preserve);
+  await assert.rejects(fixture({ profile, lastProfile: { snapshot: '81:82:' } }).preserve);
+  await assert.rejects(fixture({ profile, preservedRow: { row_count: 'unknown' } }).preserve);
 });
