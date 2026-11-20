@@ -24,6 +24,10 @@ const discrepancy = {
   before_sha256: digest('before row projection'), restored_sha256: digest('after row projection'),
   before_count: '0', restored_count: '10', details_json: { identity: 'synthetic private data' },
 };
+const sourceInventory = Object.freeze({
+  source_files: 322, historical_files: 311, installed: Object.freeze([]),
+  pending: Object.freeze(['synthetic.sql']),
+});
 
 function fixture(options = {}) {
   const calls = [];
@@ -86,6 +90,7 @@ function fixture(options = {}) {
       return {
         assertCurrent() {}, archive_digest: archiveDigest, source_ledger_count: ledger.length,
         source_ledger_head: ledger.at(-1).version, source_ledger_file_sha256: stableJsonFileSha256(ledger),
+        source_inventory: sourceInventory,
       };
     }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } });
   const restore = {
@@ -104,6 +109,7 @@ test('observes only the owning paused, verified copy and reports exact reconcili
   const evidence = await unit.run();
   assert.equal(evidence.restored_recipes, 51);
   assert.equal(evidence.registry_rows, 1);
+  assert.equal(evidence.source_inventory, sourceInventory);
   assert.deepEqual(evidence.open_categories, ['release_identity']);
   const { authority_generation, details_json, ...publicFields } = discrepancy;
   const snapshot = [{ ...publicFields, details_sha256: digest(stableJson(details_json)) }];

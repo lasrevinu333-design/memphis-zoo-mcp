@@ -223,6 +223,7 @@ export async function readCurrent428RestoredBaseline({ client, archive, bootstra
     restored_recipes: recipes.length,
     ledger_count: forward.source_ledger_count,
     ledger_head: forward.source_ledger_head,
+    source_inventory: forward.source_inventory,
     open_categories: Object.freeze(openCategories),
     open_discrepancies: Object.freeze(openDiscrepancies),
     discrepancy_snapshot_sha256: digest(stableJson(openDiscrepancies)),

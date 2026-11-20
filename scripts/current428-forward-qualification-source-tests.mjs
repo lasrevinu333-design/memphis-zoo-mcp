@@ -6,7 +6,7 @@ import {join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {assertCurrent428ForwardMetadata,qualificationTransactionBody,readVerifiedCurrent428ForwardQualificationSource} from './current428-forward-qualification-source.mjs';
+import {assertCurrent428ForwardMetadata,qualificationTransactionBody,readCurrent428SourceInventory,readVerifiedCurrent428ForwardQualificationSource} from './current428-forward-qualification-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const declaration=JSON.parse(readFileSync(new URL('../release/production-backup-source-extension-v2.native428.candidate.json',import.meta.url)));
 // Explicit synthetic source descriptor using previously observed428 ledger
@@ -37,6 +37,25 @@ test('exact current source files and historical235 target gate remain separately
  const historical=readFileSync(new URL('./release-migration-target-capture.mjs',import.meta.url));
  assert.equal(sha(historical),'3e06d8b3bd1f627da54b98cdb5dde236e7485868510b12cf4b0f0adfa90f43c1');
  assert.ok(historical.toString().includes('Signed archive must match the finite observed235 source declaration'));
+});
+
+test('classifies the full 322-file checkout with exact installed statement aliases', () => {
+ const active=JSON.parse(readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url)));
+ const inventory=readCurrent428SourceInventory(active);
+ assert.equal(inventory.source_files,322);
+ assert.equal(inventory.historical_files,311);
+ assert.equal(inventory.installed.length,8);
+ assert.deepEqual(inventory.installed.find(row=>row.file==='20261111160601_active_work_gps_reader_policy.sql'),{
+  file:'20261111160601_active_work_gps_reader_policy.sql',version:'20261111161430',
+  installed_sha256:'6bc39e329941413b3487834e2a88f08d5d0cbbca77750983e4da71b5cdf48360',
+ });
+ assert.deepEqual(inventory.pending.map(file=>file.slice(0,14)),['20261115205201','20261120002521','20261120010931']);
+ const changedBindings=structuredClone(active);
+ changedBindings.source_bindings.pop();
+ assert.throws(()=>readCurrent428SourceInventory(changedBindings));
+ const changedLedger=structuredClone(active);
+ changedLedger.ledger.find(row=>row.version==='20261111161430').statement_sha256[0]='0'.repeat(64);
+ assert.throws(()=>readCurrent428SourceInventory(changedLedger));
 });
 
 test('the three exact forwards leave commit and rollback to the caller', () => {
@@ -70,7 +89,7 @@ test('unexpected top-level transaction commands and psql directives refuse', () 
 // test-owned files; it never receives an archive/target or SQL execution port.
 function fileCustodyUnit(unitImportUrl,ports={}){
  const source=readFileSync(new URL('./current428-forward-qualification-source.mjs',import.meta.url),'utf8');
- const a=source.indexOf('const identity=s=>'),z=source.indexOf('// Detached metadata checks',a);
+ const a=source.indexOf('const identity=s=>'),z=source.indexOf('// Source inventory only.',a);
  assert.ok(a>0&&z>a);const exact=source.slice(a,z);assert.equal(exact.split('import.meta.url').length,2);
  const code=exact.replace('import.meta.url','unitImportUrl');
  const dependencies={assert,sha,dirname,openSync:fs.openSync,closeSync:fs.closeSync,readFileSync:fs.readFileSync,
