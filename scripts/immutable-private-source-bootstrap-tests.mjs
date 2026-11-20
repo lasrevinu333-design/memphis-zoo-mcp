@@ -391,7 +391,7 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
  const archiveApi=await import('./disaster-recovery-archive.mjs'),wire=await import('./production-backup-pg-dump-command.mjs');
  const v1=archiveApi.postgresJsonTextLineEncoding,v2=archiveApi.postgresTextColumnsLineEncoding;
  const text=readFileSync(new URL('./immutable-private-data-import.mjs',import.meta.url),'utf8');
- const before=readFileSync('/home/eric/Documents/Codex/2026-10-09/task-9/typed-text-import-readback-product-20261018-v1/before/scripts/immutable-private-data-import.mjs','utf8');
+ const before=readFileSync(new URL('../release/installed-source/20261018_typed_text_import_01370197.mjs.source',import.meta.url),'utf8');
  assert.equal(createHash('sha256').update(before).digest('hex'),'01370197f83806262d0412dfeaa8adbf532ba5d044657f7c657eb34abb97b902');
  const closedCode=text.slice(text.indexOf('function closed(value,keys) {'),text.indexOf('// Actual pg.Result has additional own fields/prototype;'));
  const targetStart=text.indexOf('const committedAuthorityTargets='),targetEnd=text.indexOf('\nfunction currentCommittedAuthorityData',targetStart);
@@ -589,8 +589,8 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
 // closure uses inert recorded catalog/effect replies, NOT a native SQL port.
 if(process.argv.includes('--immutable-safe-ordinary-set-only')){
  const part=process.argv.find(arg=>arg.startsWith('--safe-ordinary-set-case='))?.split('=')[1];
- assert.ok(part===undefined||['routing','predecessor','profiles','consumer','original-reader'].includes(part));
- const want=name=>part===undefined||part===name;let groups=0,cases=0;
+ assert.ok(part===undefined||['portable','routing','predecessor','profiles','consumer','original-reader'].includes(part));
+ const want=name=>part==='portable'?name!=='original-reader':part===undefined||part===name;let groups=0,cases=0;
  const {isDeepStrictEqual}=await import('node:util'),{Readable}=await import('node:stream');
  const {createInterface}=await import('node:readline'),{pipeline}=await import('node:stream/promises');
  const archiveApi=await import('./disaster-recovery-archive.mjs');
@@ -689,7 +689,7 @@ if(process.argv.includes('--immutable-safe-ordinary-set-only')){
  if(want('predecessor')){
   // New routing makes a real behavioral difference: the same multi-row
   // ordinary member was DIRECT in the exact retained predecessor planner.
-  const before=readFileSync('/home/eric/Documents/Codex/2026-10-09/task-9/immutable-safe-ordinary-set-product-20261018-v1/before/scripts/immutable-private-data-import.mjs','utf8');
+  const before=readFileSync(new URL('../release/installed-source/20261018_safe_ordinary_set_679bc8cd.mjs.source',import.meta.url),'utf8');
   assert.equal(createHash('sha256').update(before).digest('hex'),'679bc8cdf5270b1cbbe2ffb565c4ced56050cb1d95079aa749652709835c48ab');
   const oldComponent=before.slice(before.indexOf('async function inactiveOriginalForeignKeys('),before.indexOf('// Internal DATA consumer'));
   const oldPlan=compileObservedSourceFixture('ports','types','isDeepStrictEqual',`const {sameSource,fail}=ports;const selfOrdinaryConsumers=new WeakMap();${closed}\n${oldComponent}\nreturn planVerifiedOrdinaryTables;`)
@@ -1042,8 +1042,8 @@ if(process.argv.includes('--immutable-employee-push-authority-only')){
 // classifications are explicit fixture DATA, NEVER native NULL/permission proof.
 if(process.argv.includes('--immutable-row-aware-fk-only')){
  const part=process.argv.find(arg=>arg.startsWith('--row-aware-fk-case='))?.split('=')[1];
- assert.ok(part===undefined||['planner','metadata','json-null','source-reader'].includes(part));
- const want=name=>part===undefined||part===name;let cases=0,groups=0;
+ assert.ok(part===undefined||['portable','planner','metadata','json-null','source-reader'].includes(part));
+ const want=name=>part==='portable'?name!=='source-reader':part===undefined||part===name;let cases=0,groups=0;
  const {isDeepStrictEqual}=await import('node:util'),{Readable}=await import('node:stream');
  const {pipeline}=await import('node:stream/promises');
  const archiveApi=await import('./disaster-recovery-archive.mjs');

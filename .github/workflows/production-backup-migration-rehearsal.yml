@@ -58,8 +58,8 @@ jobs:
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-raw-source-only
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-prerequisite-errors-only
           node scripts/disaster-recovery-archive-tests.mjs --immutable-fixed-cohort-consumer-source-only
-          node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-safe-ordinary-set-only
-          node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-row-aware-fk-only
+          node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-safe-ordinary-set-only --safe-ordinary-set-case=portable
+          node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-row-aware-fk-only --row-aware-fk-case=portable
           node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-text-columns-import-only
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:

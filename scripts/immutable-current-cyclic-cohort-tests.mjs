@@ -6,6 +6,19 @@ import {currentCyclicCohortSql,extendCurrentCyclicCohorts,removeCurrentCyclicCoh
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
 const previous=removeCurrentCyclicCohorts(program);
+test('hosted prerequisite selectors retain exact predecessor bytes through repository relative fixtures',()=>{
+ const source=readFileSync(new URL('./immutable-private-source-bootstrap-tests.mjs',import.meta.url),'utf8');
+ for(const [path,pin]of [
+  ['20261018_typed_text_import_01370197.mjs.source','01370197f83806262d0412dfeaa8adbf532ba5d044657f7c657eb34abb97b902'],
+  ['20261018_safe_ordinary_set_679bc8cd.mjs.source','679bc8cdf5270b1cbbe2ffb565c4ced56050cb1d95079aa749652709835c48ab']]){
+  assert.equal(sha(readFileSync(new URL('../release/installed-source/'+path,import.meta.url))),pin);
+  assert.ok(source.includes("readFileSync(new URL('../release/installed-source/"+path+"',import.meta.url),'utf8')"));
+ }
+ for(const [start,end]of [["if(process.argv.includes('--immutable-safe-ordinary-set-only')){","if(process.argv.includes('--immutable-source-row-reuse-only')){"],
+  ["if(process.argv.includes('--immutable-text-columns-import-only')){","if(process.argv.includes('--immutable-safe-ordinary-set-only')){"]]){
+  const a=source.indexOf(start),b=source.indexOf(end,a);assert.ok(a>0&&b>a);const part=source.slice(a,b),privateOriginal=part.indexOf(" if(want('original-reader')){");assert.doesNotMatch(privateOriginal<0?part:part.slice(0,privateOriginal),/\/home\/eric\//);
+ }
+});
 test('complete genuine previous program survives fixed original cyclic cohort composition',()=>{
  assert.equal(sha(JSON.stringify(previous,null,2)+'\n'),'ba07026628726ae35f12522520c31a19bd1883cdbae9326fa711b9f551a0297a');
  assert.deepEqual(extendCurrentCyclicCohorts(previous),program);assert.deepEqual(program.recipes,previous.recipes);

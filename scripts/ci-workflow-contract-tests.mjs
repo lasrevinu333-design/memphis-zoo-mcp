@@ -1092,7 +1092,7 @@ assert.equal(createHash("sha256").update(reviewedBackupRehearsal.replace(cohortT
   "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
   "the complete reviewed workflow predecessor must survive the one source-test addition");
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "f490506214de61365a8dd3d3902edbbc5614a6513e6f5a43c64eea40540b6f1d",
+  "27e22cc6d0e01ceff0952be23f399549e531c558c8c771a68bfeac4a1a2b5439",
   "rehearsal length measurement requires the exact Main F08 caller candidate workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
