@@ -191,7 +191,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
  const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
  const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
- const recipeCount=postgresProgram?32:25;
+ const recipeCount=postgresProgram?51:25;
  assert.equal(allRecipes.length,recipeCount);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,recipeCount);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
@@ -211,7 +211,8 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   const aliases=recipe.registry_identity===recipe.identity&&recipe.identity.startsWith('public.')
    ?[recipe.identity,recipe.identity.slice(7)]:[recipe.registry_identity];
   const found=originalRows.filter(row=>row.object_kind==='function'&&aliases.includes(row.object_identity));
-  if(postgresProgram&&recipe.identity==='custodial_coverall.bind_manual_delivery_after_acceptance()'){
+  if(postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
+   'custodial_coverall.reconcile_manual_delivery_after_lunch()','public.sync_migration_log_summary()'].includes(recipe.identity)){
    assert.equal(found.length,0,'Fixed current unregistered callback must not rewrite original registry DATA');continue;
   }
   if(recipe.identity==='custodial_dr.guard_application_mutation()'){assert.equal(found.length,0);continue;}
@@ -219,7 +220,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   assert.ok(!Object.hasOwn(registrySource,found[0].object_identity));
   registrySource[found[0].object_identity]=Object.freeze({definition_sql:recipe.after,definition_sha256:recipe.afterHash});
  }
- assert.equal(Object.keys(registrySource).length,postgresProgram?30:24);
+ assert.equal(Object.keys(registrySource).length,postgresProgram?47:24);
  sourcePhase='SOURCE_STATEMENTS';
  const statements=postgresProgram?postgresProgram.statements.map(({sourcePath,sourceSha256,sql})=>({sourcePath,sourceSha256,sql})):[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
   ...authority.map(({sourcePath,sourceSha256,sql})=>Object.freeze({sourcePath,sourceSha256,sql}))];

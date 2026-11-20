@@ -1,3 +1,4 @@
+import {removeCurrentRestoreGuardCohort} from './immutable-current-restore-guard-cohort.mjs';
 // Source and closure tests; native restore qualification remains a separate gate.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -5,7 +6,8 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {currentLegacyDailyFenceRecipe,extendCurrentLegacyDailyFence,removeCurrentLegacyDailyFence} from './immutable-current-legacy-daily-fence-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
-const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
+const shippingProgram=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
+const program=removeCurrentRestoreGuardCohort(shippingProgram);
 const recipe=currentLegacyDailyFenceRecipe(),statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
 test('entire last reviewed program survives the new layer exactly',()=>{
  const prior=structuredClone(program);assert.deepEqual(prior.recipes.pop(),recipe);

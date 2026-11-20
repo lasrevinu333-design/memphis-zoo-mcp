@@ -440,9 +440,15 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 // This length reader is admitted only for these exact reviewed input bodies,
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
-assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
+const cohortTestArgument = " scripts/immutable-current-restore-guard-cohort-tests.mjs";
+assert.equal(productionBackupRehearsal.split(cohortTestArgument).length, 2,
+  "exactly one connection-free cohort regression belongs in the existing source contract step");
+assert.equal(createHash("sha256").update(productionBackupRehearsal.replace(cohortTestArgument, ""), "utf8").digest("hex"),
   "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
-  "rehearsal length measurement requires the exact reviewed whole workflow");
+  "the complete reviewed workflow predecessor must survive the one source-test addition");
+assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
+  "1d4ddbd39870f28969b1bdcc183ff69654003c1c4454237ed7cb38e0c0d04dc8",
+  "rehearsal length measurement requires the exact predecessor plus qualified source regression");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
   "      - run: npm ci --ignore-scripts\n" + "  \n" + "          " + "x".repeat(20_977) + "\n",

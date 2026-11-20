@@ -1,0 +1,1274 @@
+{
+  "format": "custodial.restore-original-trigger-predecessors.v1",
+  "observedProject": "rqquvtjdmugpigbndmne",
+  "source": "Read-only pg_get_functiondef and pg_trigger metadata, 2026-11-20. No business rows.",
+  "functions": [
+    {
+      "owner": "postgres",
+      "identity": "custodial_coverall.bind_manual_delivery_after_acceptance()",
+      "registry": [],
+      "triggers": [
+        {
+          "name": "manual_operational_delivery_complete",
+          "type": 5,
+          "when": null,
+          "nargs": 0,
+          "table": "activation_receipts",
+          "schema": "custodial_coverall",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "manual_initial_delivery_complete",
+          "type": 5,
+          "when": null,
+          "nargs": 0,
+          "table": "static_weekly_approved_initial_confirmations",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": true,
+          "deferrable": true,
+          "initially_deferred": true
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION custodial_coverall.bind_manual_delivery_after_acceptance()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE pub uuid;binding uuid;b custodial_coverall.manual_application_bindings%rowtype;day date;a record;\nBEGIN\n IF TG_TABLE_SCHEMA='public' AND TG_TABLE_NAME='static_weekly_approved_initial_confirmations' THEN\n  IF NOT EXISTS(SELECT 1 FROM public.static_weekly_approved_initial_baselines baseline WHERE baseline.source_id=(NEW.receipt_json->>'source_id')::uuid\n   AND baseline.feasibility#>>'{candidateSource,version,manualGroupRatingAuthority,manifestSha256}'='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f') THEN RETURN NEW;END IF;\n  pub:=NEW.publication_id;\n ELSIF TG_TABLE_SCHEMA='custodial_coverall' AND TG_TABLE_NAME='activation_receipts' THEN\n  SELECT publication_id INTO STRICT pub FROM custodial_coverall.activation_progress WHERE operation_id=NEW.operation_id;\n ELSE RAISE EXCEPTION 'Exact accepted manual receipt owner required';END IF;\n binding:=custodial_coverall.bind_manual_application(pub,NULL);\n PERFORM custodial_coverall.reconcile_manual_publication(pub);\n SELECT * INTO STRICT b FROM custodial_coverall.manual_application_bindings WHERE operation_id=binding;\n FOR day IN SELECT generate_series(b.frame_start,b.frame_end,'1 day')::date LOOP\n  SELECT * INTO a FROM public.static_weekly_v6_schedule_authority_state(day);\n  IF a.projection_status IS DISTINCT FROM 'current' OR a.publication_id IS DISTINCT FROM pub OR a.projection_id IS NULL\n   OR NOT EXISTS(SELECT 1 FROM public.weekly_schedule_lunch_documents WHERE projection_id=a.projection_id)\n   THEN RAISE EXCEPTION 'New manual acceptance requires all seven exact current projection/full-lunch days in this transaction';END IF;\n END LOOP;RETURN NEW;\nEND $function$\n",
+      "security_definer": true,
+      "definition_sha256": "716454f3b23c064fa54b2c7ea64fcb906ab3954d127e181aa794fd5829f06b7c"
+    },
+    {
+      "owner": "postgres",
+      "identity": "custodial_coverall.reconcile_manual_delivery_after_lunch()",
+      "registry": [],
+      "triggers": [
+        {
+          "name": "manual_native_delivery_after_lunch",
+          "type": 5,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_lunch_documents",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": true,
+          "deferrable": true,
+          "initially_deferred": true
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION custodial_coverall.reconcile_manual_delivery_after_lunch()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE projection public.weekly_schedule_compiled_projections%rowtype;day date;a record;\nBEGIN\n SELECT * INTO STRICT projection FROM public.weekly_schedule_compiled_projections WHERE projection_id=NEW.projection_id;\n IF EXISTS(SELECT 1 FROM custodial_coverall.manual_application_bindings WHERE publication_id=projection.publication_id) THEN\n  FOR day IN SELECT generate_series(projection.week_start,projection.week_end,'1 day')::date LOOP\n   SELECT * INTO a FROM public.static_weekly_v6_schedule_authority_state(day);\n   IF a.projection_status='current' AND a.publication_id=projection.publication_id AND a.projection_id=projection.projection_id\n    THEN PERFORM custodial_coverall.reconcile_manual_application_date(day);END IF;\n  END LOOP;\n END IF;RETURN NEW;\nEND $function$\n",
+      "security_definer": true,
+      "definition_sha256": "d96fdfd5cb39340ff1096a05f8d4f14b2d0e54686753e325634960159958251f"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.capture_system_feedback_email_intent()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "capture_system_feedback_email_intent()",
+          "definition_sha256": "ff5e533b61ec6bae4a6b8ba418cffb1a528d1fc56a0838400a60289c1b50fc77"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "capture_system_feedback_email_intent_after_insert",
+          "type": 5,
+          "when": null,
+          "nargs": 0,
+          "table": "system_feedback_items",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.capture_system_feedback_email_intent()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_actor jsonb := new.metadata_json->'identity_verification';\n  v_image jsonb := new.metadata_json->'image_attachment';\n  v_snapshot jsonb;\n  v_subject text;\n  v_text text;\n  v_link text;\n  v_envelope jsonb;\nbegin\n  -- The old public/anonymous submission path remains saved for manager review,\n  -- but is never enrolled for email. Only the authenticated employee/manager\n  -- path may create a relay intent.\n  if new.hub_context not in ('employee', 'manager') then\n    return new;\n  end if;\n\n  if NOT (new.hub_context='manager' AND custodial_leadership_private.valid_feedback_cohort_identity_v1(v_actor,new.device_id)) AND (jsonb_typeof(v_actor) is distinct from 'object'\n     or v_actor->>'status' is distinct from 'verified'\n     or (new.hub_context = 'employee' and (\n       v_actor->>'kind' is distinct from 'enrolled_employee_device'\n       or coalesce(v_actor->>'employee_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n       or nullif(btrim(v_actor->>'credential_id'), '') is null\n       or upper(coalesce(v_actor->>'device_id', '')) is distinct from upper(coalesce(new.device_id, ''))\n     ))\n     or (new.hub_context = 'manager' and (\n       v_actor->>'kind' is distinct from 'named_manager_session'\n       or coalesce(v_actor->>'manager_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n     ))\n     or nullif(btrim(new.submitted_by), '') is null) then\n    raise exception using errcode = '23514',\n      message = 'Verified feedback identity is required before email intent capture';\n  end if;\n\n  if v_image is not null and jsonb_typeof(v_image) <> 'null' then\n    -- This is a manager-authenticated application page, not a signed Storage\n    -- URL. A later claim must verify the protected object and exact reader.\n    v_link := 'https://memphis-zoo-mcp.onrender.com/system-feedback.html?hub=manager&feedback=' || new.id::text;\n  end if;\n\n  v_snapshot := jsonb_build_object(\n    'feedback_id', new.id,\n    'operation_id', new.operation_id,\n    'request_fingerprint', new.request_fingerprint,\n    'category', new.category,\n    'priority', new.priority,\n    'message', new.message,\n    'submitted_by', new.submitted_by,\n    'hub_context', new.hub_context,\n    'device_id', new.device_id,\n    'created_at', new.created_at,\n    'image_attachment', v_image\n  );\n  v_subject := 'Memphis Zoo Program Feedback [' || new.operation_id::text || ']';\n  v_text := 'Memphis Zoo Program Feedback' || E'\\n'\n    || 'Operation ID: ' || new.operation_id::text || E'\\n'\n    || 'Request fingerprint: ' || new.request_fingerprint || E'\\n'\n    || 'Feedback ID: ' || new.id::text || E'\\n'\n    || 'Submitted by: ' || new.submitted_by || E'\\n'\n    || 'Source: ' || new.hub_context || E'\\n'\n    || 'Category: ' || new.category || E'\\n'\n    || 'Priority: ' || new.priority || E'\\n'\n    || case when v_link is not null then 'Private image: ' || v_link || E'\\n' else '' end\n    || E'\\nMessage (verbatim):\\n' || new.message;\n  v_envelope := jsonb_build_object(\n    'contract_version', 'custodial-feedback-relay.v1',\n    'provider', 'outlook',\n    'provider_account', 'eoperle@memphiszoo.org',\n    'to', jsonb_build_array('eoperle@memphiszoo.org'),\n    'cc', '[]'::jsonb,\n    'bcc', '[]'::jsonb,\n    'subject', v_subject,\n    'text_content', v_text,\n    'save_to_sent_items', true\n  );\n\n  insert into public.system_feedback_email_intents(\n    feedback_id, operation_id, request_fingerprint, original_actor,\n    feedback_snapshot, email_subject, email_text, envelope_sha256\n  ) values (\n    new.id, new.operation_id, new.request_fingerprint, v_actor,\n    v_snapshot, v_subject, v_text,\n    encode(extensions.digest(convert_to(v_envelope::text, 'UTF8'), 'sha256'), 'hex')\n  );\n  return new;\nend;\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "ff5e533b61ec6bae4a6b8ba418cffb1a528d1fc56a0838400a60289c1b50fc77"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.custodial_record_offline_authority_activation_boundary()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "custodial_record_offline_authority_activation_boundary()",
+          "definition_sha256": "011cc5921cefe8714f52b821b915686359ac5edb873abd33fec8696cc050f19a"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_custodial_offline_device_activation_boundary",
+          "type": 21,
+          "when": null,
+          "nargs": 0,
+          "table": "devices",
+          "schema": "public",
+          "columns": [
+            "active"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_custodial_offline_location_activation_boundary",
+          "type": 21,
+          "when": null,
+          "nargs": 0,
+          "table": "locations",
+          "schema": "public",
+          "columns": [
+            "active"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_record_offline_authority_activation_boundary()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_kind text:=case tg_table_name when 'devices' then 'device' else 'location' end;\nbegin\n  if tg_op='INSERT' or old.active is distinct from new.active then\n    insert into public.custodial_offline_authority_activation_events(authority_kind,authority_id,active,occurred_at,source)\n    values(v_kind,new.id,new.active,clock_timestamp(),tg_table_schema||'.'||tg_table_name||':'||lower(tg_op));\n  end if;\n  return new;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "011cc5921cefe8714f52b821b915686359ac5edb873abd33fec8696cc050f19a"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.custodial_sessions_preserve_original_identity()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "custodial_sessions_preserve_original_identity()",
+          "definition_sha256": "2fc8f75d267407a49d07228ed6966d947ff8bc3b6d7e4f9aa160dcb249dbfff5"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_custodial_sessions_original_identity",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "sessions",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_sessions_preserve_original_identity()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_employee_name text;\n  v_location_code text;\n  v_location_name text;\n  v_device_identifier text;\n  v_device_name text;\n  v_assignment_epoch bigint;\nbegin\n  if tg_op = 'INSERT' then\n    select e.display_name into v_employee_name\n    from public.employees e where e.id = new.employee_id;\n    select l.location_code, l.location_name into v_location_code, v_location_name\n    from public.locations l where l.id = new.location_id;\n    select d.device_id, d.device_name, d.assignment_epoch\n      into v_device_identifier, v_device_name, v_assignment_epoch\n    from public.devices d where d.id = new.device_id;\n    if v_employee_name is null or v_location_code is null or v_location_name is null\n       or v_device_identifier is null or v_device_name is null or v_assignment_epoch is null then\n      raise exception using errcode='23503', message='Cleaning identity must resolve before a session is created';\n    end if;\n    new.employee_name_snapshot := v_employee_name;\n    new.location_code_snapshot := v_location_code;\n    new.location_name_snapshot := v_location_name;\n    new.device_identifier_snapshot := v_device_identifier;\n    new.device_name_snapshot := v_device_name;\n    new.assignment_epoch_snapshot := v_assignment_epoch;\n    new.identity_snapshot_provenance := 'session_create';\n    return new;\n  end if;\n\n  if row(new.id,new.session_uuid,new.client_session_id,new.employee_id,new.location_id,new.device_id,new.started_at,new.created_at)\n     is distinct from\n     row(old.id,old.session_uuid,old.client_session_id,old.employee_id,old.location_id,old.device_id,old.started_at,old.created_at) then\n    raise exception using errcode='23514', message='Original cleaning identity is immutable; append a named-manager correction instead';\n  end if;\n  if row(new.employee_name_snapshot,new.location_code_snapshot,new.location_name_snapshot,\n         new.device_identifier_snapshot,new.device_name_snapshot,new.assignment_epoch_snapshot,new.identity_snapshot_provenance)\n     is distinct from\n     row(old.employee_name_snapshot,old.location_code_snapshot,old.location_name_snapshot,\n         old.device_identifier_snapshot,old.device_name_snapshot,old.assignment_epoch_snapshot,old.identity_snapshot_provenance) then\n    raise exception using errcode='23514', message='At-event cleaning identity snapshots are immutable';\n  end if;\n  if old.finish_operation_id is not null and new.finish_operation_id is distinct from old.finish_operation_id then\n    raise exception using errcode='23514', message='Cleaning finish operation identity is immutable once assigned';\n  end if;\n  if old.ended_at is not null and new.ended_at is distinct from old.ended_at then\n    raise exception using errcode='23514', message='Cleaning end time is immutable once assigned';\n  end if;\n  if old.duration_minutes is not null and new.duration_minutes is distinct from old.duration_minutes then\n    raise exception using errcode='23514', message='Cleaning duration is immutable once assigned';\n  end if;\n  if old.duration_display is not null and new.duration_display is distinct from old.duration_display then\n    raise exception using errcode='23514', message='Cleaning duration display is immutable once assigned';\n  end if;\n  if old.completion_source is not null and new.completion_source is distinct from old.completion_source then\n    raise exception using errcode='23514', message='Cleaning completion source is immutable once assigned';\n  end if;\n  return new;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "2fc8f75d267407a49d07228ed6966d947ff8bc3b6d7e4f9aa160dcb249dbfff5"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.gemini_console_require_live_worker()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "gemini_console_require_live_worker()",
+          "definition_sha256": "baed2146246111ad6fd56ca0bc268d68ed20745513565114d365b61e12bde383"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_gemini_console_require_live_worker",
+          "type": 7,
+          "when": null,
+          "nargs": 0,
+          "table": "gemini_console_repair_jobs",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.gemini_console_require_live_worker()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if new.execution_mode = 'controlled_worker' and not exists (\n    select 1\n    from public.gemini_console_worker_heartbeats h\n    where h.available\n      and h.last_seen_at >= clock_timestamp() - interval '90 seconds'\n  ) then\n    raise exception 'controlled repair worker is not currently available';\n  end if;\n  return new;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "baed2146246111ad6fd56ca0bc268d68ed20745513565114d365b61e12bde383"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "msg_reject_retired_ops_manager_shared_thread_evidence_mutation()",
+          "definition_sha256": "134da8864d6370a0d95a165b28bcd793446efc08406a154a1cee68f90fe10dc8"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_msg_reject_retired_ops_shared_evidence",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "msg_hidden_threads_by_device",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_msg_reject_retired_ops_shared_evidence",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "msg_memphis_thread_context",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_msg_reject_retired_ops_shared_evidence",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "msg_thread_deletion_operations",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_msg_reject_retired_ops_shared_evidence",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "msg_thread_visibility",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_old_thread_id uuid;\n  v_new_thread_id uuid;\nbegin\n  if tg_op<>'INSERT' then v_old_thread_id:=old.thread_id; end if;\n  if tg_op<>'DELETE' then v_new_thread_id:=new.thread_id; end if;\n  if exists (\n    select 1 from public.msg_threads t\n    where t.id in (v_old_thread_id,v_new_thread_id)\n      and t.system_key='ops_manager_shared_chat_v1'\n  ) then\n    raise exception using errcode='23514',message='The retired Operations Leadership conversation evidence is immutable';\n  end if;\n  return case when tg_op='DELETE' then old else new end;\nend\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "134da8864d6370a0d95a165b28bcd793446efc08406a154a1cee68f90fe10dc8"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.ops_manager_notification_bind_credential()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "ops_manager_notification_bind_credential()",
+          "definition_sha256": "3fcf405ae9b0b9baba73bbc741b98268089a0a471559b2648ac14630a8bd5c79"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "a_notification_bind_credential",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "ops_manager_notification_preferences",
+          "schema": "public",
+          "columns": [
+            "credential_id",
+            "manager_id"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "a_notification_bind_credential",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "ops_manager_notification_queue",
+          "schema": "public",
+          "columns": [
+            "credential_id",
+            "manager_id"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "a_notification_bind_credential",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "ops_manager_notification_state",
+          "schema": "public",
+          "columns": [
+            "credential_id"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "a_notification_bind_credential",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "ops_manager_push_devices",
+          "schema": "public",
+          "columns": [
+            "credential_id",
+            "manager_id"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_notification_bind_credential()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE authority jsonb;bound public.ops_manager_notification_credentials%rowtype;\nBEGIN\n authority:=custodial_leadership_private.notification_credential(NEW.credential_id);\n IF authority IS NULL OR (TG_TABLE_NAME<>'ops_manager_notification_state'\n AND authority->>'managerId' IS DISTINCT FROM to_jsonb(NEW)->>'manager_id')\n THEN RAISE EXCEPTION 'Current typed manager notification credential required' USING ERRCODE='23514';END IF;\n INSERT INTO public.ops_manager_notification_credentials(credential_id,credential_kind,trusted_credential_id,leadership_registration_id)\n VALUES(NEW.credential_id,authority->>'kind',CASE WHEN authority->>'kind'='NAMED_TRUSTED_DEVICE' THEN NEW.credential_id ELSE NULL END,\n CASE WHEN authority->>'kind'='CUSTODIAL_LEADERSHIP_REGISTRATION' THEN NEW.credential_id ELSE NULL END)\n ON CONFLICT(credential_id) DO NOTHING;\n SELECT * INTO bound FROM public.ops_manager_notification_credentials WHERE credential_id=NEW.credential_id;\n IF bound.credential_kind IS DISTINCT FROM authority->>'kind' THEN RAISE EXCEPTION 'Notification credential domain mismatch' USING ERRCODE='23514';END IF;\n RETURN NEW;\nEND $function$\n",
+      "security_definer": true,
+      "definition_sha256": "3fcf405ae9b0b9baba73bbc741b98268089a0a471559b2648ac14630a8bd5c79"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.ops_manager_notification_validate_owner()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "ops_manager_notification_validate_owner()",
+          "definition_sha256": "ca87ecf25e05d0d7e85960ca288bf7c4ab9244294215babeeb898b46c6c915b5"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_ops_manager_notification_preferences_owner",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "ops_manager_notification_preferences",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_ops_manager_push_devices_owner",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "ops_manager_push_devices",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_notification_validate_owner()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE authority jsonb;\nBEGIN\n -- Revocation must remain possible after authority becomes stale, including\n -- the existing restore invalidation. It cannot resurrect or reassign a row.\n IF TG_OP='UPDATE' AND TG_TABLE_NAME='ops_manager_push_devices' THEN\n  IF NOT NEW.enabled AND NEW.revoked_at IS NOT NULL AND NEW.credential_id=OLD.credential_id AND NEW.manager_id=OLD.manager_id\n  AND NEW.device_id=OLD.device_id AND NEW.fcm_token=OLD.fcm_token THEN NEW.updated_at:=now();RETURN NEW;END IF;\n END IF;\n authority:=custodial_leadership_private.notification_credential(NEW.credential_id);\n IF authority IS NULL OR authority->>'managerId' IS DISTINCT FROM NEW.manager_id::text\n OR(TG_TABLE_NAME='ops_manager_push_devices' AND authority->>'kind'='CUSTODIAL_LEADERSHIP_REGISTRATION'\n AND authority->>'deviceId' IS DISTINCT FROM to_jsonb(NEW)->>'device_id')\n THEN RAISE EXCEPTION 'Notification record must belong to its current typed manager credential' USING ERRCODE='23514';END IF;\n NEW.updated_at:=now();RETURN NEW;\nEND $function$\n",
+      "security_definer": true,
+      "definition_sha256": "ca87ecf25e05d0d7e85960ca288bf7c4ab9244294215babeeb898b46c6c915b5"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.prevent_duplicate_daily_schedule_assignment()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "prevent_duplicate_daily_schedule_assignment()",
+          "definition_sha256": "2a193e2dfee542795d1e5e77264ac036fe751534b0b1a3251f3b916941922e20"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_prevent_duplicate_daily_schedule_assignment",
+          "type": 7,
+          "when": null,
+          "nargs": 0,
+          "table": "daily_schedule_assignments",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.prevent_duplicate_daily_schedule_assignment()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if new.assigned_employee_id is not null and exists (\n    select 1 from public.daily_schedule_assignments existing\n    where existing.service_date = new.service_date\n      and existing.assigned_employee_id = new.assigned_employee_id\n      and existing.location_group_id = new.location_group_id\n      and existing.coverage_start = new.coverage_start\n      and existing.coverage_end = new.coverage_end\n      and coalesce(existing.coverage_purpose, '') = coalesce(new.coverage_purpose, '')\n      and coalesce(existing.owner_type, '') = coalesce(new.owner_type, '')\n      and existing.status = new.status\n  ) then\n    return null;\n  end if;\n  return new;\nend\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "2a193e2dfee542795d1e5e77264ac036fe751534b0b1a3251f3b916941922e20"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sch_apply_default_coverage_purpose()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "sch_apply_default_coverage_purpose()",
+          "definition_sha256": "db9d608b67040869810a036bbb7e9c1a3181b7d56302b1211e8d162e6b6d7f82"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_sch_apply_default_coverage_purpose",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "daily_schedule_assignments",
+          "schema": "public",
+          "columns": [
+            "location_group_id",
+            "assigned_employee_id",
+            "coverage_start",
+            "coverage_purpose"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_apply_default_coverage_purpose()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_group_code text;\n  v_employee_name text;\n  v_template_purpose text;\nbegin\n  select lg.group_code into v_group_code\n  from public.location_groups lg\n  where lg.id = new.location_group_id;\n\n  if new.assigned_employee_id is not null then\n    select e.display_name into v_employee_name\n    from public.employees e\n    where e.id = new.assigned_employee_id;\n  end if;\n\n  select ct.coverage_purpose into v_template_purpose\n  from public.coverage_templates ct\n  where ct.location_group_id = new.location_group_id\n    and ct.day_of_week = extract(dow from new.service_date)::integer\n    and ct.segment_number = new.segment_number\n  limit 1;\n\n  if new.coverage_purpose is null or new.coverage_purpose = 'area_owner' then\n    new.coverage_purpose := coalesce(\n      v_template_purpose,\n      case\n        when v_group_code in ('ELEPHANT_TRUNK_GIFT_SHOP','ELEPHANT_TRUNK_RESTROOMS','BAMBOO_GIFT_SHOP','NORTH_WEST_PASSAGE_GIFT_SHOP') then 'reminder'\n        when v_employee_name = 'Michael McWright' then 'late_coverage'\n        when new.coverage_start < time '09:45' then 'deep_clean'\n        else coalesce(new.coverage_purpose, 'area_owner')\n      end\n    );\n  end if;\n\n  return new;\nend;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "db9d608b67040869810a036bbb7e9c1a3181b7d56302b1211e8d162e6b6d7f82"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sch_clear_scan_alerts_after_scan_event()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "sch_clear_scan_alerts_after_scan_event()",
+          "definition_sha256": "364493d79460654a44250ad1c4195e48ce0d810ec0f24aef3f4153627ce02056"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_sch_clear_scan_alerts_after_scan_event",
+          "type": 5,
+          "when": null,
+          "nargs": 0,
+          "table": "scan_events",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_clear_scan_alerts_after_scan_event()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.location_code is not null then\n    perform public.sch_clear_scan_alerts_for_location(new.location_code, 'new_scan_event');\n  end if;\n  return new;\nend;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "364493d79460654a44250ad1c4195e48ce0d810ec0f24aef3f4153627ce02056"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sch_guard_operational_daily_assignment()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "sch_guard_operational_daily_assignment()",
+          "definition_sha256": "40c2b3f2c51e035a7a3acedc2aa98529e5f90c0d31719e22d2e16e2b722107f8"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_sch_guard_operational_daily_assignment",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "daily_schedule_assignments",
+          "schema": "public",
+          "columns": [
+            "service_date",
+            "location_group_id",
+            "coverage_start",
+            "coverage_end",
+            "coverage_purpose"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_guard_operational_daily_assignment()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_group_code text;\n  v_day integer;\n  v_employee_name text;\nbegin\n  select group_code into v_group_code\n  from public.location_groups\n  where id = new.location_group_id;\n\n  if v_group_code is null then\n    raise exception 'Unknown location_group_id %', new.location_group_id;\n  end if;\n\n  v_day := extract(dow from new.service_date)::integer;\n\n  if v_group_code like '%GIFT_SHOP' and not (\n    v_day = 1\n    and coalesce(new.coverage_purpose, '') = 'reminder'\n    and new.coverage_start >= time '08:00'\n    and new.coverage_start <= time '08:30'\n    and new.coverage_end <= time '09:45'\n  ) then\n    select display_name into v_employee_name\n    from public.employees\n    where id = new.assigned_employee_id;\n\n    raise exception 'Gift shop guard: blocked assignment for employee \"%\" (id %) to \"%\" on service_date %. Gift shops are Monday morning reminder-only side work; this assignment does not meet the reminder-only criteria.',\n      coalesce(v_employee_name, 'UNKNOWN'), coalesce(new.assigned_employee_id::text, 'NULL'), v_group_code, new.service_date;\n  end if;\n\n  return new;\nend;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "40c2b3f2c51e035a7a3acedc2aa98529e5f90c0d31719e22d2e16e2b722107f8"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sch_guard_restricted_daily_assignment()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "sch_guard_restricted_daily_assignment()",
+          "definition_sha256": "c63113fa16d5d0379fdc813366887c7adabf5ae9bbc9254c0a649b52b313c109"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_sch_guard_restricted_daily_assignment",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "daily_schedule_assignments",
+          "schema": "public",
+          "columns": [
+            "service_date",
+            "location_group_id",
+            "assigned_employee_id"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_guard_restricted_daily_assignment()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_day integer;\n  v_group_code text;\nbegin\n  if new.assigned_employee_id is null then\n    return new;\n  end if;\n\n  -- H23: Look up group_code and fail closed on NULL.\n  select group_code into v_group_code\n  from public.location_groups\n  where id = new.location_group_id;\n\n  if v_group_code is null then\n    raise exception 'Unknown location_group_id %', new.location_group_id;\n  end if;\n\n  v_day := extract(dow from new.service_date)::integer;\n\n  if public.sch_is_employee_location_group_restricted(new.assigned_employee_id, new.location_group_id, v_day) then\n    new.assigned_employee_id := null;\n    new.owner_type := 'OPEN';\n    new.status := 'OPEN';\n    new.notes := trim(concat_ws(\n      ' | ',\n      nullif(new.notes, ''),\n      'Opened by schedule safety guard: assigned employee is restricted from this location group.'\n    ));\n    new.source_type := trim(both ':' from concat_ws(\n      ':',\n      nullif(new.source_type, ''),\n      'restricted_guard'\n    ));\n  end if;\n\n  return new;\nend;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "c63113fa16d5d0379fdc813366887c7adabf5ae9bbc9254c0a649b52b313c109"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sch_guard_restricted_location_coverage_template()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "sch_guard_restricted_location_coverage_template()",
+          "definition_sha256": "6b865d454683545a236bf2bd7be1b718b5091d05224360b2e03e6fe8346aac69"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_sch_guard_restricted_location_coverage_template",
+          "type": 23,
+          "when": null,
+          "nargs": 0,
+          "table": "location_coverage_templates",
+          "schema": "public",
+          "columns": [
+            "location_id",
+            "day_of_week",
+            "assigned_employee_id"
+          ],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_guard_restricted_location_coverage_template()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_location_group_id uuid;\nbegin\n  if new.assigned_employee_id is null then\n    return new;\n  end if;\n\n  select lgm.location_group_id\n    into v_location_group_id\n  from public.location_group_memberships lgm\n  join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true\n  where lgm.location_id = new.location_id\n    and lgm.active = true\n  order by lg.group_code\n  limit 1;\n\n  if v_location_group_id is not null\n     and public.sch_is_employee_location_group_restricted(new.assigned_employee_id, v_location_group_id, new.day_of_week) then\n    new.assigned_employee_id := null;\n    new.owner_type := 'OPEN';\n    new.notes := trim(concat_ws(\n      ' | ',\n      nullif(new.notes, ''),\n      'Opened by schedule safety guard: assigned employee is restricted from this location group.'\n    ));\n  end if;\n\n  return new;\nend;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "6b865d454683545a236bf2bd7be1b718b5091d05224360b2e03e6fe8346aac69"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sch_pto_absence_sync_trigger()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "sch_pto_absence_sync_trigger()",
+          "definition_sha256": "1dd800fc10ca6af99c1f775f11001d1b1139e4c7c7163f52627d56077133e521"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "employee_planned_time_off_sync_absences",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "employee_planned_time_off",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "employee_pto_sync_absences",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "employee_pto",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_pto_absence_sync_trigger()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_start date;\n  v_end date;\nbegin\n  if tg_op = 'DELETE' then\n    v_start := old.start_date;\n    v_end := old.end_date;\n  elsif tg_op = 'INSERT' then\n    v_start := new.start_date;\n    v_end := new.end_date;\n  else\n    v_start := least(coalesce(old.start_date, new.start_date), coalesce(new.start_date, old.start_date));\n    v_end := greatest(coalesce(old.end_date, new.end_date), coalesce(new.end_date, old.end_date));\n  end if;\n\n  perform public.sch_sync_pto_absence_overrides(v_start, v_end);\n  perform public.sch_regenerate_existing_schedules_for_absence_range(v_start, v_end);\n  return coalesce(new, old);\nend;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "1dd800fc10ca6af99c1f775f11001d1b1139e4c7c7163f52627d56077133e521"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_component_guard()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "static_weekly_component_guard()",
+          "definition_sha256": "303d4daf2e94e2839e2750ee2f0b3327ccdced77b2b3a57984add978c3d0a69f"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_static_weekly_weekly_schedule_objective_inputs_guard",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_objective_inputs",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_static_weekly_weekly_schedule_slot_assignments_guard",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_slot_assignments",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_static_weekly_weekly_schedule_slot_availability_guard",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_slot_availability",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_component_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_state text;\nbegin\n  select lifecycle_state into v_state from public.weekly_schedule_versions where version_id=coalesce(new.version_id,old.version_id);\n  if current_setting('app.static_weekly_draft_write',true)='on' and v_state='draft' then\n    if tg_op='DELETE' then return old; end if; return new;\n  end if;\n  if current_setting('app.static_weekly_publish_write',true)='on' and v_state='published' and tg_op='INSERT' then return new; end if;\n  raise exception using errcode='23514',message='scheduler components may change only through a revision-checked v2 command';\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "303d4daf2e94e2839e2750ee2f0b3327ccdced77b2b3a57984add978c3d0a69f"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_sch022_occurrence_gate()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "static_weekly_sch022_occurrence_gate()",
+          "definition_sha256": "f6ee7c5ef17f5b4d0fd2ee33ff80232f23282037a204eb5476610d3d79f689a9"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_static_weekly_sch022_occurrence_gate",
+          "type": 7,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_occurrences",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_sch022_occurrence_gate()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n perform public.static_weekly_sch022_work_witness(new.service_date,jsonb_build_array(\n  public.static_weekly_sch022_normalize_work(new.location_id,new.location_code_snapshot,\n   coalesce(new.authority_facts_json#>'{work_snapshot,includedLocations}','[]'::jsonb))));\n return new;\nend $function$\n",
+      "security_definer": true,
+      "definition_sha256": "f6ee7c5ef17f5b4d0fd2ee33ff80232f23282037a204eb5476610d3d79f689a9"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_sch022_publication_gate()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "static_weekly_sch022_publication_gate()",
+          "definition_sha256": "915c29da7f8a59ebae7b6dc9eb88061e51641888546d1619433f342deb61563c"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_static_weekly_sch022_publication_gate",
+          "type": 7,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_publications",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_sch022_publication_gate()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare work jsonb;\nbegin\n select coalesce(jsonb_agg(public.static_weekly_sch022_normalize_work(a.location_id,a.location_code_snapshot,\n  coalesce(a.authority_facts_json->'included_locations',a.payload_json#>'{authority_facts,included_locations}','[]'::jsonb))\n  order by a.assignment_id),'[]'::jsonb) into work\n from public.weekly_schedule_slot_assignments a where a.version_id=new.version_id;\n perform public.static_weekly_sch022_work_witness(new.effective_start,work);\n return new;\nend $function$\n",
+      "security_definer": true,
+      "definition_sha256": "915c29da7f8a59ebae7b6dc9eb88061e51641888546d1619433f342deb61563c"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_v15_advance_recurring_generation()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v15_advance_recurring_generation()",
+          "definition_sha256": "4a94f5e0cc6f6dcdd8e9547036266f05964306a04e4eb7621f8b70b811bd635c"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "employees",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "static_weekly_authority_source_documents",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_incumbencies",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_incumbency_closures",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_staffing_states",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slots",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_generation",
+          "type": 29,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_publications",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v15_advance_recurring_generation()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if tg_table_name='employees' then\n    if tg_op='UPDATE' and new.active is not distinct from old.active\n      and new.display_name is not distinct from old.display_name\n      and new.employee_code is not distinct from old.employee_code then return null;end if;\n    if tg_op='INSERT' and new.employee_code!~'^EMP[0-9]+$' and not exists(select 1 from public.weekly_roster_slot_incumbencies i where i.person_id=new.id) then return null;end if;\n    if tg_op='DELETE' and old.employee_code!~'^EMP[0-9]+$' and not exists(select 1 from public.weekly_roster_slot_incumbencies i where i.person_id=old.id) then return null;end if;\n    if tg_op='UPDATE' and new.employee_code!~'^EMP[0-9]+$' and old.employee_code!~'^EMP[0-9]+$' and not exists(select 1 from public.weekly_roster_slot_incumbencies i where i.person_id=new.id) then return null;end if;\n  elsif tg_table_name='static_weekly_authority_source_documents' then\n    -- Registration is immutable evidence, not schedule activation. Retirement\n    -- or corruption/change of a selected source does invalidate preview basis.\n    if tg_op='INSERT' then return null;end if;\n    if tg_op='UPDATE' and new.active is not distinct from old.active\n      and new.retired_at is not distinct from old.retired_at\n      and new.canonical_source is not distinct from old.canonical_source\n      and new.source_digest is not distinct from old.source_digest then return null;end if;\n  elsif tg_op='UPDATE' and to_jsonb(new)=to_jsonb(old) then return null;\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));\n  update public.static_weekly_recurring_generation set generation=generation+1,\n    changed_at=statement_timestamp() where singleton;\n  if not found then raise exception 'recurring generation singleton is missing';end if;\n\n  perform public.static_weekly_v21_track_dependency_change(tg_table_name,tg_op,\n   case when tg_op='INSERT' then null else to_jsonb(old) end,\n   case when tg_op='DELETE' then null else to_jsonb(new) end);\n \n  return null;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "4a94f5e0cc6f6dcdd8e9547036266f05964306a04e4eb7621f8b70b811bd635c"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_v15_lock_recurring_mutation()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v15_lock_recurring_mutation()",
+          "definition_sha256": "541eba3c620076ef528a3c57c8566d52c741a205f33b898d5e4225470988c850"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "employees",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "approved_template_lock",
+          "type": 6,
+          "when": null,
+          "nargs": 0,
+          "table": "static_weekly_approved_template_catalog",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "approved_template_lock",
+          "type": 6,
+          "when": null,
+          "nargs": 0,
+          "table": "static_weekly_approved_template_retirements",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "approved_template_lock",
+          "type": 6,
+          "when": null,
+          "nargs": 0,
+          "table": "static_weekly_approved_template_source_configs",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "static_weekly_authority_source_documents",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_incumbencies",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_incumbency_closures",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_staffing_states",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slots",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        },
+        {
+          "name": "trg_recurring_authority_lock",
+          "type": 30,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_publications",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v15_lock_recurring_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));\n  return null;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "541eba3c620076ef528a3c57c8566d52c741a205f33b898d5e4225470988c850"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_v8_guard_vacancy_closure()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "public.static_weekly_v8_guard_vacancy_closure()",
+          "definition_sha256": "6eb6643b27cf4b7be85d182f9e2c2db1ac72f9d833858fdfab8b372878cea85c"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_static_weekly_v8_guard_vacancy_closure",
+          "type": 7,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_roster_slot_incumbency_closures",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v8_guard_vacancy_closure()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if new.replacement_incumbency_id is not null then return new; end if;\n  perform public.static_weekly_v3_assert_control_plane();\n  if not exists (\n    select 1 from public.weekly_schedule_authority_revisions r\n    join public.weekly_roster_slot_incumbencies i on i.incumbency_id=new.closed_incumbency_id\n    join public.weekly_roster_slot_staffing_states s on s.authority_revision=r.authority_revision\n    where r.authority_revision=new.authority_revision and r.operation='vacate_roster_slot'\n      and r.actor_manager_id=new.actor_manager_id and r.content_digest=new.content_digest\n      and s.slot_id=i.slot_id and s.staffing_state='vacant_unfilled' and s.employee_id is null\n      and s.effective_start=new.closed_at_effective_date and i.effective_start<new.closed_at_effective_date\n      and (i.effective_end is null or new.closed_at_effective_date<i.effective_end)\n  ) then\n    raise exception using errcode='23514',message='replacement-free closure requires matching vacancy command and staffing authority';\n  end if;\n  return new;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "6eb6643b27cf4b7be85d182f9e2c2db1ac72f9d833858fdfab8b372878cea85c"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.static_weekly_version_guard()",
+      "registry": [
+        {
+          "object_kind": "function",
+          "object_identity": "static_weekly_version_guard()",
+          "definition_sha256": "c294db36fec59b647b24eabd6f5883d7f55b7122862a3ee7adf761a39ee219c2"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_static_weekly_versions_guard",
+          "type": 31,
+          "when": null,
+          "nargs": 0,
+          "table": "weekly_schedule_versions",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_version_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare source_comparison public.weekly_schedule_versions%rowtype;\nbegin\n  if tg_op='DELETE' then raise exception using errcode='23514',message='weekly versions are immutable'; end if;\n  if tg_op='INSERT' then\n    if new.lifecycle_state='published' and current_setting('app.static_weekly_publish_write',true) is distinct from 'on' then raise exception using errcode='23514',message='published versions require v2 publication'; end if;\n    return new;\n  end if;\n  if old.lifecycle_state='draft' and current_setting('app.static_weekly_publish_write',true)='on' and new.lifecycle_state='published' and new.revision=old.revision then return new; end if;\n  -- v3 binds a just-created v2 draft to a registered immutable source inside\n  -- the same SECURITY DEFINER transaction. No other field/revision may move.\n  if old.lifecycle_state='draft' and current_setting('app.static_weekly_source_bind',true)='on' and old.authority_source_id is null and new.authority_source_id is not null then\n    source_comparison:=new;\n    source_comparison.authority_source_id:=old.authority_source_id;\n    if source_comparison is not distinct from old then return new; end if;\n  end if;\n  if old.lifecycle_state<>'draft' or current_setting('app.static_weekly_draft_write',true) is distinct from 'on' or new.lifecycle_state<>'draft' or new.revision<>old.revision+1 then raise exception using errcode='23514',message='draft versions require a revision-checked v2 command'; end if;\n  return new;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "c294db36fec59b647b24eabd6f5883d7f55b7122862a3ee7adf761a39ee219c2"
+    },
+    {
+      "owner": "postgres",
+      "identity": "public.sync_migration_log_summary()",
+      "registry": [],
+      "triggers": [
+        {
+          "name": "trg_sync_migration_log_summary",
+          "type": 5,
+          "when": null,
+          "nargs": 0,
+          "table": "migration_log",
+          "schema": "public",
+          "columns": [],
+          "enabled": "O",
+          "args_hex": "",
+          "internal": false,
+          "new_table": null,
+          "old_table": null,
+          "constraint": false,
+          "deferrable": false,
+          "initially_deferred": false
+        }
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.sync_migration_log_summary()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  insert into public.migration_log_summary(\n    migration_name, statement_count, total_sql_bytes, latest_sql_sha256,\n    first_applied_at, last_applied_at, last_applied_by, updated_at\n  ) values (\n    new.migration_name, 1, octet_length(new.sql_text),\n    encode(digest(new.sql_text, 'sha256'), 'hex'),\n    new.applied_at, new.applied_at, new.applied_by, now()\n  )\n  on conflict (migration_name) do update\n  set statement_count = public.migration_log_summary.statement_count + 1,\n      total_sql_bytes = public.migration_log_summary.total_sql_bytes + excluded.total_sql_bytes,\n      latest_sql_sha256 = excluded.latest_sql_sha256,\n      first_applied_at = least(public.migration_log_summary.first_applied_at, excluded.first_applied_at),\n      last_applied_at = greatest(public.migration_log_summary.last_applied_at, excluded.last_applied_at),\n      last_applied_by = excluded.last_applied_by,\n      updated_at = now();\n  return new;\nend\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "d882a522f35ff28a0849ef6b55c13b52483f989431cb002d313a050958e1640c"
+    }
+  ]
+}

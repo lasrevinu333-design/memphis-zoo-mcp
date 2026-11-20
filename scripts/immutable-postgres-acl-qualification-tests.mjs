@@ -1,3 +1,4 @@
+import {removeCurrentRestoreGuardCohort} from './immutable-current-restore-guard-cohort.mjs';
 // Connection-free tests of the shipping synthetic qualifier. Never calls Docker.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -96,12 +97,20 @@ const stdinArgs=cid=>['exec','-i',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',
 
 test('75-case batch keeps69 valid Boolean rows and six separately bound exact invalid-array SELECTs',()=>{
  const fixture=immutablePostgresAclFixtureSql();assert.equal(fixture.checks,69);assert.equal(fixture.total_checks,75);assert.equal(fixture.expected_error_cases.length,6);
- assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'7ec41e9a42a2f0e9e9e1c1861bd71776c3861f7fc2a6f796ff1baf58ac734908');
- // Only the current manager statement's complete Source hash changed when
- // its unchanged invoker checks were rebound to the derived ordinary matcher.
+ assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'60f43e1ec4c1fa8eaa3bd83384dc073d8eeff5f6e52928c12b64496d5323a351');
+ // The cohort is appended to the last fixed Source statement; the exact ACL
+ // predicates and all six hostile-array SQL bytes remain unchanged. Reverse
+ // that layer before the earlier manager-statement predecessor check.
+ const currentProgram=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+ const beforeCohort=removeCurrentRestoreGuardCohort(currentProgram);
+ const originalEmployeePush=beforeCohort.statements.find(s=>s.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql').sourceSha256;
+ const previousBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
+  expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,
+   source_sha256:case_id==='EMPLOYEE_PUSH_CURRENT_EMPTY_ACL'?originalEmployeePush:source_sha256,sql_sha256}))};
+ assert.equal(hash(JSON.stringify(previousBatch)),'7ec41e9a42a2f0e9e9e1c1861bd71776c3861f7fc2a6f796ff1baf58ac734908');
  const priorBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
   expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,
-   source_sha256:case_id==='MANAGER_CURRENT_EMPTY_ACL'?'5181d13fae8cac9e7c4093be78dc1e02142ebf7588893804c7f2ba60afe020bf':source_sha256,sql_sha256}))};
+   source_sha256:case_id==='MANAGER_CURRENT_EMPTY_ACL'?'5181d13fae8cac9e7c4093be78dc1e02142ebf7588893804c7f2ba60afe020bf':case_id==='EMPLOYEE_PUSH_CURRENT_EMPTY_ACL'?originalEmployeePush:source_sha256,sql_sha256}))};
  assert.equal(hash(JSON.stringify(priorBatch)),'b903af3e203c31670bf4c3e531eee0ec75c9ced2f7dce28018f3941eee3928c6');
  assert.equal((fixture.sql.match(/'\{postgres=\/postgres\}'::aclitem\[\]/g)||[]).length,6);
  assert.ok(!fixture.sql.includes("'{}'::aclitem[]"));

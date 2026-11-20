@@ -1,3 +1,4 @@
+import {extendCurrentRestoreGuardCohort} from './immutable-current-restore-guard-cohort.mjs';
 import {currentLegacyDailyFenceRecipe,extendCurrentLegacyDailyFence} from './immutable-current-legacy-daily-fence-source.mjs';
 import {currentAbsenceRestoreRecipe,extendCurrentAbsenceRestoreSource} from './immutable-current-absence-restore-source.mjs';
 import {extendCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
@@ -121,7 +122,8 @@ const statements=order.map(name=>{
 });
 const result={format:'custodial.immutable-private-current-postgres-program.v1',profile:{id:'immutable-private-current-postgres',actor:'postgres'},provenance:{sourcePath:installedPath,sourceSha256:sha(installed),definitions:specs.map(([identity,,sha256])=>({identity,sha256}))},recipes:[...recipes,currentCoverallRestoreRecipe(),currentLeadershipRestoreRecipe(),currentOc24RestoreRecipe(),currentCoverageRestoreRecipe(),currentRestrictedCoverageRestoreRecipe(),currentAbsenceRestoreRecipe(),currentLegacyDailyFenceRecipe()],statements};
 domain.assertCurrent();messages.assertCurrent();
-const output=JSON.stringify(result,null,2)+'\n';
+const compiled=extendCurrentRestoreGuardCohort(result);
+const output=JSON.stringify(compiled,null,2)+'\n';
 if(process.argv.includes('--check'))assert.equal(readFileSync('proposals/immutable-private-current-postgres-program.json','utf8'),output);
 else writeFileSync('proposals/immutable-private-current-postgres-program-absence-candidate.json',output,{flag:'wx'});
-console.log(JSON.stringify({ok:true,sha256:sha(output),bytes:Buffer.byteLength(output),recipes:result.recipes.length,statements:statements.length}));
+console.log(JSON.stringify({ok:true,sha256:sha(output),bytes:Buffer.byteLength(output),recipes:compiled.recipes.length,statements:compiled.statements.length}));

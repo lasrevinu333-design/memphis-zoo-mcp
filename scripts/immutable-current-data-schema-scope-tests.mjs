@@ -1,3 +1,4 @@
+import {removeCurrentRestoreGuardCohort} from './immutable-current-restore-guard-cohort.mjs';
 import {removeCurrentLegacyDailyFence as undoDailyFence,currentLegacyDailyFenceRecipe as dailyFenceRecipe} from './immutable-current-legacy-daily-fence-source.mjs';
 import {removeCurrentAbsenceRestoreSource as undoAbsence,currentAbsenceRestoreRecipe as absenceRecipe} from './immutable-current-absence-restore-source.mjs';
 import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
@@ -25,7 +26,8 @@ const pairs=[
  ['884485499c6f2c893407e809f5a32200c5b4abe48c8eca944130babdff9d5b15','e89263e58487fc1dcbc08c31f5428130bc05cce726cd15ae162f03a3bc6aae36'],
 ];
 const originalSql=sql=>pairs.reduce((s,[old,next])=>s.replaceAll(next,old),sql).replaceAll(full,oldFull).replaceAll(ordinary,oldOrdinary);
-const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+const shippingProgram=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+const program=removeCurrentRestoreGuardCohort(shippingProgram);
 { assert.deepEqual(program.recipes.pop(),dailyFenceRecipe());const s=program.statements.find(x=>x.sourcePath==='proposals/immutable-private-owner-context.sql');s.sql=undoDailyFence(s.sql);s.sourceSha256=sha(s.sql); }
 { assert.deepEqual(program.recipes.pop(),absenceRecipe());const s=program.statements.find(x=>x.sourcePath==='proposals/immutable-private-owner-context.sql');s.sql=undoAbsence(s.sql);s.sourceSha256=sha(s.sql); }
 const leadershipContext=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');

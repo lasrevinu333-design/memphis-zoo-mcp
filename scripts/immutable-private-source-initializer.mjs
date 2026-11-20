@@ -164,16 +164,17 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  initializerStage='RECONCILE_ARCHIVED_ACLS';
  const acl=await reconcileVerifiedImmutableBootstrapAcls(db,source,verifiedArchive);await readContext();
  const recipeIdentities=Object.freeze(source.recipes.map(recipe=>recipe.identity));
- const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?32:25;
+ const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?51:25;
  assert.equal(recipeIdentities.length,recipeCount);assert.equal(new Set(recipeIdentities).size,recipeCount);
- if(recipeCount===32){
-  assert.equal(recipeIdentities.at(-7),'custodial_coverall.bind_manual_delivery_after_acceptance()');
-  assert.equal(recipeIdentities.at(-6),'custodial_leadership_private.bind_registration_generation()');
-  assert.equal(recipeIdentities.at(-5),'public.custodial_oc24_completion_selection_guard()');
-  assert.equal(recipeIdentities.at(-4),'public.sch_guard_operational_coverage_template()');
-  assert.equal(recipeIdentities.at(-3),'public.sch_guard_restricted_coverage_template()');
- assert.equal(recipeIdentities.at(-2),'public.sch_daily_absence_override_regenerate_trigger()');
-  assert.equal(recipeIdentities.at(-1),'public.static_weekly_reject_legacy_daily_schedule_write()');
+ if(recipeCount===51){
+  assert.equal(recipeIdentities.at(-26),'custodial_coverall.bind_manual_delivery_after_acceptance()');
+  assert.equal(recipeIdentities.at(-25),'custodial_leadership_private.bind_registration_generation()');
+  assert.equal(recipeIdentities.at(-24),'public.custodial_oc24_completion_selection_guard()');
+  assert.equal(recipeIdentities.at(-23),'public.sch_guard_operational_coverage_template()');
+  assert.equal(recipeIdentities.at(-22),'public.sch_guard_restricted_coverage_template()');
+ assert.equal(recipeIdentities.at(-21),'public.sch_daily_absence_override_regenerate_trigger()');
+  assert.equal(recipeIdentities.at(-20),'public.static_weekly_reject_legacy_daily_schedule_write()');
+  assert.deepEqual(recipeIdentities.slice(-19),["custodial_coverall.reconcile_manual_delivery_after_lunch()","public.capture_system_feedback_email_intent()","public.custodial_sessions_preserve_original_identity()","public.gemini_console_require_live_worker()","public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()","public.ops_manager_notification_bind_credential()","public.prevent_duplicate_daily_schedule_assignment()","public.sch_apply_default_coverage_purpose()","public.sch_clear_scan_alerts_after_scan_event()","public.sch_guard_operational_daily_assignment()","public.sch_guard_restricted_daily_assignment()","public.sch_guard_restricted_location_coverage_template()","public.sch_pto_absence_sync_trigger()","public.static_weekly_component_guard()","public.static_weekly_sch022_occurrence_gate()","public.static_weekly_sch022_publication_gate()","public.static_weekly_v8_guard_vacancy_closure()","public.static_weekly_version_guard()","public.sync_migration_log_summary()"]);
  }
  // One fresh, ordered native catalog read per side, never a cached verdict.
  // LEFT JOIN retains a missing overload as a refused row rather than omitting it.
