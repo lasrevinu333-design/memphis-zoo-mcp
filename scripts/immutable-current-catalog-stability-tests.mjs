@@ -1,3 +1,4 @@
+import {removeCurrentLiveDataSnapshot} from './immutable-current-live-data-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -5,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {extendCurrentCatalogStability,removeCurrentCatalogStability} from './immutable-current-catalog-stability-source.mjs';
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const serial=v=>JSON.stringify(v,null,2)+'\n';
-const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
+const program=removeCurrentLiveDataSnapshot(JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url))));
 const prior=removeCurrentCatalogStability(program);
 const fn=(sql,name)=>{const m=sql.match(new RegExp('CREATE FUNCTION custodial_dr\\.'+name+'\\([\\s\\S]*?\\$fn\\$;'));assert.ok(m,name);return m[0];};
 test('locked catalog successor recovers the complete genuine6f predecessor and changes only statement1',()=>{

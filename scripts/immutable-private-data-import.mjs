@@ -2706,7 +2706,7 @@ export async function diagnoseVerifiedImmutableFreshContextCost(options) {
    ['catalog_epoch','select custodial_dr.immutable_import_catalog_epoch()'],
    ['inventory_state','select custodial_dr.immutable_import_source_inventory_state()'],
    ['target_shape','select custodial_dr.immutable_import_target_shape()'],
-   ['catalog_matches','select custodial_dr.immutable_import_catalog_matches(c.target_shape,c.catalog_epoch)'+contextFrom],
+   ['catalog_matches','select custodial_dr.immutable_import_catalog_matches(c.target_shape,c.catalog_epoch,c.expected_live_data)'+contextFrom],
    ['assert_context','select custodial_dr.immutable_import_assert_context()'],
    ['read_context','select pg_column_size(c)'+contextFrom],
    ['extract_three_data_fields',"select jsonb_build_object('migration_head',c.target_shape->'migration_head','release',c.target_shape->'release','recovery_inventory',c.target_shape->'recovery_inventory')"+contextFrom],

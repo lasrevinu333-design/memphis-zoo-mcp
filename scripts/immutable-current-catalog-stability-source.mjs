@@ -1,3 +1,4 @@
+import {removeCurrentLiveDataSnapshot} from './immutable-current-live-data-source.mjs';
 // Fixed offline successor and exact whole-predecessor inverse. No target port.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -25,7 +26,7 @@ export function extendCurrentCatalogStability(prior){
  assert.deepEqual(removeCurrentCatalogStability(program),prior);return program;
 }
 export function removeCurrentCatalogStability(current){
- assert.equal(arguments.length,1);const program=structuredClone(current),statement=program.statements[0];
+ assert.equal(arguments.length,1);const program=structuredClone(removeCurrentLiveDataSnapshot(current)),statement=program.statements[0];
  if(!statement.sql.includes(marker))return program;
  const inverse=fixedInverse();assert.equal(sha(statement.sql),statement.sourceSha256);
  assert.equal(statement.sourceSha256,inverse.currentStatementSha256);

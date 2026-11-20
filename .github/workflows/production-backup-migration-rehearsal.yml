@@ -46,7 +46,7 @@ concurrency:
 jobs:
   rehearse:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.rehearsal_scope == 'backup_only' && inputs.official_local_storage_provider && !inputs.private_context_cost_diagnostic_only && 205 || 45 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,7 +60,7 @@ jobs:
         run: |
           node scripts/build-immutable-postgres-program.mjs --check
           node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs
-          node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-current-restore-guard-cohort-tests.mjs scripts/immutable-current-cyclic-cohort-tests.mjs scripts/immutable-postgres-acl-qualification-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs scripts/private-restore-function-diagnostic-tests.mjs scripts/immutable-current-bounded-stage-tests.mjs scripts/immutable-ordinary-progress-tests.mjs scripts/immutable-current-catalog-stability-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs scripts/private-catalog-lease-runner-tests.mjs
+          node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-current-restore-guard-cohort-tests.mjs scripts/immutable-current-cyclic-cohort-tests.mjs scripts/immutable-postgres-acl-qualification-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs scripts/private-restore-function-diagnostic-tests.mjs scripts/immutable-current-bounded-stage-tests.mjs scripts/immutable-ordinary-progress-tests.mjs scripts/immutable-current-catalog-stability-tests.mjs scripts/immutable-current-live-data-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs scripts/private-catalog-lease-runner-tests.mjs
           node scripts/disaster-recovery-archive-tests.mjs --native-text-columns-archive-only --text-archive-case=bootstrap
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-raw-source-only
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-prerequisite-errors-only

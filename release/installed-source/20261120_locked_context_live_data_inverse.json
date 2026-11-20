@@ -1,0 +1,44 @@
+{
+  "previousProgramSha256": "46ca2ea40882ac2c2d649462cceaf558011f9dbeab3d4d40703b5c821c0a1ae5",
+  "currentProgramSha256": "39cf55e18a69f41c3f53cdb122dd6245b33cc35a9a2967d85f4be6adbbceb4be",
+  "previousStatementSha256": "14420c835830483bdeb069dc3f616b67fdd9752915c7462469a5873038c79132",
+  "currentStatementSha256": "c248867b950a4f52727dd74c35be73a2b411aa00e6c013953382658f17cbd489",
+  "hunks": [
+    {
+      "before": "active_row_sha256 text,catalog_epoch jsonb,",
+      "after": "active_row_sha256 text,catalog_epoch jsonb,expected_live_data jsonb NOT NULL,"
+    },
+    {
+      "before": "CREATE FUNCTION custodial_dr.immutable_import_context_source_immutable()\nRETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $fn$\nBEGIN\n IF TG_OP='UPDATE' AND TG_LEVEL='ROW' AND TG_TABLE_SCHEMA='custodial_dr'\n  AND TG_TABLE_NAME='immutable_private_import_context' AND TG_NARGS=0\n  AND TG_NAME='immutable_import_context_source_immutable'\n  AND TG_RELID='custodial_dr.immutable_private_import_context'::regclass THEN\n  IF ROW(NEW.database_oid,NEW.backend_pid,NEW.transaction_id,NEW.restore_id,NEW.authority_generation,\n    NEW.archive_digest,NEW.original_manifest,NEW.original_control,NEW.target_shape,NEW.catalog_epoch)\n    IS DISTINCT FROM ROW(OLD.database_oid,OLD.backend_pid,OLD.transaction_id,OLD.restore_id,OLD.authority_generation,\n     OLD.archive_digest,OLD.original_manifest,OLD.original_control,OLD.target_shape,OLD.catalog_epoch)\n   THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Original immutable import context cannot be replaced'; END IF;\n  RETURN NEW;\n END IF;\n RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Original immutable import context cannot be removed';\nEND $fn$;",
+      "after": "CREATE FUNCTION custodial_dr.immutable_import_context_source_immutable()\nRETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $fn$\nBEGIN\n IF TG_OP='UPDATE' AND TG_LEVEL='ROW' AND TG_TABLE_SCHEMA='custodial_dr'\n  AND TG_TABLE_NAME='immutable_private_import_context' AND TG_NARGS=0\n  AND TG_NAME='immutable_import_context_source_immutable'\n  AND TG_RELID='custodial_dr.immutable_private_import_context'::regclass THEN\n  IF ROW(NEW.database_oid,NEW.backend_pid,NEW.transaction_id,NEW.restore_id,NEW.authority_generation,\n    NEW.archive_digest,NEW.original_manifest,NEW.original_control,NEW.target_shape,NEW.catalog_epoch,NEW.expected_live_data)\n    IS DISTINCT FROM ROW(OLD.database_oid,OLD.backend_pid,OLD.transaction_id,OLD.restore_id,OLD.authority_generation,\n     OLD.archive_digest,OLD.original_manifest,OLD.original_control,OLD.target_shape,OLD.catalog_epoch,OLD.expected_live_data)\n   THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Original immutable import context cannot be replaced'; END IF;\n  RETURN NEW;\n END IF;\n RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Original immutable import context cannot be removed';\nEND $fn$;"
+    },
+    {
+      "before": "='0c21afd420913d3caa766942fd0df66f29dfe8e5a85bc070ca5802a20f3fbfe4'",
+      "after": "='9254415b61bb2153f8ffc02415237e7c7311b0dcf18abc0ec96ccfbbbf64ed28'"
+    },
+    {
+      "before": "jsonb_agg(c.target_shape->'recovery_inventory')",
+      "after": "jsonb_agg(c.expected_live_data->'recovery_inventory')"
+    },
+    {
+      "before": "custodial_dr.immutable_import_catalog_matches(ctx.target_shape,ctx.catalog_epoch)",
+      "after": "custodial_dr.immutable_import_catalog_matches(ctx.target_shape,ctx.catalog_epoch,ctx.expected_live_data)"
+    },
+    {
+      "before": "to_jsonb(ctl),target,'STAGING',NULL,NULL,catalog_certificate);",
+      "after": "to_jsonb(ctl),target,'STAGING',NULL,NULL,catalog_certificate,\n   jsonb_build_object('migration_head',target->'migration_head','release',target->'release',\n     'recovery_inventory',target->'recovery_inventory'));"
+    },
+    {
+      "before": "immutable_import_catalog_matches(expected_shape jsonb,expected_epoch jsonb)",
+      "after": "immutable_import_catalog_matches(expected_shape jsonb,expected_epoch jsonb,expected_data jsonb)"
+    },
+    {
+      "before": "DECLARE before_epoch jsonb;after_epoch jsonb;live_data jsonb;expected_data jsonb;",
+      "after": "DECLARE before_epoch jsonb;after_epoch jsonb;live_data jsonb;"
+    },
+    {
+      "before": " expected_data:=jsonb_build_object('migration_head',expected_shape->'migration_head',\n  'release',expected_shape->'release','recovery_inventory',expected_shape->'recovery_inventory');\n",
+      "after": " -- The expected fields were projected from the same full target shape at\n -- begin and sealed by the original context's immutable source guard.\n"
+    }
+  ]
+}

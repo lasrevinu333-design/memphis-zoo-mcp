@@ -15,7 +15,7 @@ import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fr
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
-import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
+import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';
@@ -112,7 +112,8 @@ export function selectPrivateProfile(source){
 }
 // Signed DATA construction only. Caller must authenticate the archive and invoke
 // captureVerifiedImmutableFreshRestoreIntent before any target is created.
-export function freshIntentEnvelope(binding,key,keyId,now=new Date()){
+export function freshIntentEnvelope(binding,key,keyId,now=new Date(),lifetimeMs=60*60*1000){
+  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===4*60*60*1000,'Closed disposable rehearsal intent lifetime required');
   requireSigningKey(key,'Independent rehearsal intent key');
   assert.match(keyId,/^[a-zA-Z0-9._:-]{1,120}$/);
   const release=Object.fromEntries(['release_id','backend_commit','frontend_commit','migration_head','migration_manifest_sha256']
@@ -121,7 +122,7 @@ export function freshIntentEnvelope(binding,key,keyId,now=new Date()){
     archive_digest:binding.archive_digest,source_project_ref:binding.project_ref,target_project_ref:binding.project_ref,
     source_identity_sha256:binding.source_identity_sha256,target_migration_head:binding.source_identity.migration_head,
     target_release_identity:release,actor:'GitHub private backup-only disposable rehearsal',
-    approved_at:now.toISOString(),expires_at:new Date(now.getTime()+60*60*1000).toISOString(),resume_after_verification:false};
+    approved_at:now.toISOString(),expires_at:new Date(now.getTime()+lifetimeMs).toISOString(),resume_after_verification:false};
   return {format:'memphis-zoo-production-restore-intent.v1',algorithm:'hmac-sha256',key_id:keyId,
     intent,signature:signBinding(restoreIntentBinding(intent),key)};
 }
@@ -283,6 +284,7 @@ export async function runPrivate(){
   const docker=(args,options)=>run('docker',args,options);
   const inspect=async(cleanup=false,options={})=>JSON.parse(await docker(['inspect',cid],{cleanup,...options}))[0];
   const receiptPath=resolve(tmp,'private-backup-only-rehearsal.json');
+  let restoreTimeoutMs=privateRestoreWorkTimeoutMs;
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
     sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
@@ -296,7 +298,9 @@ export async function runPrivate(){
     const requireOwnerProfile=()=>{const current=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
       assert.deepEqual(current,ownerProfile);return current;};
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
-    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId);
+    const currentFullRestore=!contextDiagnosticOnly&&ownerProfile.id==='immutable-private-current-postgres';
+    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres').work_ms+100000;
+    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?4*60*60*1000:60*60*1000);
     captureVerifiedImmutableFreshRestoreIntent({verifiedArchive:archive,originalIntentEnvelope:envelope,intentVerifyKey:key,intentVerifyKeyId:keyId});
     const secretEnv={...baseEnv,REHEARSAL_SCOPE:'backup_only',OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',
       GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,RESTORE_SOURCE_DIR:archive.directory,
@@ -364,7 +368,7 @@ export async function runPrivate(){
       client.pause();const pending=verifyTarget().then(()=>{
         if(stopping||closing||client.destroyed){client.destroy();return;}
         const upstream=createConnection({host:address,port:5432});
-        for(const socket of [client,upstream]){sockets.add(socket);socket.setTimeout(privateRestoreWorkTimeoutMs);
+        for(const socket of [client,upstream]){sockets.add(socket);socket.setTimeout(restoreTimeoutMs);
           socket.on('timeout',()=>{relaySocketTimeouts=Math.min(64,relaySocketTimeouts+1);socket.destroy();});socket.on('error',()=>{client.destroy();upstream.destroy();});
           socket.on('close',()=>{sockets.delete(socket);if(socket===client)upstream.destroy();else client.destroy();});}
         client.pipe(upstream);upstream.pipe(client);client.resume();
@@ -396,7 +400,7 @@ export async function runPrivate(){
         contextCost=projectPrivateContextCost(JSON.parse(await run(process.execPath,['scripts/private-context-cost-diagnostic.mjs'],{env:secretEnv,timeout:300000})));
         assert.ok(contextCost);assert.equal(contextCost.archive_digest,source.sourceBinding.archive_digest);await verifyTarget();return null;
       }
-      const restored=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:privateRestoreWorkTimeoutMs,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
+      const restored=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:restoreTimeoutMs,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
       assertPrivateResult(restored,source,envelope.intent);await verifyTarget();return restored;
     };
     if(requireOwnerProfile().id==='immutable-private-current-postgres'){
@@ -454,7 +458,7 @@ export async function runPrivate(){
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
       postgres_process:finalPostgresProcess,
       function_cost:finalFunctionStats,
-      relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:privateRestoreWorkTimeoutMs},
+      relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:restoreTimeoutMs},
       subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,catalog_privileges:catalogPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
