@@ -960,7 +960,7 @@
       {
         "path": "proposals/immutable-private-current-postgres-program.json",
         "mode": "100644",
-        "object_id": "e46b7f6869c3fe5c95ab300becac22315ba45d31"
+        "object_id": "f80b07552250f0395937c39d6eece4e94231f371"
       },
       {
         "path": "proposals/immutable-private-owner-context.sql",
@@ -2698,6 +2698,11 @@
         "object_id": "2c0ae1750b12d2d714d27fd3a7e7f687310b5351"
       },
       {
+        "path": "release/installed-source/20261120_typed_ordinary_set_insert_inverse.json",
+        "mode": "100644",
+        "object_id": "c5c76db45af9a1f25fd21647e10be1c7b799bd19"
+      },
+      {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
@@ -4115,7 +4120,7 @@
       {
         "path": "scripts/build-immutable-postgres-program.mjs",
         "mode": "100644",
-        "object_id": "debefeeec5c547bd178660e501e2fd74417489d7"
+        "object_id": "04d5de731fe561c736388dfbc98ea172ebca4737"
       },
       {
         "path": "scripts/build52-release-recovery-binding-database-tests.mjs",
@@ -6815,7 +6820,7 @@
       {
         "path": "scripts/immutable-current-bounded-stage-tests.mjs",
         "mode": "100644",
-        "object_id": "805063fd9b5f033f159e7869ac84884aa00fdf65"
+        "object_id": "98ee387c2e6e4bc13388e8cfe9ac891303d419eb"
       },
       {
         "path": "scripts/immutable-current-catalog-stability-source.mjs",
@@ -6900,12 +6905,12 @@
       {
         "path": "scripts/immutable-current-live-data-source.mjs",
         "mode": "100644",
-        "object_id": "a943760089c5c0494a92b88eeb218981f1c505d8"
+        "object_id": "4f460c92a68a7fe984bc0616531ddd63f097161c"
       },
       {
         "path": "scripts/immutable-current-live-data-tests.mjs",
         "mode": "100644",
-        "object_id": "55ded5ee06a87eec1162fdc1f4c1b3020a5827fb"
+        "object_id": "9f637958b048f56d0a923953731cf94976a81744"
       },
       {
         "path": "scripts/immutable-current-oc24-restore-source.mjs",
@@ -7055,7 +7060,7 @@
       {
         "path": "scripts/immutable-private-postgres-source.mjs",
         "mode": "100644",
-        "object_id": "41b1e87c7189a8789da3bc50e3d430ad279389b5"
+        "object_id": "df401baaa1acb629f13fef8c56ca5cf5f6742a65"
       },
       {
         "path": "scripts/immutable-private-source-acl.mjs",
@@ -14543,7 +14548,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2883,
+    "authority_path_count": 2884,
     "migration_path_count": 322,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
