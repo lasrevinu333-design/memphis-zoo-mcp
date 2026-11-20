@@ -5,6 +5,10 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const priorPin='952d9dabdcf4c219c513f0137340a37318376ac7fd46dec760f6addc29ae6bf6';
+const releaseHistoryBefore="   IF count_value<>1 THEN RAISE EXCEPTION 'Immutable import release bootstrap not exact'; END IF;";
+const releaseHistoryAfter=`   IF count_value=0 OR count_value<>(item->>'row_count')::bigint
+    OR (SELECT count(*) FROM public.release_deployment_manifest WHERE status='deployed')<>1
+    THEN RAISE EXCEPTION 'Immutable import release bootstrap not exact'; END IF;`;
 const sourcePin='d69019c73934ae977b06c4f1ae8eeadfb32b94d51a281cf7413599d2aa3a814d';
 const lockIdentity='public.static_weekly_v15_lock_recurring_mutation()';
 const existing=Object.freeze(['custodial_coverall.bind_manual_delivery_after_acceptance()',
@@ -203,6 +207,7 @@ export function extendCurrentRestoreGuardCohort(prior){
  const {guard,install,nextRecipes}=parts(prior),p=structuredClone(prior),byId=new Map(nextRecipes.map(r=>[r.identity,r]));
  p.recipes=p.recipes.map(r=>byId.get(r.identity)??r).concat(nextRecipes.filter(r=>!existing.includes(r.identity)));
  const s=p.statements[0];assert.equal(s.sql.split(anchor).length,2);s.sql=s.sql.replace(anchor,()=>guard+anchor);s.sourceSha256=sha(s.sql);
+ assert.equal(s.sql.split(releaseHistoryBefore).length,2);s.sql=s.sql.replace(releaseHistoryBefore,releaseHistoryAfter);s.sourceSha256=sha(s.sql);
  const last=p.statements.at(-1);last.sql+=install;last.sourceSha256=sha(last.sql);
  assert.deepEqual(removeCurrentRestoreGuardCohort(p),prior);return p;
 }
@@ -216,6 +221,7 @@ export function removeCurrentRestoreGuardCohort(program){
  }
  const {guard,install}=parts(p),s=p.statements[0],last=p.statements.at(-1);
  assert.equal(s.sql.split(guard).length,2);s.sql=s.sql.replace(guard,'');s.sourceSha256=sha(s.sql);
+ assert.equal(s.sql.split(releaseHistoryAfter).length,2);s.sql=s.sql.replace(releaseHistoryAfter,releaseHistoryBefore);s.sourceSha256=sha(s.sql);
  assert.ok(last.sql.endsWith(install));last.sql=last.sql.slice(0,-install.length);last.sourceSha256=sha(last.sql);
  assert.equal(sha(serial(p)),priorPin);return p;
 }

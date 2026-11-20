@@ -25,6 +25,20 @@ const profiles=[
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('fixed original-bootstrap P0001 labels survive the actual failure and receipt chain without private messages',()=>{
+ const source=text('./immutable-private-data-import.mjs'),a=source.indexOf('function fail('),z=source.indexOf('function closed(',a);assert.ok(a>0&&z>a);
+ const fail=new Function('types','privateFailures','recordImmutableFreshFailure','classifyImmutableImportPermission',source.slice(a,z)+'return fail;')(types,new WeakMap(),recordImmutableFreshFailure,classifyImmutableImportPermission);
+ for(const [message,label] of [['Immutable import release bootstrap not exact','IMPORT_RELEASE_HISTORY_BOOTSTRAP_DIFFERS'],['Immutable import exact columns changed','IMPORT_EXACT_COLUMNS_CHANGED'],['Immutable import exact recovery metadata unavailable','IMPORT_RECOVERY_METADATA_UNAVAILABLE']]){
+  let failure;try{fail(Object.assign(new Error(message),{code:'P0001',detail:'PRIVATE ROW AND KEY'}));}catch(e){failure=e;}
+  assert.equal(failure.sql_state,'P0001');assert.equal(readImmutableFreshFailure(failure).fresh_refusal,label);
+  const projected=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',failure);assert.equal(projected.fresh_refusal,label);
+  assert.deepEqual(projectPrivateRestoreDiagnostic(projected),projected);
+  const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[projected]})));
+  assert.equal(receipt.restore_diagnostics[0].fresh_refusal,label);assert.doesNotMatch(JSON.stringify(receipt),/PRIVATE ROW AND KEY|release bootstrap not exact/);
+ }
+ let unknown;try{fail(Object.assign(new Error('Immutable import release bootstrap not exact: PRIVATE ROW'),{code:'P0001'}));}catch(e){unknown=e;}
+ assert.equal(readImmutableFreshFailure(unknown).fresh_refusal,undefined);
+});
 test('unsupported INSERT guard diagnosis exports only catalog-bound schema and digests through the actual receipt chain',()=>{
  const detail={schema:'public',table:'private_table',trigger:'private_trigger',function_identity:'public.private_function()',tgtype:7,enabled:'O',owner:'postgres',function_sha256:'a'.repeat(64)};
  const tables=[{schema_name:'public',table_name:'private_table'}],cause=Object.assign(new Error('IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED'),{code:'55000',detail:JSON.stringify(detail)});

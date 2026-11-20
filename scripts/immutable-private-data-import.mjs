@@ -98,12 +98,30 @@ function fail(cause,code='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',fields) {
     // Fixed shipping guard vocabulary only. Never expose raw PG detail,
     // values, SQL or cause; this diagnostic cannot create retry authority.
     const message=Object.getOwnPropertyDescriptor(cause,'message');
-    if(error.sql_state==='55000'&&message&&Object.hasOwn(message,'value')&&[
+    if(['55000','P0001'].includes(error.sql_state)&&message&&Object.hasOwn(message,'value')&&[
       'Immutable import original global fence unavailable','Immutable import Source inventory epoch unavailable',
       'Immutable import Source inventory context changed','Immutable import Source inventory original changed',
       'Immutable import original context changed','Immutable import full target catalog mismatch',
       'Immutable private guard kind unsupported','IMMUTABLE_MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED',
       'IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED','Immutable import current Source registry unavailable or stale',
+      "Immutable import manifest field type invalid",
+      "Immutable import manifest original target absent",
+      "Immutable import member type invalid",
+      "Immutable import private source member invalid",
+      "Immutable import catalog shape invalid",
+      "Immutable import catalog invalid",
+      "Immutable import relation kind unsupported",
+      "Immutable import exact columns changed",
+      "Immutable import original primary key changed",
+      "Immutable import release bootstrap not exact",
+      "Immutable import current Source registry bootstrap not exact",
+      "Immutable import target DATA is not fresh",
+      "Immutable import private owner/schema boundary changed",
+      "Immutable import exact constraints or policy changed",
+      "Immutable import ALWAYS/source guard unqualified",
+      "Immutable import exact ALWAYS scope changed",
+      "Immutable import exact recovery metadata unavailable",
+      "Immutable import original target identity changed",
     ].includes(message.value))error.import_refusal=message.value;
   }
   const permission=classifyImmutableImportPermission(cause);

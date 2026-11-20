@@ -37,6 +37,11 @@ test('shipping bootstrap recipe projection accepts every current recipe and refu
  assert.throws(()=>run(altered,true,assert,closed,sha,bodyOf));
  assert.throws(()=>run(program.recipes,false,assert,closed,sha,bodyOf));
 });
+test('release bootstrap preserves all authenticated history while requiring one deployed release and the unchanged final identity',()=>{
+ const s=program.statements[0].sql;
+ for(const x of ["IF count_value=0 OR count_value<>(item->>'row_count')::bigint","(SELECT count(*) FROM public.release_deployment_manifest WHERE status='deployed')<>1","target->'release' IS DISTINCT FROM jsonb_build_array(original_manifest->'target_release_identity')"])assert.ok(s.includes(x),x);
+ const changed=structuredClone(program);changed.statements[0].sql=changed.statements[0].sql.replace("WHERE status='deployed')<>1","WHERE status='deployed')<>2");assert.throws(()=>removeCurrentRestoreGuardCohort(changed));
+});
 for(const id of sources.filter(f=>f.identity!=='public.static_weekly_v15_lock_recurring_mutation()').map(f=>f.identity))test('only exact archived INSERT branch for '+id,()=>{
  const r=program.recipes.find(r=>r.identity===id),a=r.after.indexOf('-- Exact authenticated archived INSERT only.'),z=r.after.indexOf('  END IF;\n',a)+'  END IF;\n'.length;assert.ok(a>0&&z>a);
  const branch=r.after.slice(a,z);

@@ -57,7 +57,26 @@ const importRefusals=new Map([
  ['IMMUTABLE_MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED','MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED'],
  ['IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED','MIXED_INSERT_GUARD_UNSUPPORTED'],
  ['Immutable import current Source registry unavailable or stale','CURRENT_SOURCE_REGISTRY_STALE'],
+ ["Immutable import manifest field type invalid","IMPORT_MANIFEST_FIELD_TYPE_INVALID"],
+ ["Immutable import manifest original target absent","IMPORT_MANIFEST_TARGET_ABSENT"],
+ ["Immutable import member type invalid","IMPORT_MEMBER_TYPE_INVALID"],
+ ["Immutable import private source member invalid","IMPORT_PRIVATE_SOURCE_MEMBER_INVALID"],
+ ["Immutable import catalog shape invalid","IMPORT_CATALOG_SHAPE_INVALID"],
+ ["Immutable import catalog invalid","IMPORT_CATALOG_INVALID"],
+ ["Immutable import relation kind unsupported","IMPORT_RELATION_KIND_UNSUPPORTED"],
+ ["Immutable import exact columns changed","IMPORT_EXACT_COLUMNS_CHANGED"],
+ ["Immutable import original primary key changed","IMPORT_PRIMARY_KEY_CHANGED"],
+ ["Immutable import release bootstrap not exact","IMPORT_RELEASE_HISTORY_BOOTSTRAP_DIFFERS"],
+ ["Immutable import current Source registry bootstrap not exact","IMPORT_REGISTRY_BOOTSTRAP_DIFFERS"],
+ ["Immutable import target DATA is not fresh","IMPORT_TARGET_DATA_NOT_FRESH"],
+ ["Immutable import private owner/schema boundary changed","IMPORT_PRIVATE_OWNER_SCHEMA_CHANGED"],
+ ["Immutable import exact constraints or policy changed","IMPORT_CONSTRAINTS_POLICY_CHANGED"],
+ ["Immutable import ALWAYS/source guard unqualified","IMPORT_ALWAYS_GUARD_UNQUALIFIED"],
+ ["Immutable import exact ALWAYS scope changed","IMPORT_ALWAYS_SCOPE_CHANGED"],
+ ["Immutable import exact recovery metadata unavailable","IMPORT_RECOVERY_METADATA_UNAVAILABLE"],
+ ["Immutable import original target identity changed","IMPORT_ORIGINAL_TARGET_IDENTITY_CHANGED"],
 ]);
+for(const label of importRefusals.values())enums.fresh_refusal.add(label);
 const own=(value,key)=>{
  if(!value||typeof value!=='object'||types.isProxy(value))return undefined;
  const d=Object.getOwnPropertyDescriptor(value,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;
@@ -143,7 +162,7 @@ export function readImmutableFreshFailure(error){
  const saved=error&&typeof error==='object'&&!types.isProxy(error)?failures.get(error):null;
  const code=own(error,'code'),message=own(error,'message');
  const refusal=(code==='55000'||code==='42501')&&typeof message==='string'?fixedRefusals.get(message):undefined;
- const importRefusal=code==='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'&&own(error,'sql_state')==='55000'
+ const importRefusal=code==='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'&&['55000','P0001'].includes(own(error,'sql_state'))
   ?importRefusals.get(own(error,'import_refusal')):undefined;
  return Object.freeze({...saved,...(refusal||importRefusal?{fresh_refusal:refusal??importRefusal}:{})});
 }
