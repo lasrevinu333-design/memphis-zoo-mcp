@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {currentRestoreGuardCohortSources,extendCurrentRestoreGuardCohort,removeCurrentRestoreGuardCohort,deferredOriginalMatcherSql} from './immutable-current-restore-guard-cohort.mjs';
+import {currentRestoreGuardCohortSources,currentOriginalStorageGuards,extendCurrentRestoreGuardCohort,removeCurrentRestoreGuardCohort,deferredOriginalMatcherSql} from './immutable-current-restore-guard-cohort.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
 const sources=currentRestoreGuardCohortSources();
@@ -41,6 +41,18 @@ test('release bootstrap preserves all authenticated history while requiring one 
  const s=program.statements[0].sql;
  for(const x of ["IF count_value=0 OR count_value<>(item->>'row_count')::bigint","(SELECT count(*) FROM public.release_deployment_manifest WHERE status='deployed')<>1","target->'release' IS DISTINCT FROM jsonb_build_array(original_manifest->'target_release_identity')"])assert.ok(s.includes(x),x);
  const changed=structuredClone(program);changed.statements[0].sql=changed.statements[0].sql.replace("WHERE status='deployed')<>1","WHERE status='deployed')<>2");assert.throws(()=>removeCurrentRestoreGuardCohort(changed));
+});
+test('vendor bucket validators execute unchanged with exact owner, service-role argument and trigger columns',()=>{
+ const rows=currentOriginalStorageGuards();assert.throws(()=>currentOriginalStorageGuards('caller'));
+ assert.equal(rows.length,2);assert.deepEqual(rows.map(g=>g.security_definer),[false,true]);
+ assert.equal(rows[0].args_hex,'736572766963655f726f6c6500');assert.equal(rows[0].nargs,1);
+ assert.deepEqual(rows[1].columns,['lifecycle_configuration_generation']);
+ const sql=program.statements[0].sql,a=sql.indexOf('     -- Two exact unchanged official Storage bucket INSERT consumers.');assert.ok(a>0);
+ const z=sql.indexOf('     -- Original taxonomy checks',a);assert.ok(z>a);const clause=sql.slice(a,z);
+ for(const g of rows){assert.equal(sha(g.definition),g.definition_sha256);assert.ok(clause.includes(g.definition_sha256));assert.ok(!program.recipes.some(r=>r.identity===g.function));}
+ for(const x of ["rolname='supabase_storage_admin'","t.tgnargs=(g->>'nargs')::smallint AND encode(t.tgargs,'hex')=g->>'args_hex'","guard_function.prosecdef=(g->>'security_definer')::boolean","t.tgtype=(g->>'type')::smallint","t.tgqual IS NULL"])assert.ok(clause.includes(x),x);
+ assert.doesNotMatch(clause,/\b(?:ALTER|CREATE|GRANT|REVOKE|DISABLE|INSERT INTO|SET ROLE)\b/);
+ const changed=structuredClone(program);changed.statements[0].sql=changed.statements[0].sql.replace("rolname='supabase_storage_admin'","rolname='postgres'");assert.throws(()=>removeCurrentRestoreGuardCohort(changed));
 });
 for(const id of sources.filter(f=>f.identity!=='public.static_weekly_v15_lock_recurring_mutation()').map(f=>f.identity))test('only exact archived INSERT branch for '+id,()=>{
  const r=program.recipes.find(r=>r.identity===id),a=r.after.indexOf('-- Exact authenticated archived INSERT only.'),z=r.after.indexOf('  END IF;\n',a)+'  END IF;\n'.length;assert.ok(a>0&&z>a);

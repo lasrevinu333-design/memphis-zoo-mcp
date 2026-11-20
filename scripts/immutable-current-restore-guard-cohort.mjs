@@ -38,6 +38,36 @@ export function currentRestoreGuardCohortSources(){
  return fs;
 }
 const deferredTables=Object.freeze(['static_weekly_approved_initial_confirmations','weekly_schedule_lunch_documents']);
+export function currentOriginalStorageGuards(){
+ assert.equal(arguments.length,0);
+ const raw=readFileSync(new URL('../release/installed-source/20261120_storage_original_insert_guards.json',import.meta.url),'utf8');
+ assert.equal(sha(raw),'65aaef32278f24ea2c86896d984f3bf5b9add61fbd60c92e37709fda60b57285');
+ const source=JSON.parse(raw);assert.equal(source.format,'custodial.original-storage-insert-guards.v1');assert.equal(source.guards.length,2);
+ assert.deepEqual(source.guards.map(g=>g.trigger),['protect_bucket_control_insert','wake_lifecycle_on_policy_write']);
+ for(const g of source.guards){assert.equal(g.schema,'storage');assert.equal(g.table,'buckets');assert.equal(g.owner,'supabase_storage_admin');assert.equal(sha(g.definition),g.definition_sha256);}
+ return source.guards;
+}
+function originalStorageGuardClause(){
+ // Both vendor functions still execute unchanged, including service-role
+ // checks and the lifecycle wake function's original NULL-policy no-op.
+ const rows=currentOriginalStorageGuards().map(({definition,...g})=>g);
+ return `     -- Two exact unchanged official Storage bucket INSERT consumers.
+     AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements($current_original_storage_guards$${JSON.stringify(rows)}$current_original_storage_guards$::jsonb) g
+      WHERE current_user=session_user AND session_user='postgres'
+       AND guard_relation_namespace.nspname=g->>'schema' AND guard_relation.relname=g->>'table'
+       AND t.tgname=g->>'trigger' AND t.tgfoid=to_regprocedure(g->>'function')
+       AND t.tgtype=(g->>'type')::smallint AND t.tgenabled::text=g->>'enabled'
+       AND NOT t.tgisinternal AND t.tgconstraint=0 AND NOT t.tgdeferrable AND NOT t.tginitdeferred
+       AND t.tgqual IS NULL AND t.tgnargs=(g->>'nargs')::smallint AND encode(t.tgargs,'hex')=g->>'args_hex'
+       AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL
+       AND coalesce((SELECT jsonb_agg(a.attname ORDER BY cols.ord) FROM unnest(t.tgattr::smallint[]) WITH ORDINALITY cols(attnum,ord)
+        JOIN pg_catalog.pg_attribute a ON a.attrelid=t.tgrelid AND a.attnum=cols.attnum AND NOT a.attisdropped),'[]'::jsonb)=g->'columns'
+       AND guard_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='supabase_storage_admin')
+       AND guard_function.prosecdef=(g->>'security_definer')::boolean
+       AND guard_function.prokind='f' AND guard_function.pronargs=0 AND guard_function.prorettype='pg_catalog.trigger'::regtype
+       AND public.static_weekly_digest_text(pg_get_functiondef(guard_function.oid))=g->>'definition_sha256')
+`;
+}
 function insertBranch(f){
  const rows=f.triggers.filter(t=>(t.type&4)!==0);assert.ok(rows.length>0);
  const cases=rows.map(t=>`(TG_TABLE_SCHEMA=${sqlString(t.schema)} AND TG_TABLE_NAME=${sqlString(t.table)}
@@ -154,7 +184,7 @@ function parts(prior){
        AND (g->>'registry_identity' IS NULL OR EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory ri
         WHERE ri.object_kind='function' AND ri.object_identity=g->>'registry_identity'
          AND ri.definition_sql=pg_get_functiondef(guard_function.oid) AND ri.definition_sha256=g->>'definition_sha256')))
-`;
+`+originalStorageGuardClause();
  const installation=nextRecipes.map(r=>{
   const f=sources.find(f=>f.identity===r.identity),before=old.get(r.identity)?.after??r.before;
   return {identity:r.identity,install_before:before,install_before_body_sha256:sha(body(before)),after:r.after,after_body_sha256:r.afterBodyHash,
