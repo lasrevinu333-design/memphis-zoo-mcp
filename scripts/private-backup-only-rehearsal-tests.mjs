@@ -729,7 +729,7 @@ test('production early private setup refuses with a marked phase and no raw exce
 
 test('actual connect and session-lock boundaries retain distinct safe failure phases',async()=>{
   const source=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
-  const start=source.indexOf("  privateRestorePhase('CONNECT_NATIVE_CLIENT');"),end=source.indexOf('try {\n  if (freshPrivateDatabase)',start);
+  const start=source.indexOf("  privateRestorePhase('CONNECT_NATIVE_CLIENT');"),end=source.indexOf('try {\n  requireRestoreIntentFresh();\n  if (freshPrivateDatabase)',start);
   assert.ok(start>0&&end>start);
   const factory=new Function('ports',`const {db,privateRestorePhase}=ports;let restoreSessionLockHeld=false;return async()=>{${source.slice(start,end)}return restoreSessionLockHeld;};`);
   for(const failConnect of [true,false]){

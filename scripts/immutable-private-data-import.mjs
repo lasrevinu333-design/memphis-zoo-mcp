@@ -379,6 +379,47 @@ async function inactiveOriginalForeignKeys(verifiedArchive,original,table,foreig
   }
 }
 
+// Collapse only two fixed active original SCCs. This is closed routing DATA,
+// never permission to defer constraints or execute caller-selected SQL.
+function fixedOriginalCohortOrder(originals,parents,relations){
+  const allowed=[
+    ['custodial_release_canary_controls','custodial_release_canary_transport_probes'],
+    ['ops_manager_enrollment_codes','ops_manager_shared_enrollment_windows','ops_manager_trusted_devices']
+  ].map(names=>names.map(name=>JSON.stringify(['public',name])));
+  const index=new Map(),low=new Map(),pending=[],onStack=new Set(),components=[];let ordinal=0;
+  function visit(key){
+    index.set(key,ordinal);low.set(key,ordinal++);pending.push(key);onStack.add(key);
+    for(const parent of [...parents.get(key)].sort()){
+      if(!originals.has(parent))fail();
+      if(!index.has(parent)){visit(parent);low.set(key,Math.min(low.get(key),low.get(parent)));}
+      else if(onStack.has(parent))low.set(key,Math.min(low.get(key),index.get(parent)));
+    }
+    if(low.get(key)===index.get(key)){
+      const members=[];let member;do{member=pending.pop();onStack.delete(member);members.push(member);}while(member!==key);
+      members.sort();if(members.length>1&&!allowed.some(keys=>isDeepStrictEqual(keys,members)))fail();
+      components.push(members);
+    }
+  }
+  for(const key of [...originals.keys()].sort())if(!index.has(key))visit(key);
+  const owner=new Map(),groups=new Map(),byId=new Map(),dependencies=new Map(),children=new Map();
+  for(const members of components){
+    const id=members[0];byId.set(id,members);dependencies.set(id,new Set());children.set(id,new Set());
+    for(const key of members)owner.set(key,id);
+    if(members.length>1){
+      const tables=Object.freeze(members.map(key=>originals.get(key)));
+      if(tables.some(table=>table.row_count==='0'))fail();
+      const group={members:tables,anchorOid:relations.get(id).oid,next:0,busy:false,refused:false,complete:false};
+      for(const key of members)groups.set(key,group);
+    }
+  }
+  for(const [key,edges]of parents)for(const parent of edges){const childId=owner.get(key),parentId=owner.get(parent);
+    if(childId!==parentId){dependencies.get(childId).add(parentId);children.get(parentId).add(childId);}}
+  const ready=[...byId.keys()].filter(id=>dependencies.get(id).size===0).sort(),ordered=[];
+  while(ready.length){const id=ready.shift();ordered.push(...byId.get(id).map(key=>originals.get(key)));
+    for(const child of children.get(id)){dependencies.get(child).delete(id);if(!dependencies.get(child).size){ready.push(child);ready.sort();}}}
+  if(ordered.length!==originals.size)fail();return {ordered,groups};
+}
+
 // The owner context has already locked and pinned ALL selected relations and
 // their constraint definitions. Catalog order is not an INSERT dependency
 // order. Observe actual target FKs without deferring/disabling their guards.
@@ -493,20 +534,13 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   }
   await assertContext();sameSource(verifiedArchive,original);
   importValidation='PLANNER_TOPOLOGY';
-  const ready=[...parents.keys()].filter(key=>parents.get(key).size===0).sort(),ordered=[];
-  while(ready.length){
-    const key=ready.shift();ordered.push(originals.get(key));
-    for(const child of children.get(key)){parents.get(child).delete(key);if(parents.get(child).size===0){ready.push(child);ready.sort();}}
-  }
-  // Active cross-table cycles remain unsupported, including deferrable cycles.
-  // Never SET CONSTRAINTS, sort row IDs or silently omit a selected table.
-  if(ordered.length!==selected.length)fail();
+  const {ordered,groups:cohortGroups}=fixedOriginalCohortOrder(originals,parents,relations);
   // Reuse the existing EOF-gated staged consumer only when batching cannot
   // change noninternal INSERT-trigger business effects. Self-FK routing is
   // unchanged. Fixed bootstrap metadata is always consumed without DATA SQL.
   const setTables=new Set(),setCandidates=ordered.filter(table=>
     ['public','auth','storage'].includes(table.schema_name)&&BigInt(table.row_count)>1n
-    &&!selfTables.has(identity(table.schema_name,table.table_name))
+    &&!selfTables.has(identity(table.schema_name,table.table_name))&&!cohortGroups.has(identity(table.schema_name,table.table_name))
     &&!(table.schema_name==='public'&&['release_deployment_manifest','custodial_release_authority_restore_inventory'].includes(table.table_name)));
   importValidation='PLANNER_BATCH_CATALOG';
   if(setCandidates.length){
@@ -563,9 +597,9 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   }
   return Object.freeze(ordered.filter(table=>table.schema_name!=='custodial_release_identity').map(table=>{
     const key=identity(table.schema_name,table.table_name);
-    if(!selfTables.has(key)&&!setTables.has(key))return table;
+    if(!selfTables.has(key)&&!setTables.has(key)&&!cohortGroups.has(key))return table;
     const selected=Object.freeze({schema_name:table.schema_name,table_name:table.table_name});
-    selfOrdinaryConsumers.set(selected,Object.freeze({verifiedArchive,original,table}));return selected;
+    selfOrdinaryConsumers.set(selected,Object.freeze({verifiedArchive,original,table,...(cohortGroups.has(key)?{cohort:cohortGroups.get(key)}:{})}));return selected;
   }));
   } catch(error){recordImmutableFreshFailure(error,{import_validation:importValidation});throw error;}
 }
@@ -573,10 +607,14 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
 // Internal DATA consumer, not a target admission or alternate client port.
 // The only shipping caller supplies its original pg.Client/context below.
 async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext) {
-  const staged=selfOrdinaryConsumers.get(selected);
+  const staged=selfOrdinaryConsumers.get(selected),cohort=staged?.cohort;
   if(staged){
     selfOrdinaryConsumers.delete(selected); // Includes failed/ambiguous consumption; no retry.
-    if(staged.verifiedArchive!==verifiedArchive||staged.original!==original)fail();
+    if(cohort){
+      if(cohort.refused||cohort.complete||cohort.busy||cohort.members[cohort.next]!==staged.table){cohort.refused=true;fail();}
+      cohort.busy=true; // Released only after this member's cleanup succeeds.
+    }
+    if(staged.verifiedArchive!==verifiedArchive||staged.original!==original){if(cohort)cohort.refused=true;fail();}
     selected=staged.table;
   }
   sameSource(verifiedArchive,original);
@@ -654,12 +692,20 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
     if(!sourceOnlyEmpty){await assertContext();sameSource(verifiedArchive,original);}
     if(staged&&!bootstrap){
       // Complete authenticated original EOF/digest/count and current context
-      // precede the ONE table INSERT. A lost result is UNKNOWN, never replayed.
-      await mutate('select custodial_dr.insert_staged_immutable_ordinary_table($1::text,$2::text,$3::jsonb) as context',[table.schema_name,table.table_name]);
+      // precede the ONE table or complete fixed-cohort INSERT. A lost result
+      // is UNKNOWN; no member resumes after a refusal or failed cleanup.
+      if(cohort){
+        if(cohort.refused||cohort.members[cohort.next]!==selected)fail();
+        cohort.next++;
+        if(cohort.next===cohort.members.length){
+          cohort.complete=true; // Includes SQL refusal and an ambiguous result.
+          await mutate('select custodial_dr.insert_staged_immutable_ordinary_cohort($1::oid,$2::jsonb) as context',[cohort.anchorOid]);
+        }
+      }else await mutate('select custodial_dr.insert_staged_immutable_ordinary_table($1::text,$2::text,$3::jsonb) as context',[table.schema_name,table.table_name]);
       sameSource(verifiedArchive,original);
     }
     return count;
-  }catch(error){firstFailure=error;throw error;}
+  }catch(error){firstFailure=error;if(cohort)cohort.refused=true;throw error;}
   finally{if(batchInput)batchInput.destroy();else if(input)input.close();data.stream.destroy();guard?.destroy();
     if(sourceOnlyEmpty||batchInput){
       // Lost source custody refuses success, but MUST NOT skip either cleanup
@@ -679,7 +725,9 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
       if(settled)await settled.catch(()=>{});
       try{await data.close();}catch(cleanup){if(firstFailure)throw new AggregateError([firstFailure,cleanup],'Mixed original source cleanup failed',{cause:firstFailure});throw cleanup;}
       if(!firstFailure)sameSource(verifiedArchive,original);
-    }}
+    }
+    if(cohort&&!firstFailure)cohort.busy=false;
+  }
 }
 
 // Shipping fresh-target composition, not an alternate importer or a recovery

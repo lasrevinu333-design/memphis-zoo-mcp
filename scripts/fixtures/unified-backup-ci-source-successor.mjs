@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const raw=readFileSync(new URL('./unified-backup-ci-source-successor.json',import.meta.url));
-assert.equal(sha(raw),'c64820ab269016dba9a54f5b360c27b5fe4bae03cdd9418c7a73cbe645520787');
+assert.equal(sha(raw),'8bc6c02a4379eee4d47c498bb00f448831114fed8d99e55e39ccd614596a790c');
 const doc=JSON.parse(raw);
 assert.equal(doc.historical_pins_rewritten,false);assert.equal(doc.SQL_executed,false);assert.equal(doc.release_admission,false);
 export function restoreUnifiedBackupPackage(bytes){

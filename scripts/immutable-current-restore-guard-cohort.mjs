@@ -1,3 +1,4 @@
+import {removeCurrentCyclicCohorts} from './immutable-current-cyclic-cohort-source.mjs';
 // Closed offline composition for the remaining original INSERT consumers.
 // No runtime caller selects a function, table, recipe, owner or replacement.
 import assert from 'node:assert/strict';
@@ -242,7 +243,7 @@ export function extendCurrentRestoreGuardCohort(prior){
  assert.deepEqual(removeCurrentRestoreGuardCohort(p),prior);return p;
 }
 export function removeCurrentRestoreGuardCohort(program){
- assert.equal(arguments.length,1);const p=structuredClone(program),sources=currentRestoreGuardCohortSources();
+ assert.equal(arguments.length,1);const p=removeCurrentCyclicCohorts(program),sources=currentRestoreGuardCohortSources();
  const added=sources.filter(f=>f.identity!==lockIdentity&&!existing.includes(f.identity));assert.equal(added.length,19);
  assert.deepEqual(p.recipes.slice(-19),added.map(f=>makeRecipe(f)));p.recipes.splice(-19);
  for(const id of existing){

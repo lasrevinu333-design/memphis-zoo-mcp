@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Retained UNIT archive + actual shipping Source composition, never an
 // installer, SQL fixture, signer, target observation or restore authority.
+import * as sourceFixtureDiagnostics from './immutable-private-stage-diagnostic.mjs';
+import {postgresTextColumnsLineEncoding as fixtureTextEncoding} from './disaster-recovery-archive.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {openSync,closeSync,readFileSync,fstatSync,lstatSync,realpathSync,existsSync,constants} from 'node:fs';
@@ -10,6 +12,19 @@ import {types} from 'node:util';
 import {materializeVerifiedArchive,readVerifiedArchiveSourceBinding,decodeRestoreTableRowLine} from './disaster-recovery-archive.mjs';
 import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource,
  readVerifiedImmutableBootstrapAcls,readVerifiedImmutableBootstrapSourceRows} from './immutable-private-source-bootstrap.mjs';
+
+// Extracted historical fixture ports retain the shipping closed observers.
+// These supply no native Client, archive brand, owner or mutation authority.
+function compileObservedSourceFixture(...parameters){
+ const body=parameters.pop(),bound=new Set(parameters);
+ for(const match of body.matchAll(/const\s+\{([^}]+)\}\s*=\s*(?:ports|p)\s*;/g))for(const name of match[1].split(','))bound.add(name.trim());
+ const values={recordImmutableFreshFailure:sourceFixtureDiagnostics.recordImmutableFreshFailure,
+  classifyImmutableImportPermission:sourceFixtureDiagnostics.classifyImmutableImportPermission,
+  classifyImmutableImportPermissionContext:sourceFixtureDiagnostics.classifyImmutableImportPermissionContext,
+  classifyImmutableImportGuard:sourceFixtureDiagnostics.classifyImmutableImportGuard,postgresTextColumnsLineEncoding:fixtureTextEncoding};
+ const names=Object.keys(values).filter(name=>!bound.has(name)),compiled=new Function(...names,...parameters,body);
+ return(...args)=>compiled(...names.map(name=>values[name]),...args);
+}
 
 // Only NEW direct refusal checks for the private post-authority fence entry.
 // No archive/client connection/SQL/transaction/HMAC or positive ancestry is
@@ -382,14 +397,14 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
  const targetStart=text.indexOf('const committedAuthorityTargets='),targetEnd=text.indexOf('\nfunction currentCommittedAuthorityData',targetStart);
  const imageStart=text.indexOf('function committedAuthorityImageSql('),imageEnd=text.indexOf('\n// Inspect only THIS module',imageStart);
  const targetCode=text.slice(targetStart,targetEnd),imageCode=text.slice(imageStart,imageEnd);
- const model=new Function('fail','postgresJsonTextLineEncoding','postgresTextColumnsLineEncoding',targetCode+'\n'+imageCode+
+ const model=compileObservedSourceFixture('fail','postgresJsonTextLineEncoding','postgresTextColumnsLineEncoding',targetCode+'\n'+imageCode+
   '\nreturn {targets:committedAuthorityTargets,sql:committedAuthorityImageSql};')(()=>{throw Error('UNIT encoding/target refused');},v1,v2);
  if(want('guards')){
   for(const marker of ['  // Carry the importer\'s supported private-table/encoding boundary BEFORE','  const privateNames=']){
    const start=text.indexOf(marker),at=text.indexOf('  if(',start),end=text.indexOf('fail();',at)+'fail();'.length;
    const fragment=marker.startsWith('  const privateNames=')?text.slice(start,end):text.slice(at,end);
    assert.ok(at>start&&end>at);
-   const check=new Function('original','identities','postgresJsonTextLineEncoding','postgresTextColumnsLineEncoding','isDeepStrictEqual','fail',fragment);
+   const check=compileObservedSourceFixture('original','identities','postgresJsonTextLineEncoding','postgresTextColumnsLineEncoding','isDeepStrictEqual','fail',fragment);
    for(const encoding of [v1,v2])check({selection:{privateTables:[{table_name:'employee_message_original_outcomes'},{table_name:'group_original_creations'}]},
     privateDataMembers:[{data_encoding:encoding},{data_encoding:encoding}]},['employee_message_original_outcomes','group_original_creations'],v1,v2,isDeepStrictEqual,()=>{throw Error('UNIT unsupported');});cases++;
    for(const encoding of [undefined,null,'',v2+'\n','postgres-text-columns-line.v3']){
@@ -406,7 +421,7 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
  }
  if(want('fk')){
   const start=text.indexOf('async function inactiveOriginalForeignKeys('),end=text.indexOf('// The owner context has already locked',start);
-  const build=new Function('p','types','isDeepStrictEqual',`const {sameSource,openVerifiedRestoreTableData,createRestoreRowUtf8Guard,
+  const build=compileObservedSourceFixture('p','types','isDeepStrictEqual',`const {sameSource,openVerifiedRestoreTableData,createRestoreRowUtf8Guard,
    createRestoreRowLineBatchDecoder,decodeRestoreTableRowLine,pipeline,fail,postgresTextColumnsLineEncoding}=p;
    ${closedCode}\n${text.slice(start,end)}\nreturn inactiveOriginalForeignKeys;`);
   for(const option of [{encoding:v1},{encoding:v2},{encoding:v2,active:'1'},{encoding:v2,withdraw:true},
@@ -437,12 +452,24 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
   groups++;
  }
  const readbackCode=src=>src.slice(src.indexOf('export async function compareVerifiedImmutablePrivateTableData(options) {')).replaceAll('export async function ','async function ');
- const compile=(src,p)=>new Function('p','types','isDeepStrictEqual',`const {Client,query,readVerifiedPrivateImportSource,sameSource,fail,
+ const nativeCode=text.slice(text.indexOf('function nativeData(object,key){'),text.indexOf('// Capture actual original transport objects'));
+ const helperCode=text.slice(text.indexOf('const immutableTextHelperSourceSql = '),text.indexOf('// Read-only DATA comparison, never a restore/COMMIT/admission capability.'));
+ const {immutableTextCodecSourceHashes}=await import('./immutable-text-codec-profile.mjs');
+ const fixtureOwner=Object.freeze({id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'});
+ const baseSql=readFileSync(new URL('../proposals/immutable-private-owner-context.sql',import.meta.url),'utf8');
+ const helperRows=()=>['immutable_import_text_projection','immutable_import_text_record'].map((name,i)=>{
+  const start=baseSql.indexOf('CREATE FUNCTION custodial_dr.'+name+'('),at=baseSql.indexOf('AS $fn$',start),end=baseSql.indexOf('END $fn$;',at);
+  assert.ok(start>=0&&at>start&&end>at);const body=baseSql.slice(at+'AS $fn$'.length,end+'END '.length);
+  assert.equal(createHash('sha256').update(body).digest('hex'),immutableTextCodecSourceHashes(fixtureOwner)[i?'record':'projection']);
+  return {oid:String(501+i),name,arguments:i?'2283 25':'2283',returns:i?'2283':'25',argument_names:i?['prototype','original_row_utf8']:['original_record'],body,definition:baseSql.slice(start,end+'END $fn$;'.length),
+   config:['search_path=pg_catalog','extra_float_digits=3','datestyle=ISO, YMD','timezone=UTC','intervalstyle=postgres','bytea_output=hex'],source_attributes:'true'};
+ });
+ const compile=(src,p)=>compileObservedSourceFixture('p','types','isDeepStrictEqual','createHash',`const {Client,query,readVerifiedPrivateImportSource,readVerifiedImmutableArchiveOwnerProfile,immutableTextCodecSourceHashes,sameSource,fail,
   readVerifiedImmutableBootstrapInventory,deriveOriginalAuthEnumDescriptors,openVerifiedRestoreTableData,decodeRestoreTableRowLine,
   createRestoreRowUtf8Guard,createRestoreRowLineBatchDecoder,createInterface,pipeline,prepareVerifiedImmutableBootstrapSource,
   readVerifiedImmutableBootstrapSourceRows,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding}=p;
   const committedAuthorityDataReads=new WeakMap(),committedAuthorityOrdinaryReads=new WeakSet();
-  ${closedCode}\n${readbackCode(src)}\nreturn {compareVerifiedImmutablePrivateTableData,compareVerifiedImmutableOrdinaryTableData};`)(p,types,isDeepStrictEqual);
+  ${nativeCode}\n${closedCode}\n${src.includes('const immutableTextHelperSourceSql = ')?helperCode:''}\n${readbackCode(src)}\nreturn {compareVerifiedImmutablePrivateTableData,compareVerifiedImmutableOrdinaryTableData};`)(p,types,isDeepStrictEqual,createHash);
  const column=(name,data_type='text')=>({name,data_type,generated:'',identity:''});
  async function runReadback(encoding,option={},src=text){
   const fail=()=>{throw Error('UNIT readback refusal');};let live=true,opens=0,closes=0,contexts=0;
@@ -475,7 +502,8 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
   const query=async function(sql,args=[]){
    source();
    if(sql.includes(') context')){contexts++;if(option.changedContext&&contexts>2)return result([{context:{...contextBase,backend_pid:22}}]);
-    return result([{context:sql.includes("'timezone'")?{...contextBase,timezone:'UTC',date_style:'ISO, YMD',interval_style:'postgres'}:contextBase}]);}
+    const current=sql.includes("'control_owner'")?{...contextBase,control_owner:'supabase_admin'}:contextBase;return result([{context:sql.includes("'timezone'")?{...current,timezone:'UTC',date_style:'ISO, YMD',interval_style:'postgres'}:current}]);}
+   if(sql.includes('source_attributes'))return result(helperRows());
    if(sql.includes('inheritance_count')){
     const selected=sql.includes("n.nspname='custodial_release_identity'")?tables.slice(3):tables.slice(0,3);
     return result(selected.map((t,i)=>({schema_name:t.schema_name,table_name:t.table_name,relation_oid:String((t.schema_name==='custodial_release_identity'?200:100)+i),
@@ -489,7 +517,7 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
    return result([{original_rows:'1',current_rows:'1',missing_rows:option.different?'1':'0',extra_rows:option.different?'1':'0'}]);
   };
   ComponentClient.prototype.query=query;
-  const p={Client:ComponentClient,query,readVerifiedPrivateImportSource:()=>original,sameSource:source,fail,
+  const p={Client:ComponentClient,query,readVerifiedPrivateImportSource:()=>original,readVerifiedImmutableArchiveOwnerProfile:()=>fixtureOwner,immutableTextCodecSourceHashes,sameSource:source,fail,
    readVerifiedImmutableBootstrapInventory:()=>({sourceBinding:binding,inventory:{'inventory/application-schema.sql':'UNIT unchanged enum dependency'}}),
    deriveOriginalAuthEnumDescriptors:()=>[],postgresJsonTextLineEncoding:v1,postgresTextColumnsLineEncoding:v2,pipeline,createInterface,
    decodeRestoreTableRowLine:archiveApi.decodeRestoreTableRowLine,createRestoreRowUtf8Guard:archiveApi.createRestoreRowUtf8Guard,
@@ -526,7 +554,7 @@ if(process.argv.includes('--immutable-text-columns-import-only')){
  }
  if(want('authority')){
   const oldAt=before.indexOf('function committedAuthorityImageSql('),oldEnd=before.indexOf('\n// Inspect only THIS module',oldAt);
-  const old=new Function('fail',targetCode+'\n'+before.slice(oldAt,oldEnd)+'\nreturn {targets:committedAuthorityTargets,sql:committedAuthorityImageSql};')(()=>{throw Error('UNIT old target refused');});
+  const old=compileObservedSourceFixture('fail',targetCode+'\n'+before.slice(oldAt,oldEnd)+'\nreturn {targets:committedAuthorityTargets,sql:committedAuthorityImageSql};')(()=>{throw Error('UNIT old target refused');});
   for(let i=0;i<model.targets.length;i++){
    const target=model.targets[i],sql=model.sql(target,v2);
    assert.equal(model.sql(target,v1),old.sql(old.targets[i]));
@@ -571,7 +599,7 @@ if(process.argv.includes('--immutable-safe-ordinary-set-only')){
  const start=text.indexOf('async function inactiveOriginalForeignKeys('),end=text.indexOf('// Shipping fresh-target composition',start);
  assert.ok(start>0&&end>start);
  const component=text.slice(start,end);
- const build=new Function('ports','types','isDeepStrictEqual',`const {sameSource,openVerifiedRestoreTableData,
+ const build=compileObservedSourceFixture('ports','types','isDeepStrictEqual',`const {sameSource,openVerifiedRestoreTableData,
   decodeRestoreTableRowLine,createRestoreRowUtf8Guard,createRestoreRowLineBatchDecoder,pipeline,createInterface,fail}=ports;
   const selfOrdinaryConsumers=new WeakMap();${closed}\n${component}\nreturn {planVerifiedOrdinaryTables,consumeVerifiedOrdinaryTable};`);
  const raw='{"id":9007199254740993,"payload":{"fraction":0.1234567890123456789012345}}';
@@ -664,7 +692,7 @@ if(process.argv.includes('--immutable-safe-ordinary-set-only')){
   const before=readFileSync('/home/eric/Documents/Codex/2026-10-09/task-9/immutable-safe-ordinary-set-product-20261018-v1/before/scripts/immutable-private-data-import.mjs','utf8');
   assert.equal(createHash('sha256').update(before).digest('hex'),'679bc8cdf5270b1cbbe2ffb565c4ced56050cb1d95079aa749652709835c48ab');
   const oldComponent=before.slice(before.indexOf('async function inactiveOriginalForeignKeys('),before.indexOf('// Internal DATA consumer'));
-  const oldPlan=new Function('ports','types','isDeepStrictEqual',`const {sameSource,fail}=ports;const selfOrdinaryConsumers=new WeakMap();${closed}\n${oldComponent}\nreturn planVerifiedOrdinaryTables;`)
+  const oldPlan=compileObservedSourceFixture('ports','types','isDeepStrictEqual',`const {sameSource,fail}=ports;const selfOrdinaryConsumers=new WeakMap();${closed}\n${oldComponent}\nreturn planVerifiedOrdinaryTables;`)
    ({sameSource:()=>{},fail:()=>{throw Error('UNIT_OLD_PLANNER_REFUSAL');}},types,isDeepStrictEqual);
   const old=fixture();const oldOrder=await oldPlan(old.archive,old.original,old.sql,old.assertContext);
   assert.equal(oldOrder[0],old.selected[0]);assert.equal(old.counts.profiles,0);cases++;groups++;
@@ -1023,7 +1051,7 @@ if(process.argv.includes('--immutable-row-aware-fk-only')){
  const start=text.indexOf('async function inactiveOriginalForeignKeys('),end=text.indexOf('// Internal DATA consumer',start);
  assert.ok(start>0&&end>start);const component=text.slice(start,end);
  const closed=text.slice(text.indexOf('function closed(value,keys) {'),text.indexOf('// Actual pg.Result has additional own fields/prototype;'));
- const build=new Function('ports','types','isDeepStrictEqual',`const {sameSource,assertContext,sql,openVerifiedRestoreTableData,
+ const build=compileObservedSourceFixture('ports','types','isDeepStrictEqual',`const {sameSource,assertContext,sql,openVerifiedRestoreTableData,
   createRestoreRowUtf8Guard,createRestoreRowLineBatchDecoder,decodeRestoreTableRowLine,pipeline,fail}=ports;
   const selfOrdinaryConsumers=new WeakMap();${closed}\n${component}\nreturn planVerifiedOrdinaryTables;`);
  const column=(name,type='uuid')=>({name,data_type:type,generated:'',identity:''});

@@ -1,10 +1,11 @@
+import {removeCurrentCyclicCohorts} from './immutable-current-cyclic-cohort-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {currentRestoreGuardCohortSources,currentOriginalStorageGuards,extendCurrentRestoreGuardCohort,removeCurrentRestoreGuardCohort,deferredOriginalMatcherSql} from './immutable-current-restore-guard-cohort.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
-const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
+const program=removeCurrentCyclicCohorts(JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url))));
 const sources=currentRestoreGuardCohortSources();
 test('entire last native-attempt program survives, with no changed ordinary behavior or historical pin',()=>{
  const previous=removeCurrentRestoreGuardCohort(program),bytes=JSON.stringify(previous,null,2)+'\n';

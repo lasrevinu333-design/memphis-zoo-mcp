@@ -1,3 +1,4 @@
+import {extendCurrentCyclicStatementFence} from './immutable-current-cyclic-cohort-source.mjs';
 // Program Source preparation for the existing immutable-original importer.
 // No database, install, transaction, import or resume authority is returned.
 import assert from 'node:assert/strict';
@@ -118,6 +119,7 @@ function baseRecipes(originalGuards,owner){
   +"   AND custodial_dr.immutable_original_authority_guard_matches(TG_RELID,TG_OP)\n"
   +"  THEN RETURN NULL; END IF;\n";
  const after=[group,replaceOnce(originalGuards[1].definition,normal,ordinary.replace(normal,authority+normal))];
+ if(owner==='postgres')after[1]=extendCurrentCyclicStatementFence(after[1]);
  return originalGuards.map((g,i)=>Object.freeze({identity:guardIds[i],registry_identity:guardIds[i],
   before:g.definition,after:after[i],beforeHash:sha(g.definition),afterHash:sha(after[i]),
   beforeBodyHash:guardBodySha[i],afterBodyHash:sha(bodyOf(after[i]))}));

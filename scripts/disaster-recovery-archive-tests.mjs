@@ -1154,7 +1154,8 @@ if (process.argv.includes('--immutable-bootstrap-prerequisite-errors-only') || p
   // Enter only the existing signed-archive fixture below, never its old cases.
   process.argv.push('--verified-table-data-only');
 }
-if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || process.argv.includes('--immutable-authority-reconciliation-source-only') || process.argv.includes("--verified-table-data-only") || process.argv.includes("--immutable-private-source-only") || process.argv.includes('--immutable-owner-context-source-only') || process.argv.includes('--immutable-owner-context-static-only') || process.argv.includes('--immutable-mixed-consumer-source-only') || process.argv.includes('--immutable-intent-owner-join-only') || process.argv.includes('--immutable-fixed-row-consumer-source-only') || process.argv.includes('--immutable-dependency-order-source-only') || process.argv.includes('--immutable-empty-dependency-order-source-only') || process.argv.includes('--immutable-row-count-before-insert-source-only') || process.argv.includes("--immutable-private-row-count-before-stage-source-only") || process.argv.includes('--immutable-self-reference-consumer-source-only')) {
+if (process.argv.includes('--immutable-fixed-cohort-consumer-source-only') || process.argv.includes('--immutable-bootstrap-metadata-source-only') || process.argv.includes('--immutable-authority-reconciliation-source-only') || process.argv.includes("--verified-table-data-only") || process.argv.includes("--immutable-private-source-only") || process.argv.includes('--immutable-owner-context-source-only') || process.argv.includes('--immutable-owner-context-static-only') || process.argv.includes('--immutable-mixed-consumer-source-only') || process.argv.includes('--immutable-intent-owner-join-only') || process.argv.includes('--immutable-fixed-row-consumer-source-only') || process.argv.includes('--immutable-dependency-order-source-only') || process.argv.includes('--immutable-empty-dependency-order-source-only') || process.argv.includes('--immutable-row-count-before-insert-source-only') || process.argv.includes("--immutable-private-row-count-before-stage-source-only") || process.argv.includes('--immutable-self-reference-consumer-source-only')) {
+  const cohortConsumerOnly=process.argv.includes('--immutable-fixed-cohort-consumer-source-only');
   const bootstrapBatchOnly = process.argv.includes('--immutable-bootstrap-batch-source-only');
   const textColumnsOnly = process.argv.includes('--native-text-columns-archive-only');
   const prerequisiteErrorsOnly = process.argv.includes('--immutable-bootstrap-prerequisite-errors-only');
@@ -1170,7 +1171,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
   const dependencyOrderOnly = process.argv.includes('--immutable-dependency-order-source-only');
   const fixedRowConsumerOnly = process.argv.includes('--immutable-fixed-row-consumer-source-only');
   const intentOwnerJoinOnly = process.argv.includes('--immutable-intent-owner-join-only');
-  const mixedConsumerOnly = bootstrapBatchOnly || bootstrapMetadataOnly || authorityReconciliationOnly || selfReferenceOnly || privateStageCountOnly || rowCountBoundOnly || emptyDependencyOrderOnly || dependencyOrderOnly || fixedRowConsumerOnly || process.argv.includes('--immutable-mixed-consumer-source-only');
+  const mixedConsumerOnly = cohortConsumerOnly || bootstrapBatchOnly || bootstrapMetadataOnly || authorityReconciliationOnly || selfReferenceOnly || privateStageCountOnly || rowCountBoundOnly || emptyDependencyOrderOnly || dependencyOrderOnly || fixedRowConsumerOnly || process.argv.includes('--immutable-mixed-consumer-source-only');
   const mixedCase = process.argv.find(arg=>arg.startsWith('--immutable-mixed-case='))?.slice('--immutable-mixed-case='.length);
   const immutableSourceOnly = process.argv.includes("--immutable-private-source-only");
   const ownerContextStaticOnly = process.argv.includes('--immutable-owner-context-static-only');
@@ -1745,7 +1746,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','pipeline','createInterface','decodeRestoreTableRowLine',
         witnessConstants+'\n'+source.slice(prefixStart,prefixEnd)+"\nreturn function(verifiedArchive,original,witness,query){const db={};let importOperation='BEGIN_IMPORT';\n"+
         source.slice(sqlStart,sqlEnd)+source.slice(checkStart,checkEnd)+source.slice(mutateStart,mutateEnd)+
-        '\nreturn {readWitness:contextWitness,ordinary:selected=>consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext),'+
+        '\nreturn {readWitness:contextWitness,mutate,ordinary:selected=>consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext),'+
         'plan:()=>planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext),private:async()=>{'+
         source.slice(privateStart,privateEnd)+'\nreturn total;}};};')(
         types,isDeepStrictEqual,new WeakMap(),sourceOf,(...args)=>{const data=open(...args);readers.push(data);return data;},
@@ -1820,6 +1821,13 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           assert.equal(x.calls.filter(c=>c.text===target).length,1);assert.equal(x.calls.at(-1).text,target);
         }
       });
+      await run('MUTATION_WITNESS_NEW fixed cohort command appends and checks the same original witness without replay',async()=>{
+        const text='select custodial_dr.insert_staged_immutable_ordinary_cohort($1::oid,$2::jsonb) as context';
+        const x=fixtureApi(ordinary());await x.api.mutate(text,['105']);
+        assert.deepEqual(x.calls,[{text,args:['105',JSON.stringify(witness)]}]);
+        const bad=fixtureApi(ordinary(),()=>({rowCount:1,rows:[{context:{...witness,archive_digest:'b'.repeat(64)}}]}));
+        await assert.rejects(()=>bad.api.mutate(text,['105']),unknown);assert.equal(bad.calls.length,1);
+      });
       await run('MUTATION_WITNESS_NEW type-sensitive mismatch for every original witness field refuses',async()=>{
         for(const key of Object.keys(witness)){
           const changed=typeof witness[key]==='number'?String(witness[key]):key==='transaction_id'?456:witness[key]+'foreign';
@@ -1863,7 +1871,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         assert.equal(await x.api.ordinary(selected),1);assert.equal(x.calls.length,2);assert.equal(contextReads(x.calls),2);
       });
       }
-      assert.equal(cases.length,oidTextOnly?1:11);
+      assert.equal(cases.length,oidTextOnly?1:12);
       console.log(JSON.stringify({selector:oidTextOnly?'--immutable-mutation-witness-caller-only --immutable-witness-oid-text-only':'--immutable-mutation-witness-caller-only',count:cases.length,cases,status:'PASS_NEW_CALLER_WITNESS_SOURCE_PROTOCOL_ONLY',actual_SQL:'NOT_RUN',server_mutation_contract:'MAIN_TASK7_OWNING_QUALIFICATION_REQUIRED',limits:'Actual extracted shipping closures and signed UNIT reader/EOF; recording query replies only. No server pre/post assertions, real pg.Client admission, DATA mutation, rollback, ACK or performance qualification.'}));
     }else if(selectionParsingOnly){
       await run('SELECTION_PARSING_NEW repeated reads reuse only exact mode validated selection',async()=>{
@@ -2109,12 +2117,13 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       // consumer and its original-source checks, not a copied implementation.
       // Recording SQL/context callbacks below establish NO target capability.
       const privateFailureRecords=new WeakMap();
+      let cohortCloseFault=null,cohortCloseTarget=null;
       const observedOrdinaryEof=new WeakSet(); // Actual private reader promise, observation only.
       const {consume,scrubFailure,plan}=compileRecordedImporterSource('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','pipeline','createInterface','decodeRestoreTableRowLine',
         consumer.slice(first,last)+'\nreturn {consume:consumeVerifiedOrdinaryTable,scrubFailure:fail,plan:planVerifiedOrdinaryTables};')(
         types,isDeepStrictEqual,privateFailureRecords,readVerifiedPrivateImportSource,
-        (...args)=>{const data=open(...args);readers.push(data);if(selfReferenceOnly)data.verified.then(()=>observedOrdinaryEof.add(data),()=>{});return data;},
+        (...args)=>{const data=open(...args);readers.push(data);if(selfReferenceOnly)data.verified.then(()=>observedOrdinaryEof.add(data),()=>{});if(cohortCloseFault&&args[2]===cohortCloseTarget)return {...data,close:async()=>{await data.close();throw cohortCloseFault;}};return data;},
         createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine);
       const columns=[{name:'id',data_type:'bigint',generated:'',identity:''},{name:'value',data_type:'json',generated:'',identity:''}];
       const raw='{"id":4,"value":{"original":"mixed"}}',wire=Buffer.from(JSON.stringify(raw)+'\n');
@@ -2123,7 +2132,111 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const sourceOf=archive=>readVerifiedPrivateImportSource(archive);
       const selected=(original,schema='public',name='records')=>original.selection.databaseTables.find(table=>table.schema_name===schema&&table.table_name===name);
       const sourceFailure=error=>error.code==='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'&&error.outcome==='UNKNOWN'&&error.retry_safe===false;
-      if(bootstrapMetadataOnly){
+      if(cohortConsumerOnly){
+        const fixedGroups=[['custodial_release_canary_controls','custodial_release_canary_transport_probes'],
+          ['ops_manager_enrollment_codes','ops_manager_shared_enrollment_windows','ops_manager_trusted_devices']];
+        const stageSql='select custodial_dr.stage_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context';
+        const cohortSql='select custodial_dr.insert_staged_immutable_ordinary_cohort($1::oid,$2::jsonb) as context';
+        const wireRows=rows=>Buffer.from(rows.map(row=>JSON.stringify(row)+'\n').join(''));
+        const makeCohort=(names,{outside=false,schema='public',badCount=null}={})=>make({data:Buffer.alloc(0),
+          privateTables:[{...privateRow,data:Buffer.alloc(0)}],
+          ordinaryTables:[...names.map(name=>({schema,name,primaryKey:['id'],columns,data:wire})),
+            ...(outside?['outside_parent','outside_child'].map(name=>({schema:'public',name,primaryKey:['id'],columns,data:wire})):[])],
+          ...(badCount!==null?{declaredRows:names.length+badCount-1,changeCatalog:catalog=>{catalog.find(t=>t.table_name===names[1]).row_count=String(badCount);}}:{})});
+        function catalog(original,names,{outside=false,schema='public'}={}){
+          const rows=original.selection.databaseTables.map((t,i)=>({schema_name:t.schema_name,table_name:t.table_name,
+            relation_oid:String(100+i),relation_kind:'r',persistence:'p',is_partition:false,foreign_keys:[]}));
+          let nextOid=900;
+          const edge=(child,parent)=>{const c=rows.find(t=>t.table_name===child),p=rows.find(t=>t.table_name===parent);
+            c.foreign_keys.push({constraint_oid:String(nextOid++),parent_schema_name:p.schema_name,parent_table_name:p.table_name,
+              parent_relation_oid:p.relation_oid,validated:true,deferrable:false,initially_deferred:false,match_type:'s',
+              columns:[{name:'id',data_type:'bigint',generated:'',identity:'',parent_name:'id',parent_data_type:'bigint',parent_generated:'',parent_identity:''}]});};
+          if(names.length===2){edge(names[0],names[1]);edge(names[1],names[0]);}
+          else{edge(names[0],names[2]);edge(names[1],names[2]);edge(names[2],names[0]);edge(names[2],names[1]);}
+          if(outside){edge(names[0],'outside_parent');edge('outside_child',names.at(-1));}
+          const query=async(text,args)=>{
+            if(text.startsWith('with original_rows as materialized('))return {rowCount:args.length-1,
+              rows:args.slice(1).map(constraint_oid=>({constraint_oid,row_count:String(args[0].length),active_rows:String(args[0].length),partial_rows:'0'}))};
+            assert.ok(text.includes("k.contype='f'"));return {rowCount:rows.length,rows};
+          };
+          return {rows,query};
+        }
+        const prepare=async(names,options={})=>{
+          const archive=makeCohort(names,options),original=sourceOf(archive),{rows,query}=catalog(original,names,options);
+          const ordered=await plan(archive,original,query,async()=>{});
+          return {archive,original,ordered,chosen:ordered.filter(t=>names.includes(t.table_name)),rows};
+        };
+        await run('FIXED_COHORT_NEW both fixed groups retain original order stage all exact rows and insert once after every EOF',async()=>{
+          for(const names of fixedGroups){
+            const x=await prepare(names),calls=[];assert.deepEqual(x.chosen.map(t=>t.table_name),names);
+            for(const table of x.ordered)await consume(x.archive,x.original,table,async(text,args)=>{
+              if(text===cohortSql){
+                const consumed=readers.filter(d=>names.includes(d.table.table_name));
+                assert.equal(consumed.length,names.length*2); // Actual inactive-FK proof plus actual consumer.
+                for(const data of consumed){assert.ok(data.stream.readableEnded);const eof=await data.verified;assert.equal(eof.sha256,hash(wire));}
+                assert.equal(calls.filter(c=>c.text===stageSql).length,names.length);
+              }
+              calls.push({text,args});
+            },async()=>{});
+            assert.deepEqual(calls,[...names.map(name=>({text:stageSql,args:['public',name,raw]})),
+              {text:cohortSql,args:[x.rows.find(r=>r.table_name===names[0]).relation_oid]}]);
+            assert.ok(readers.every(d=>d.stream.closed));
+          }
+        });
+        await run('FIXED_COHORT_NEW external parents precede the complete group and external children follow it',async()=>{
+          const names=fixedGroups[1],x=await prepare(names,{outside:true}),order=x.ordered.map(t=>t.table_name),calls=[];
+          assert.ok(order.indexOf('outside_parent')<order.indexOf(names[0]));assert.ok(order.indexOf('outside_child')>order.indexOf(names.at(-1)));
+          for(const table of x.ordered)await consume(x.archive,x.original,table,async(text,args)=>calls.push({text,args}),async()=>{});
+          assert.equal(calls.filter(c=>c.text===cohortSql).length,1);assert.equal(calls.filter(c=>c.text===stageSql).length,3);
+          assert.equal(calls[0].args[1],'outside_parent');assert.equal(calls.at(-1).args[1],'outside_child');
+        });
+        await run('FIXED_COHORT_NEW unknown table groups and identical names in another schema remain unsupported',async()=>{
+          for(const [names,options]of [[['a_child','z_parent'],{}],[fixedGroups[0],{schema:'auth'}]]){
+            const archive=makeCohort(names,options),original=sourceOf(archive),{query}=catalog(original,names,options);
+            await assert.rejects(()=>plan(archive,original,query,async()=>{}),sourceFailure);
+          }
+        });
+        await run('FIXED_COHORT_NEW out of order or cross archive routing refuses every later member without mutation',async()=>{
+          for(const foreign of [false,true]){
+            const names=fixedGroups[0],x=await prepare(names),calls=[];
+            if(foreign){const other=makeCohort(names);await assert.rejects(()=>consume(other,sourceOf(other),x.chosen[0],async()=>calls.push('foreign'),async()=>{}),sourceFailure);}
+            else await assert.rejects(()=>consume(x.archive,x.original,x.chosen[1],async()=>calls.push('out-of-order'),async()=>{}),sourceFailure);
+            for(const table of x.chosen)await assert.rejects(()=>consume(x.archive,x.original,table,async()=>calls.push('resume'),async()=>{}),sourceFailure);
+            assert.deepEqual(calls,[]);
+          }
+        });
+        await run('FIXED_COHORT_NEW stage context and final-result refusals cannot resume or issue a second cohort command',async()=>{
+          for(const boundary of ['stage','context','final']){
+            const names=fixedGroups[0],x=await prepare(names),calls=[],refusal=new Error('UNIT_COHORT_UNKNOWN');let refused=false;
+            for(const table of x.chosen){
+              try{await consume(x.archive,x.original,table,async(text,args)=>{calls.push({text,args});if(boundary==='stage'&&text===stageSql||boundary==='final'&&text===cohortSql)throw refusal;},async()=>{if(boundary==='context')throw refusal;});}
+              catch(error){assert.equal(error,refusal);refused=true;break;}
+            }
+            assert.ok(refused);const before=calls.length;
+            for(const table of x.chosen)await assert.rejects(()=>consume(x.archive,x.original,table,async()=>calls.push('resume'),async()=>{}),sourceFailure);
+            assert.equal(calls.length,before);assert.equal(calls.filter(c=>c.text===cohortSql).length,boundary==='final'?1:0);
+          }
+        });
+        await run('FIXED_COHORT_NEW failed member cleanup keeps the private group busy and cannot reach insertion',async()=>{
+          const names=fixedGroups[0],x=await prepare(names),calls=[],failure=new Error('UNIT_COHORT_CLOSE');
+          cohortCloseFault=failure;cohortCloseTarget=names[0];
+          try{await assert.rejects(()=>consume(x.archive,x.original,x.chosen[0],async(text,args)=>calls.push({text,args}),async()=>{}),error=>error===failure);}
+          finally{cohortCloseFault=null;cohortCloseTarget=null;}
+          await assert.rejects(()=>consume(x.archive,x.original,x.chosen[1],async()=>calls.push('resume'),async()=>{}),sourceFailure);
+          assert.equal(calls.length,1);assert.equal(calls[0].text,stageSql);
+        });
+        await run('FIXED_COHORT_NEW short authenticated member and source withdrawal cannot reach a cohort INSERT',async()=>{
+          const names=fixedGroups[0],archive=makeCohort(names,{badCount:2}),original=sourceOf(archive),{query}=catalog(original,names),calls=[];
+          await assert.rejects(()=>plan(archive,original,query,async()=>{}),sourceFailure);assert.deepEqual(calls,[]);
+          const x=await prepare(names);
+          await assert.rejects(()=>consume(x.archive,x.original,x.chosen[0],async(text,args)=>{calls.push({text,args});x.archive.cleanup();},async()=>{}),sourceFailure);
+          for(const table of x.chosen)await assert.rejects(()=>consume(x.archive,x.original,table,async()=>calls.push('resume'),async()=>{}),sourceFailure);
+          assert.equal(calls.length,1);assert.equal(calls[0].text,stageSql);
+        });
+        console.log(JSON.stringify({selector:'--immutable-fixed-cohort-consumer-source-only',count:cases.length,cases,
+          status:'PASS_FIXED_COHORT_SHIPPING_SOURCE_WITH_SIGNED_UNIT_ORIGINALS_AND_RECORDING_SQL_ONLY',
+          actual_SQL:false,original_owner_admission:false,full_restore:false}));
+      }else if(bootstrapMetadataOnly){
         const registry='custodial_release_authority_restore_inventory',release='release_deployment_manifest';
         const originalRaw=' { "id":9223372036854775807, "value":{"n":9007199254740993,"decimal":1.2300,"source":"café original metadata, not target authority"} }';
         const secondRaw='{"id":5,"value":{"source":"second original metadata row"}}';

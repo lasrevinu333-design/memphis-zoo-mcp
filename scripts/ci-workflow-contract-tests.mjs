@@ -1083,13 +1083,16 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 verifyUnifiedBackupCiInputs(new URL('../',import.meta.url));
 const reviewedBackupRehearsal=restoreUnifiedBackupWorkflow(productionBackupRehearsal,'production-backup-migration-rehearsal.yml');
 const cohortTestArgument = " scripts/immutable-current-restore-guard-cohort-tests.mjs";
+for(const flag of ["--immutable-safe-ordinary-set-only","--immutable-row-aware-fk-only","--immutable-text-columns-import-only"])assert.equal(productionBackupRehearsal.split("node scripts/immutable-private-source-bootstrap-tests.mjs "+flag).length,2);
+assert.equal(productionBackupRehearsal.split(" scripts/immutable-current-cyclic-cohort-tests.mjs").length,2);
+assert.equal(productionBackupRehearsal.split("node scripts/disaster-recovery-archive-tests.mjs --immutable-fixed-cohort-consumer-source-only").length,2);
 assert.equal(productionBackupRehearsal.split(cohortTestArgument).length, 2,
   "exactly one connection-free cohort regression belongs in the existing source contract step");
 assert.equal(createHash("sha256").update(reviewedBackupRehearsal.replace(cohortTestArgument, ""), "utf8").digest("hex"),
   "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
   "the complete reviewed workflow predecessor must survive the one source-test addition");
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "ae3d0bc4423433a7bd20504cee61ff35d363bd276d095b07a2bea8ff9c2e5079",
+  "f490506214de61365a8dd3d3902edbbc5614a6513e6f5a43c64eea40540b6f1d",
   "rehearsal length measurement requires the exact Main F08 caller candidate workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
