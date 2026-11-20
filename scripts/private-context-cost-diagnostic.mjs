@@ -34,7 +34,7 @@ export async function observePrivateContextCost(env=process.env){
    intentVerifyKey:env.RESTORE_INTENT_VERIFY_KEY,intentVerifyKeyId:env.RESTORE_INTENT_VERIFY_KEY_ID});
   assert.equal(receipt.archive_digest,original.sourceBinding.archive_digest);
   phase='ROLLBACK';const rollback=await query('ROLLBACK');assert.equal(rollback.command,'ROLLBACK');began=false;rollbackReceived=true;
-  phase='ROLLBACK_READBACK';await query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');began=true;
+  phase='ROLLBACK_READBACK';await query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');began=true;await query('SET LOCAL row_security=off');
   const readback=await query(`select current_user actor,session_user session_actor,current_database() database,
    (select rolsuper from pg_roles where rolname=current_user) superuser,current_setting('transaction_read_only') readonly,
    to_regclass('custodial_dr.immutable_private_import_context') is null context_absent,
@@ -46,7 +46,9 @@ export async function observePrivateContextCost(env=process.env){
    (select count(*)::text from public.custodial_release_authority_restore_inventory) registry`);
   assert.equal(readback.rowCount,1);assert.deepEqual(readback.rows[0],{actor:'postgres',session_actor:'postgres',database:'mz_schema_rebuild_'+env.GITHUB_RUN_ID,
    superuser:false,readonly:'on',context_absent:true,employee_rows:'0',group_original_rows:'0',message_original_rows:'0',controls:'0',releases:'0',registry:'0'});readbackVerified=true;
-  assert.equal(readVerifiedPrivateImportSource(archive),original);const final=await query('ROLLBACK');assert.equal(final.command,'ROLLBACK');began=false;
+  const current=readVerifiedPrivateImportSource(archive);assert.equal(current.sourceBinding,original.sourceBinding);
+  assert.deepEqual(current.selection,original.selection);assert.deepEqual(current.privateDataMembers,original.privateDataMembers);
+  const final=await query('ROLLBACK');assert.equal(final.command,'ROLLBACK');began=false;
  }catch(error){failure=error;}
  finally{
   if(db&&began)try{const r=await Reflect.apply(nativeQuery,db,['ROLLBACK']);if(r.command==='ROLLBACK')rollbackReceived=true;}catch(error){failure??=error;}

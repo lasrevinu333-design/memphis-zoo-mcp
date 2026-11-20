@@ -59,7 +59,7 @@ jobs:
       - name: Check isolated private rehearsal contracts
         run: |
           node scripts/build-immutable-postgres-program.mjs --check
-          node --test scripts/private-context-cost-tests.mjs scripts/current428-forward-qualification-source-tests.mjs
+          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs
           node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-current-restore-guard-cohort-tests.mjs scripts/immutable-current-cyclic-cohort-tests.mjs scripts/immutable-postgres-acl-qualification-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs scripts/private-restore-function-diagnostic-tests.mjs scripts/immutable-current-bounded-stage-tests.mjs scripts/immutable-ordinary-progress-tests.mjs scripts/immutable-current-catalog-stability-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs scripts/private-catalog-lease-runner-tests.mjs
           node scripts/disaster-recovery-archive-tests.mjs --native-text-columns-archive-only --text-archive-case=bootstrap
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-raw-source-only

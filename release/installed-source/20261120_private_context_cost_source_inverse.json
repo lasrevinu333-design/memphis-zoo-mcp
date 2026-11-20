@@ -59,7 +59,7 @@
     },
     ".github/workflows/production-backup-migration-rehearsal.yml": {
       "previousSha256": "e3352172fac50e799262819801d1c4f6396ae45e8664fee92272d445bbf5bcfa",
-      "currentSha256": "65d781c1d38bfe1c032e7ecdfcd6f5d00fea75e44b9ef4f7d2971ffccd7fb908",
+      "currentSha256": "7ed460f4818695b93aa746494ac725cb08785b5aebb6e767ea079c00992804d4",
       "hunks": [
         {
           "before": "      official_local_storage_provider:\n",
@@ -75,7 +75,7 @@
         },
         {
           "before": "          node scripts/build-immutable-postgres-program.mjs --check\n",
-          "after": "          node scripts/build-immutable-postgres-program.mjs --check\n          node --test scripts/private-context-cost-tests.mjs scripts/current428-forward-qualification-source-tests.mjs\n"
+          "after": "          node scripts/build-immutable-postgres-program.mjs --check\n          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs\n"
         }
       ]
     }
