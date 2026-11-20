@@ -137,9 +137,9 @@ const insist = (value,message) => { if(!value) throw new Error(message); };
 // One fixed dependency, authenticated before import. The exact URL preserves
 // the host factory's WeakMap instance; the provider receives an owned0400 copy.
 const diagnosticHelperUrl=new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url);
-const diagnosticHelperSha256='17369227abaa714349d9a6361273aa9e2d9c09dc2588874f7b808541752046a8';
+const diagnosticHelperSha256='63cc27663d719c5207d96c1373460a5ae1eaadcdd24d4bfd8b7a09fec075f07f';
 const diagnosticHelperBytes=readFileSync(diagnosticHelperUrl);
-insist(diagnosticHelperBytes.length===15909 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
+insist(diagnosticHelperBytes.length===16766 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
 const {readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import(diagnosticHelperUrl.href);
 insist(readFileSync(diagnosticHelperUrl).equals(diagnosticHelperBytes),'Fixed diagnostic helper changed.');
 export function stageOwnedStorageWorker(mount){
@@ -372,7 +372,7 @@ export function privateRestoreStageDiagnostic(phase,event,error=null,freshFields
 export function projectPrivateRestoreDiagnostic(value){
   if(!value||typeof value!=='object'||isProxy(value)||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return null;
   const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
-  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','import_validation','import_relation_schema','import_native_operation','guard_schema','guard_relation_sha256','guard_trigger_sha256','guard_function_sha256','guard_receipt_checks','source_statement','fresh_refusal'];
+  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','import_validation','import_relation_schema','import_native_operation','guard_schema','guard_relation_sha256','guard_trigger_sha256','guard_function_sha256','guard_receipt_checks','source_statement','fresh_refusal','ordinary_mode','ordinary_phase','ordinary_relation_sha256'];
   if(keys.some(key=>!allowed.includes(key)||!Object.hasOwn(descriptors[key],'value')||descriptors[key].enumerable!==true))return null;
   const data=Object.fromEntries(keys.map(key=>[key,descriptors[key].value]));
   if(keys.some(key=>key!=='private_payload_exported'&&typeof data[key]!=='string'))return null;
@@ -388,7 +388,18 @@ export function readPrivateRestoreDiagnostics(raw){
     let value;try{value=JSON.parse(line);}catch{continue;}
     const record=projectPrivateRestoreDiagnostic(value);
     // Require the exact producer serialization as well as closed field shapes.
-    if(record&&JSON.stringify(record)===line){result.push(record);if(result.length>128)return Object.freeze([]);}
+    if(record&&JSON.stringify(record)===line){
+      // Ordinary import can visit353 tables. Preserve only its latest5 closed
+      // checkpoints, while retaining every original phase/refusal record and
+      // the existing128-record saved-evidence ceiling. No raw line is saved.
+      if(record.ordinary_phase&&result.filter(item=>item.ordinary_phase).length>=5)
+        result.splice(result.findIndex(item=>item.ordinary_phase),1);
+      result.push(record);
+      // A full original phase/refusal set takes precedence over progress.
+      while(result.length>128&&result.some(item=>item.ordinary_phase))
+        result.splice(result.findIndex(item=>item.ordinary_phase),1);
+      if(result.length>128)return Object.freeze([]);
+    }
   }
   return Object.freeze(result);
 }

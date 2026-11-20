@@ -641,6 +641,15 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
     sourceOnlyEmpty=!bootstrap&&declaredRows===0n;
     if(sourceOnlyEmpty&&staged)fail(); // An empty original never stages or inserts a set.
     if(!bootstrap&&!columns.length&&table.row_count!=='0')fail();
+    const observeOrdinary=phase=>{
+      try{
+        recordImmutableFreshProgress({import_relation_schema:table.schema_name,
+          ordinary_relation_sha256:createHash('sha256').update(JSON.stringify([table.schema_name,table.table_name])).digest('hex'),
+          ordinary_mode:bootstrap?'BOOTSTRAP':sourceOnlyEmpty?'EMPTY':cohort?'COHORT_STAGE':boundedTypedStage?'BOUNDED_STAGE':staged?'STAGED':'DIRECT',
+          ordinary_phase:phase});
+      }catch{} // Observational failure cannot change validation or cleanup.
+    };
+    observeOrdinary('SOURCE_OPEN');
     guard=createRestoreRowUtf8Guard();
     if(bootstrap||boundedTypedStage){
       batchInput=createRestoreRowLineBatchDecoder();input=batchInput;
@@ -681,6 +690,7 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
       const flush=async()=>{
         if(!pending.length)return;
         sameSource(verifiedArchive,original);
+        if(firstOrdinal===1)observeOrdinary('FIRST_SQL');
         await mutate('select custodial_dr.stage_immutable_ordinary_rows($1::text,$2::text,$3::bigint,$4::text[],$5::jsonb) as context',
           [table.schema_name,table.table_name,String(firstOrdinal),pending]);
         sameSource(verifiedArchive,original);pending=[];pendingBytes=0;
@@ -694,6 +704,7 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
           const raw=decodeRestoreTableRowLine(line,table),bytes=Buffer.byteLength(raw,'utf8');
           if(bytes>65536){
             await flush();sameSource(verifiedArchive,original);
+            if(count===0)observeOrdinary('FIRST_SQL');
             await mutate('select custodial_dr.stage_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context',
               [table.schema_name,table.table_name,raw]);sameSource(verifiedArchive,original);
           }else{
@@ -712,6 +723,7 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
       const raw=decodeRestoreTableRowLine(line,table);
       if(BigInt(count)>=declaredRows)fail(); // Refuse BEFORE any excess row reaches the fixed INSERT.
       if(!bootstrap){
+        if(count===0)observeOrdinary('FIRST_SQL');
         if(staged)await mutate('select custodial_dr.stage_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context',[table.schema_name,table.table_name,raw]);
         else await mutate('select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context',[table.schema_name,table.table_name,raw]);
         sameSource(verifiedArchive,original);
@@ -725,6 +737,7 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
     // not a public checksum projection or a caller zero-count assertion.
     if(eof.data_file!==table.data_file||!Number.isSafeInteger(eof.bytes)||eof.bytes<0
       ||typeof eof.sha256!=='string'||!/^[a-f0-9]{64}$/.test(eof.sha256)||String(count)!==table.row_count)fail();
+    observeOrdinary('SOURCE_EOF');
     // A verified empty ordinary original has no target effect or admission.
     // Its source lifetime remains live through EOF/close; the shared original
     // witness is checked after ALL ordinary EOFs, before guarded finish.
@@ -738,11 +751,16 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
         cohort.next++;
         if(cohort.next===cohort.members.length){
           cohort.complete=true; // Includes SQL refusal and an ambiguous result.
+          observeOrdinary('INSERT_SET');
           await mutate('select custodial_dr.insert_staged_immutable_ordinary_cohort($1::oid,$2::jsonb) as context',[cohort.anchorOid]);
         }
-      }else await mutate('select custodial_dr.insert_staged_immutable_ordinary_table($1::text,$2::text,$3::jsonb) as context',[table.schema_name,table.table_name]);
+      }else{
+        observeOrdinary('INSERT_SET');
+        await mutate('select custodial_dr.insert_staged_immutable_ordinary_table($1::text,$2::text,$3::jsonb) as context',[table.schema_name,table.table_name]);
+      }
       sameSource(verifiedArchive,original);
     }
+    observeOrdinary('BODY_COMPLETE');
     return count;
   }catch(error){firstFailure=error;if(cohort)cohort.refused=true;throw error;}
   finally{if(batchInput)batchInput.destroy();else if(input)input.close();data.stream.destroy();guard?.destroy();

@@ -8,6 +8,8 @@ const enums={
  initializer_stage:new Set(['PREPARE_SOURCE','VERIFY_NATIVE_CONTEXT','VERIFY_EMPTY_RELATIONS','VERIFY_ISOLATED_CRON_SETUP','INITIALIZE_CONTROL','RECONCILE_ARCHIVED_ACLS','VERIFY_PREDECESSORS','INSTALL_PINNED_STATEMENT','INSTALL_APPLICATION_GUARD','VERIFY_SUCCESSORS','VERIFY_OWNER_FENCE','RESTORE_METADATA','RESTORE_MIGRATION_LEDGER','RESTORE_CRON','RESTORE_RELEASES','RESTORE_REGISTRY','VERIFY_RESTORED_METADATA','VERIFY_FINAL_STATE']),
  initializer_operation:new Set(['READ_NATIVE_CONTEXT','EXECUTE_QUERY','READ_PINNED_STATEMENT']),
  import_operation:new Set(['BEGIN_IMPORT','VERIFY_INITIAL_WITNESS','PLAN_ORDINARY_ORDER','STAGE_PRIVATE_ORIGINALS','CONSUME_ORDINARY_ORIGINALS','FINISH_IMPORT']),
+ ordinary_mode:new Set(['BOOTSTRAP','EMPTY','DIRECT','STAGED','BOUNDED_STAGE','COHORT_STAGE']),
+ ordinary_phase:new Set(['SOURCE_OPEN','FIRST_SQL','SOURCE_EOF','INSERT_SET','BODY_COMPLETE']),
  import_validation:new Set(["PLANNER_CONTEXT","PLANNER_CATALOG_RESULT","PLANNER_RELATION","PLANNER_FOREIGN_KEY","PLANNER_FK_COLUMNS","PLANNER_GRAPH","PLANNER_INACTIVE_FK_SOURCE","PLANNER_TOPOLOGY","PLANNER_BATCH_CATALOG","PLANNER_BATCH_ROW"]),
  import_relation_schema:new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']),
  import_native_operation:new Set(['LOCK_RELATION_ACCESS_EXCLUSIVE','COUNT_RELATION_ROWS']),
@@ -145,6 +147,9 @@ export function immutableFreshDiagnosticFields(value){
  const result={};
  for(const [key,allowed] of Object.entries(enums)){const data=own(value,key);if(allowed.has(data))result[key]=data;}
  const digest=key=>{const v=own(value,key);return typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)?v:undefined;};
+ if(result.import_relation_schema&&result.ordinary_mode&&result.ordinary_phase&&digest('ordinary_relation_sha256')){
+  result.ordinary_relation_sha256=digest('ordinary_relation_sha256');
+ }else{delete result.ordinary_mode;delete result.ordinary_phase;}
  if(result.guard_schema&&digest('guard_relation_sha256')&&digest('guard_trigger_sha256')){
   for(const key of ['guard_relation_sha256','guard_trigger_sha256','guard_function_sha256'])if(digest(key))result[key]=digest(key);
   const checks=own(value,'guard_receipt_checks');if(typeof checks==='string'&&/^[01]{9}$/.test(checks))result.guard_receipt_checks=checks;
@@ -170,16 +175,21 @@ export function readImmutableFreshFailure(error){
 
 // Bounded observational checkpoints for the one explicit private rehearsal.
 // No SQL, row data, retry, validity verdict or admission is produced here.
-let progressRecords=0;
+let progressRecords=0,ordinaryProgressRecords=0;
 export function recordImmutableFreshProgress(fields){
  try{
   if(process.env.RESTORE_PRIVATE_DIAGNOSTICS!=='bounded-v1'||process.env.REHEARSAL_SCOPE!=='backup_only'
-   ||process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER!=='true'||process.env.RESTORE_DATABASE_ONLY!=='true'
-   ||progressRecords>=64)return;
+   ||process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER!=='true'||process.env.RESTORE_DATABASE_ONLY!=='true')return;
   const projected=immutableFreshDiagnosticFields(fields);if(Object.keys(projected).length===0)return;
+  const ordinary=Boolean(projected.ordinary_phase);
+  // At most5 metadata-only checkpoints for each of this finite archive's
+  //353 selected tables. Separate counters retain the original64-stage cap.
+  //2048*384 +64*2048 stays below the unchanged1MiB private stream ceiling.
+  if(ordinary?ordinaryProgressRecords>=2048:progressRecords>=64)return;
   const line=JSON.stringify({schema:'custodial.private-restore-stage.v1',phase:'stage_fresh_private_database',
    event:'ENTER',private_payload_exported:false,...projected});
-  if(Buffer.byteLength(line)>2048)return;
-  progressRecords++;console.error(line);
+  if(Buffer.byteLength(line)>(ordinary?384:2048))return;
+  if(ordinary)ordinaryProgressRecords++;else progressRecords++;
+  console.error(line);
  }catch{} // Observation cannot change source validation, refusal or cleanup.
 }

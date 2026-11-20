@@ -1,5 +1,6 @@
 // Fixed offline composition. The runtime cannot select SQL, schemas or bounds.
 import assert from 'node:assert/strict';
+import {removeOrdinaryProgressObservations} from './immutable-ordinary-progress-source-proof.mjs';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -29,6 +30,7 @@ export function removeCurrentBoundedOrdinaryStage(program){
 // its output is a runtime profile, archive capability or target admission.
 export function removeCurrentBoundedOrdinaryConsumerSource(source){
  assert.equal(arguments.length,1);assert.equal(typeof source,'string');
+ source=removeOrdinaryProgressObservations('immutable-private-data-import.mjs',source);
  const raw=readFileSync(new URL('../release/installed-source/20261120_bounded_ordinary_consumer_inverse.json',import.meta.url),'utf8');
  assert.equal(sha(raw),'fa2f1fe80f1f1a37823c9843c532741ece24324baef8273b37095185b3ebbeb6');
  const inverse=JSON.parse(raw);assert.equal(inverse.format,'custodial.bounded-ordinary-consumer-source-inverse.v1');

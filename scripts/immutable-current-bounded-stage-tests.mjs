@@ -7,7 +7,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createInterface} from 'node:readline';
 import * as archiveApi from './disaster-recovery-archive.mjs';
-import {recordImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
+import {recordImmutableFreshFailure,recordImmutableFreshProgress} from './immutable-private-stage-diagnostic.mjs';
 import {currentBoundedOrdinaryStageSql,extendCurrentBoundedOrdinaryStage,removeCurrentBoundedOrdinaryStage,removeCurrentBoundedOrdinaryConsumerSource} from './immutable-current-bounded-stage-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
@@ -17,7 +17,7 @@ const start=text.indexOf('async function inactiveOriginalForeignKeys('),end=text
 assert.ok(start>0&&end>start);
 // Recorded ports qualify the actual source consumer/real codecs, not native
 // owner admission. Native SQL fidelity is separately exercised in PostgreSQL.
-const build=new Function('ports','types','isDeepStrictEqual','recordImmutableFreshFailure',`const {sameSource,fail,openVerifiedRestoreTableData,
+const build=new Function('ports','types','isDeepStrictEqual','recordImmutableFreshFailure','recordImmutableFreshProgress','createHash',`const {sameSource,fail,openVerifiedRestoreTableData,
  decodeRestoreTableRowLine,createRestoreRowUtf8Guard,createRestoreRowLineBatchDecoder,readVerifiedImmutableArchiveOwnerProfile,
  pipeline,createInterface}=ports;const selfOrdinaryConsumers=new WeakMap();${closed}\n${text.slice(start,end)}\nreturn {planVerifiedOrdinaryTables,consumeVerifiedOrdinaryTable};`);
 const raw=n=>JSON.stringify({id:String(9007199254740993n+BigInt(n)),payload:'{ "dup":1,"dup":2,"value":0.1234567890123456789 }',nullable:n%2?'Ω\\x\n':null});
@@ -43,7 +43,7 @@ function fixture(options={}){
     eof=true;if(options.eofFailure)reject(Error('UNIT_BAD_EOF'));else resolve({data_file:table.data_file,bytes:bytes.length,sha256:'a'.repeat(64)});
    }));verified.catch(()=>{});
    return {table,stream,verified,async close(){closedCount++;if(options.closeFailure)throw Error('UNIT_CLOSE_FAILED');}};
-  }},types,isDeepStrictEqual,recordImmutableFreshFailure);
+  }},types,isDeepStrictEqual,recordImmutableFreshFailure,recordImmutableFreshProgress,createHash);
  const sql=async statement=>statement.includes('as foreign_keys')?{rowCount:1,rows:[{schema_name:table.schema_name,table_name:table.table_name,
   relation_oid:'100',relation_kind:'r',persistence:'p',is_partition:false,foreign_keys:[]}]}:
   {rowCount:1,rows:[{schema_name:table.schema_name,table_name:table.table_name,relation_oid:'100',guard_oid:'500',insert_triggers:options.triggers??[guard()]}]};
@@ -117,4 +117,18 @@ test('close refusal consumes the selected token and cannot replay a final INSERT
  const f=fixture({closeFailure:true});await f.plan();await assert.rejects(f.consume());assert.equal(f.closed,1);
  assert.equal(f.effects.filter(e=>e.statement.includes('insert_staged_immutable_ordinary_table')).length,1);
  const count=f.effects.length;await assert.rejects(f.consume());assert.equal(f.effects.length,count);
+});
+test('actual consumer reports only closed relation hashes and phases; observer failure never changes cleanup',async()=>{
+ const keys=['RESTORE_PRIVATE_DIAGNOSTICS','REHEARSAL_SCOPE','OFFICIAL_LOCAL_STORAGE_PROVIDER','RESTORE_DATABASE_ONLY'];
+ const saved=keys.map(k=>process.env[k]),values=['bounded-v1','backup_only','true','true'],error=console.error,lines=[];
+ try{
+  keys.forEach((k,i)=>process.env[k]=values[i]);console.error=line=>lines.push(line);
+  const f=fixture();await f.plan();assert.equal(await f.consume(),3);assert.equal(f.closed,1);
+  const records=lines.map(line=>JSON.parse(line));
+  assert.deepEqual(records.map(r=>r.ordinary_phase),['SOURCE_OPEN','FIRST_SQL','SOURCE_EOF','INSERT_SET','BODY_COMPLETE']);
+  for(const r of records){assert.equal(r.ordinary_mode,'BOUNDED_STAGE');assert.equal(r.ordinary_relation_sha256,sha(JSON.stringify(['public',f.table.table_name])));
+   assert.equal(r.private_payload_exported,false);assert.ok(!JSON.stringify(r).includes(f.raws[0])&&!JSON.stringify(r).includes(f.table.table_name));}
+  console.error=()=>{throw Error('UNIT_OBSERVER_FAILURE');};const next=fixture();await next.plan();assert.equal(await next.consume(),3);assert.equal(next.closed,1);
+  const closing=fixture({closeFailure:true});await closing.plan();await assert.rejects(closing.consume());assert.equal(closing.closed,1);
+ }finally{console.error=error;keys.forEach((k,i)=>{if(saved[i]===undefined)delete process.env[k];else process.env[k]=saved[i];});}
 });

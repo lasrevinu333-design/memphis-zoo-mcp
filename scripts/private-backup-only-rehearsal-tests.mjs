@@ -1,5 +1,6 @@
 import test from 'node:test';
 import {removeCurrentBoundedOrdinaryConsumerSource} from './immutable-current-bounded-stage-source.mjs';
+import {removeOrdinaryProgressObservations} from './immutable-ordinary-progress-source-proof.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,openSync,fsyncSync,closeSync,mkdtempSync,readdirSync,rmSync,existsSync,mkdirSync,symlinkSync,renameSync,chmodSync,lstatSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -925,6 +926,6 @@ test('bounded substage checkpoints survive both privacy layers without changing 
   source=source.replace(/^[ \t]*recordImmutableFreshProgress\(\{[^;\n]+\}\);\n/gm,'').replace('recordImmutableFreshFailure,recordImmutableFreshProgress','recordImmutableFreshFailure');
   assert.equal(hash(source),pin,'every validation, SQL, refusal, cleanup and deadline byte survives: '+path);
  }
- const helper=readFileSync(new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url),'utf8');
+ const helper=removeOrdinaryProgressObservations('immutable-private-stage-diagnostic.mjs',readFileSync(new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url),'utf8'));
  assert.equal(hash(helper.slice(0,helper.indexOf('\n// Bounded observational checkpoints'))),'bffc1c516cbd8e22fc3527f01a509251ecaeb0b4372977546c1466852730bc8f');
 });
