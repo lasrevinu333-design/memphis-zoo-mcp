@@ -383,11 +383,14 @@ async function inactiveOriginalForeignKeys(verifiedArchive,original,table,foreig
 // their constraint definitions. Catalog order is not an INSERT dependency
 // order. Observe actual target FKs without deferring/disabling their guards.
 async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext) {
+  let importValidation='PLANNER_CONTEXT';
+  try {
   sameSource(verifiedArchive,original);await assertContext();sameSource(verifiedArchive,original);
   const selected=original.selection.databaseTables;
   const identity=(schema,table)=>JSON.stringify([schema,table]);
   const originals=new Map(selected.map(table=>[identity(table.schema_name,table.table_name),table]));
   if(originals.size!==selected.length||!selected.length)fail();
+  importValidation='PLANNER_CATALOG_RESULT';
   const result=await sql(`select s.schema_name,s.table_name,c.oid::text as relation_oid,
     c.relkind::text as relation_kind,c.relpersistence::text as persistence,c.relispartition as is_partition,
     case when c.oid is null then null else coalesce((
@@ -417,6 +420,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   const relations=new Map(),oids=new Set(),constraintOids=new Set();
   const oid=value=>typeof value==='string'&&/^[1-9][0-9]*$/.test(value)&&BigInt(value)<=4294967295n;
   for(const value of result.rows){
+    importValidation='PLANNER_RELATION';
     const row=closed(value,['schema_name','table_name','relation_oid','relation_kind','persistence','is_partition','foreign_keys']);
     const key=identity(row.schema_name,row.table_name);
     if(!originals.has(key)||relations.has(key)||!oid(row.relation_oid)||oids.has(row.relation_oid)
@@ -424,6 +428,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
       ||!Array.isArray(row.foreign_keys)||types.isProxy(row.foreign_keys))fail();
     const dependencies=[];
     for(const value of row.foreign_keys){
+      importValidation='PLANNER_FOREIGN_KEY';
       const fk=closed(value,['constraint_oid','parent_schema_name','parent_table_name','parent_relation_oid','validated','deferrable','initially_deferred','match_type','columns']);
       if(!oid(fk.constraint_oid)||constraintOids.has(fk.constraint_oid)||!oid(fk.parent_relation_oid)
         ||fk.validated!==true||typeof fk.deferrable!=='boolean'||typeof fk.initially_deferred!=='boolean'
@@ -432,6 +437,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
       if(!parent||!['s','f'].includes(fk.match_type)||!Array.isArray(fk.columns)||types.isProxy(fk.columns)||!fk.columns.length
         ||Reflect.ownKeys(fk.columns).length!==fk.columns.length+1)fail();
       const childNames=new Set(),parentNames=new Set();
+      importValidation='PLANNER_FK_COLUMNS';
       fk.columns=Object.freeze(fk.columns.map(value=>{
         const column=closed(value,['name','data_type','generated','identity','parent_name','parent_data_type','parent_generated','parent_identity']);
         const a=child.columns.find(c=>c.name===column.name),p=parent.columns.find(c=>c.name===column.parent_name);
@@ -446,6 +452,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   }
   // Finish graph validation before any ordinary row is inserted. A selected
   // private parent is staged, not yet inserted; it is NOT an available parent.
+  importValidation='PLANNER_GRAPH';
   const parents=new Map(),children=new Map(),selfTables=new Set(),edges=[];
   for(const key of originals.keys()){parents.set(key,new Set());children.set(key,new Set());}
   for(const [child,row] of relations)for(const fk of row.dependencies){
@@ -475,6 +482,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   for(const {child,parent,fk} of edges)if(reaches(parent,child)){
     if(!candidates.has(child))candidates.set(child,[]);candidates.get(child).push(fk);
   }
+  importValidation='PLANNER_INACTIVE_FK_SOURCE';
   for(const [child,fks] of candidates){
     const observed=await inactiveOriginalForeignKeys(verifiedArchive,original,originals.get(child),fks,sql,assertContext);
     sameSource(verifiedArchive,original);for(const oid of observed)inactive.add(oid);
@@ -484,6 +492,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     parents.get(child).add(parent);children.get(parent).add(child);
   }
   await assertContext();sameSource(verifiedArchive,original);
+  importValidation='PLANNER_TOPOLOGY';
   const ready=[...parents.keys()].filter(key=>parents.get(key).size===0).sort(),ordered=[];
   while(ready.length){
     const key=ready.shift();ordered.push(originals.get(key));
@@ -499,6 +508,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     ['public','auth','storage'].includes(table.schema_name)&&BigInt(table.row_count)>1n
     &&!selfTables.has(identity(table.schema_name,table.table_name))
     &&!(table.schema_name==='public'&&['release_deployment_manifest','custodial_release_authority_restore_inventory'].includes(table.table_name)));
+  importValidation='PLANNER_BATCH_CATALOG';
   if(setCandidates.length){
     sameSource(verifiedArchive,original);await assertContext();sameSource(verifiedArchive,original);
     const profiles=await sql(`select s.schema_name,s.table_name,c.oid::text as relation_oid,
@@ -520,6 +530,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     const wanted=new Set(setCandidates.map(table=>identity(table.schema_name,table.table_name))),seen=new Set();
     const profileOid=value=>typeof value==='string'&&/^[1-9][0-9]{0,9}(?![\s\S])/.test(value)&&BigInt(value)<=4294967295n;
     let guardOid,guardSeen=false;
+    importValidation='PLANNER_BATCH_ROW';
     for(const value of profiles.rows){
       const row=closed(value,['schema_name','table_name','relation_oid','guard_oid','insert_triggers']);
       const key=identity(row.schema_name,row.table_name);
@@ -556,6 +567,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     const selected=Object.freeze({schema_name:table.schema_name,table_name:table.table_name});
     selfOrdinaryConsumers.set(selected,Object.freeze({verifiedArchive,original,table}));return selected;
   }));
+  } catch(error){recordImmutableFreshFailure(error,{import_validation:importValidation});throw error;}
 }
 
 // Internal DATA consumer, not a target admission or alternate client port.
@@ -1003,6 +1015,7 @@ export async function stageVerifiedImmutablePrivateData(options) {
     actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,
     target_release_identity:intent.target_release_identity,catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers});
   let importOperation='BEGIN_IMPORT';
+  try {
   async function sql(text,args=[]) {
     sameSource(verifiedArchive,original);
     let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',
@@ -1011,6 +1024,7 @@ export async function stageVerifiedImmutablePrivateData(options) {
   }
   const initial=await sql('select custodial_dr.begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb) as context',
     [intent.restore_id,String(intent.authority_generation),binding.archive_digest,JSON.stringify(manifest)]);
+  importOperation='VERIFY_INITIAL_WITNESS';
   const witness=Object.freeze(contextWitness(initial));
   if(witness.restore_id!==intent.restore_id||witness.authority_generation!==String(intent.authority_generation)
     ||witness.archive_digest!==binding.archive_digest)fail();
@@ -1065,6 +1079,7 @@ export async function stageVerifiedImmutablePrivateData(options) {
   for(const name of witnessKeys)if(!isDeepStrictEqual(result[name],witness[name]))fail();
   if(result.private_rows!==String(total)||result.transaction_authority!==false||result.admission_resumed!==false)fail();
   return Object.freeze(result); // NOT a COMMIT, restart/resend authority or effect receipt.
+  } catch(error){recordImmutableFreshFailure(error,{import_operation:importOperation});throw error;}
 }
 
 // Prepare DATA only from this module's actual original acknowledged decision.

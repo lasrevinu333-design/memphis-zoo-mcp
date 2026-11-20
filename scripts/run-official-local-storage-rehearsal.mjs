@@ -134,9 +134,9 @@ const insist = (value,message) => { if(!value) throw new Error(message); };
 // One fixed dependency, authenticated before import. The exact URL preserves
 // the host factory's WeakMap instance; the provider receives an owned0400 copy.
 const diagnosticHelperUrl=new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url);
-const diagnosticHelperSha256='cfa967626b28b2b24f5c578e7af23e187223cc4802e68dcfbd1cfa72c6ecbe26';
+const diagnosticHelperSha256='bffc1c516cbd8e22fc3527f01a509251ecaeb0b4372977546c1466852730bc8f';
 const diagnosticHelperBytes=readFileSync(diagnosticHelperUrl);
-insist(diagnosticHelperBytes.length===14723 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
+insist(diagnosticHelperBytes.length===14992 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
 const {readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import(diagnosticHelperUrl.href);
 insist(readFileSync(diagnosticHelperUrl).equals(diagnosticHelperBytes),'Fixed diagnostic helper changed.');
 export function stageOwnedStorageWorker(mount){
@@ -369,7 +369,7 @@ export function privateRestoreStageDiagnostic(phase,event,error=null,freshFields
 export function projectPrivateRestoreDiagnostic(value){
   if(!value||typeof value!=='object'||isProxy(value)||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return null;
   const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
-  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','import_relation_schema','import_native_operation','guard_schema','guard_relation_sha256','guard_trigger_sha256','guard_function_sha256','guard_receipt_checks','source_statement','fresh_refusal'];
+  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','import_operation','import_validation','import_relation_schema','import_native_operation','guard_schema','guard_relation_sha256','guard_trigger_sha256','guard_function_sha256','guard_receipt_checks','source_statement','fresh_refusal'];
   if(keys.some(key=>!allowed.includes(key)||!Object.hasOwn(descriptors[key],'value')||descriptors[key].enumerable!==true))return null;
   const data=Object.fromEntries(keys.map(key=>[key,descriptors[key].value]));
   if(keys.some(key=>key!=='private_payload_exported'&&typeof data[key]!=='string'))return null;

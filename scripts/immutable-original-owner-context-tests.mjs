@@ -25,6 +25,15 @@ const profiles=[
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('closed JavaScript planner validation labels survive the receipt chain without exporting values',()=>{
+ const error=Object.assign(new Error('PRIVATE FIELD VALUE'),{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'});
+ recordImmutableFreshFailure(error,{import_operation:'PLAN_ORDINARY_ORDER',import_validation:'PLANNER_FK_COLUMNS',raw_value:'PRIVATE FIELD VALUE'});
+ const value=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);
+ assert.equal(value.import_operation,'PLAN_ORDINARY_ORDER');assert.equal(value.import_validation,'PLANNER_FK_COLUMNS');
+ assert.deepEqual(projectPrivateRestoreDiagnostic(value),value);
+ const receipt=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',private_payload_exported:false,restore_diagnostics:[value]})));
+ assert.equal(receipt.restore_diagnostics[0].import_validation,'PLANNER_FK_COLUMNS');assert.doesNotMatch(JSON.stringify(receipt),/PRIVATE FIELD VALUE|raw_value/);
+});
 test('fixed original-bootstrap P0001 labels survive the actual failure and receipt chain without private messages',()=>{
  const source=text('./immutable-private-data-import.mjs'),a=source.indexOf('function fail('),z=source.indexOf('function closed(',a);assert.ok(a>0&&z>a);
  const fail=new Function('types','privateFailures','recordImmutableFreshFailure','classifyImmutableImportPermission',source.slice(a,z)+'return fail;')(types,new WeakMap(),recordImmutableFreshFailure,classifyImmutableImportPermission);
