@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {EventEmitter} from 'node:events';
-import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
+import {PG_IMAGE,privatePostgresProcessDiagnostic,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
 import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
@@ -844,4 +844,19 @@ test('owned PostgreSQL relay permits quiet native work up to the existing child 
  for(let i=0;i<80;i++)handlers.get('timeout')();
  assert.equal(count(),64);assert.equal(destroys,80);
  assert.ok(source.includes('await closeOwnedRelay(relay,sockets,Date.now()+15000)'));
+});
+
+
+test('private PostgreSQL process observation distinguishes backend death and cgroup OOM without exporting logs',()=>{
+ const raw='PRIVATE FIXTURE Ada; INSERT SECRET';
+ const observed=privatePostgresProcessDiagnostic({Running:true,OOMKilled:false,ExitCode:0,Error:raw},'low 0\nhigh 0\nmax 41\noom 2\noom_kill 1\noom_group_kill 0\n','2026-11-20 UTC LOG:  server process (PID 318) was terminated by signal 9: Killed\n'+raw);
+ assert.deepEqual(observed,{running:true,oom_killed:false,exit_code:0,cgroup_oom:'2',cgroup_oom_kill:'1',backend_sigkill_observed:true,backend_sigsegv_observed:false,metadata_only:true,private_payload_exported:false});assertNoPrivate(observed);assert.ok(!JSON.stringify(observed).includes(raw));
+ assert.equal(privatePostgresProcessDiagnostic({},raw,raw).cgroup_oom_kill,null);
+ assert.equal(privatePostgresProcessDiagnostic({},'oom_kill SECRET\n','row: SIGKILL PRIVATE').backend_sigkill_observed,false);
+ let reads=0;const hostile={};Object.defineProperty(hostile,'Running',{get(){reads++;throw Error(raw);}});
+ assert.equal(privatePostgresProcessDiagnostic(hostile,'','').running,null);assert.equal(reads,0);
+ const proxy=new Proxy({},{getOwnPropertyDescriptor(){throw Error(raw);}});assert.equal(privatePostgresProcessDiagnostic(proxy,'','').running,null);
+ const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+ assert.ok(source.indexOf('finalPostgresProcess=privatePostgresProcessDiagnostic')<source.indexOf("await docker(['rm','-f',cid]"));
+ assert.ok(source.includes("['exec',cid,'cat','/sys/fs/cgroup/memory.events']"));
 });

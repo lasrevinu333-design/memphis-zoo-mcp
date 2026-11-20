@@ -85,6 +85,22 @@ export function originalOwnerMetadataDiagnostics(inventory){
       source_inventory_match_count:relations.filter(r=>r.schema_name==='custodial_dr'&&r.table_name==='restore_control').length,
       owner:'NOT_ESTABLISHED_BY_SOURCE_INVENTORY'},admission_changed:false};
 }
+// Failure observation only. Never exports PostgreSQL log payloads or admits work.
+export function privatePostgresProcessDiagnostic(state,memoryEvents,logs){
+ const safe=state&&typeof state==='object'&&!isProxy(state)?state:{};
+ const own=name=>{const d=Object.getOwnPropertyDescriptor(safe,name);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+ const events={};
+ if(typeof memoryEvents==='string'&&Buffer.byteLength(memoryEvents)<=4096)
+  for(const line of memoryEvents.trim().split('\n')){const m=/^(low|high|max|oom|oom_kill|oom_group_kill) ([0-9]{1,15})$/.exec(line);if(m&&!Object.hasOwn(events,m[1]))events[m[1]]=m[2];}
+ const text=typeof logs==='string'&&Buffer.byteLength(logs)<=1024*1024?logs:'';
+ return {running:typeof own('Running')==='boolean'?own('Running'):null,
+  oom_killed:typeof own('OOMKilled')==='boolean'?own('OOMKilled'):null,
+  exit_code:Number.isSafeInteger(own('ExitCode'))?own('ExitCode'):null,
+  cgroup_oom:events.oom??null,cgroup_oom_kill:events.oom_kill??null,
+  backend_sigkill_observed:/^[^\r\n]*LOG:  server process \(PID [0-9]+\) was terminated by signal 9: Killed\s*$/m.test(text),
+  backend_sigsegv_observed:/^[^\r\n]*LOG:  server process \(PID [0-9]+\) was terminated by signal 11: Segmentation fault\s*$/m.test(text),
+  metadata_only:true,private_payload_exported:false};
+}
 export function selectPrivateProfile(source){
   const names=source.selection.privateTables.map(t=>t.table_name).sort();
   if(!names.length)return 'native';
@@ -212,7 +228,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let relaySocketTimeouts=0;
+  let relaySocketTimeouts=0,finalPostgresProcess=null;
   let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -224,6 +240,7 @@ export async function runPrivate(){
     let stdout='',bytes=0,stdoutBytes=0,stderrBytes=0,failed=false,hardTimer,timedOut=false,outputLimit=false,cancelled=false,spawnError=false;children.add(child.pid);
     const operationAtStart=phase==='create_owned_target'&&!cleanup?targetCreationOperation(creationOperation):null;
     const privateOperation=!cleanup&&diagnosticOperation!==null?privateSubprocessOperation(diagnosticOperation):null;
+    const privateProcessLogs=cleanup&&command==='docker'&&args.length===4&&args[0]==='logs'&&args[1]==='--tail'&&args[2]==='100'&&args[3]===cid;
     const pinnedPull=operationAtStart==='PULL_PINNED_POSTGRES_IMAGE'&&command==='docker'&&args.length===2&&args[0]==='pull'&&args[1]===PG_IMAGE;
     const pullErrorChunks=[];let pullErrorBytes=0,pullErrorTruncated=false;
     const kill=(reason='TIMEOUT')=>{failed=true;timedOut ||= reason==='TIMEOUT';outputLimit ||= reason==='OUTPUT_LIMIT';try{process.kill(-child.pid,'SIGTERM');}catch{}
@@ -234,6 +251,7 @@ export async function runPrivate(){
     child.stdout.on('data',b=>{bytes+=b.length;stdoutBytes+=b.length;if(bytes>16*1024*1024)kill('OUTPUT_LIMIT');else stdout+=b;});
     // Private SQL/rows/errors never enter CI logs or receipt artifacts.
     child.stderr.on('data',b=>{bytes+=b.length;stderrBytes+=b.length;
+      if(privateProcessLogs&&stderrBytes<=1024*1024)stdout+=b; // Classified in memory only; never returned to CI output.
       if(pinnedPull){pullErrorBytes+=b.length;if(pullErrorBytes<=65536)pullErrorChunks.push(b);else pullErrorTruncated=true;}
       if(bytes>16*1024*1024)kill('OUTPUT_LIMIT');});
     child.stdin.on('error',()=>{});child.stdin.end(input);
@@ -380,6 +398,10 @@ export async function runPrivate(){
       // Reconcile uncertain births using exact name + unpredictable ownership label.
       if(!cid){const ids=(await docker(['ps','-aq','--no-trunc','--filter','name=^/'+name+'$','--filter','label='+label+'='+owner],{cleanup:true})).split('\n').filter(Boolean);assert.ok(ids.length<=1);cid=ids[0];}
       if(cid){const value=await inspect(true);assert.equal(value.Id,cid);assert.equal(value.Name,'/'+name);assert.equal(value.Config.Labels[label],owner);assert.equal(value.Config.Image,PG_IMAGE);
+        let memoryEvents='',logs='';
+        try{memoryEvents=await docker(['exec',cid,'cat','/sys/fs/cgroup/memory.events'],{cleanup:true,timeout:5000});}catch{}
+        try{logs=await docker(['logs','--tail','100',cid],{cleanup:true,timeout:5000});}catch{}
+        finalPostgresProcess=privatePostgresProcessDiagnostic(value.State,memoryEvents,logs);
         await docker(['rm','-f',cid],{cleanup:true});assert.equal(await docker(['ps','-aq','--filter','id='+cid],{cleanup:true}),'');}
       pgAbsent=true;
       const networks=(await docker(['network','ls','--no-trunc','-q','--filter','label='+label+'='+owner],{cleanup:true})).split('\n').filter(Boolean);assert.ok(networks.length<=1);
@@ -400,6 +422,7 @@ export async function runPrivate(){
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
+      postgres_process:finalPostgresProcess,
       relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:privateRestoreWorkTimeoutMs},
       subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
