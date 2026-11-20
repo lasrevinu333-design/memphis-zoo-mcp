@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {removePrivateCatalogLeaseRunner} from './private-catalog-lease-runner-source.mjs';
 import {createHash} from 'node:crypto';
 import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,projectPrivateFunctionStats,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
 const current={id:'immutable-private-current-postgres',actor:'postgres'};
@@ -67,7 +68,7 @@ test('complete runner byte inverse removes only the five observational source ad
  assert.equal(sha(raw),'37eab10bde43f2eee685dc6d3601803e0c09715d3faabb309bb24ba69f49e1cc');
  const inverse=JSON.parse(raw);assert.equal(inverse.hunks.length,5);
  assert.equal(inverse.format,'custodial.private-function-cost-observational-inverse.v1');
- let source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+ let source=removePrivateCatalogLeaseRunner(readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8'));
  assert.equal(sha(source),inverse.currentSha256);
  for(const hunk of inverse.hunks){assert.equal(source.split(hunk.after).length,2);source=source.replace(hunk.after,()=>hunk.before);}
  assert.equal(sha(source),'3c1f648dff14122bbcc33c1e5f4cbe5b88a9458408ce1a48f5b65e1323b16eac');

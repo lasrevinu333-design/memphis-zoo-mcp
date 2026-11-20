@@ -1,0 +1,23 @@
+{
+  "format": "custodial.private-catalog-lease-runner-inverse.v1",
+  "previousSha256": "05902eaa885fa652590ac056658715691ed13df2265fcd10aee51bed0b69f586",
+  "currentSha256": "bca81f466de6733d5968fc23742ce11e765809cb272164dd264e7ff03a37f4b1",
+  "hunks": [
+    {
+      "before": "import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';",
+      "after": "import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';\nimport {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';"
+    },
+    {
+      "before": "subprocessFailure=null,cronSetup=null,vendorPrivileges=null;",
+      "after": "subprocessFailure=null,cronSetup=null,vendorPrivileges=null,catalogPrivileges=null;"
+    },
+    {
+      "before": "      const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreOriginal);",
+      "after": "      const restoreWithCatalogLease=async()=>{\n        try{\n          const catalog=await withIsolatedCurrentCatalogPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreOriginal);\n          catalogPrivileges=catalog.receipt;assert.equal(catalogPrivileges.retirement_verified,true);return catalog.value;\n        }catch(error){\n          if(error&&typeof error==='object'&&!isProxy(error))catalogPrivileges=projectIsolatedCatalogPrivilegeStatus(Object.getOwnPropertyDescriptor(error,'catalog_privileges')?.value)??catalogPrivileges;\n          throw error;\n        }\n      };\n      const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreWithCatalogLease);"
+    },
+    {
+      "before": "cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,source_preparation:",
+      "after": "cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,catalog_privileges:catalogPrivileges,source_preparation:"
+    }
+  ]
+}

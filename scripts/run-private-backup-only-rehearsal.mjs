@@ -18,6 +18,7 @@ import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOw
 import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
+import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';
 import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
 
 const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
@@ -230,7 +231,7 @@ export async function runPrivate(){
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
   let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null;
-  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null;
+  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null,catalogPrivileges=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
@@ -386,7 +387,16 @@ export async function runPrivate(){
       assertPrivateResult(restored,source,envelope.intent);await verifyTarget();return restored;
     };
     if(requireOwnerProfile().id==='immutable-private-current-postgres'){
-      const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreOriginal);
+      const restoreWithCatalogLease=async()=>{
+        try{
+          const catalog=await withIsolatedCurrentCatalogPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreOriginal);
+          catalogPrivileges=catalog.receipt;assert.equal(catalogPrivileges.retirement_verified,true);return catalog.value;
+        }catch(error){
+          if(error&&typeof error==='object'&&!isProxy(error))catalogPrivileges=projectIsolatedCatalogPrivilegeStatus(Object.getOwnPropertyDescriptor(error,'catalog_privileges')?.value)??catalogPrivileges;
+          throw error;
+        }
+      };
+      const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreWithCatalogLease);
       vendorPrivileges=qualified.receipt;assert.equal(vendorPrivileges.retirement_verified,true);result=qualified.value;
     }else result=await restoreOriginal();
     phase='verified_waiting_cleanup';
@@ -432,7 +442,7 @@ export async function runPrivate(){
       postgres_process:finalPostgresProcess,
       function_cost:finalFunctionStats,
       relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:privateRestoreWorkTimeoutMs},
-      subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
+      subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,catalog_privileges:catalogPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }

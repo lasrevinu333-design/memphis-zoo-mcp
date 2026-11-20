@@ -1,5 +1,6 @@
 // Fixed offline composition. The runtime cannot select SQL, schemas or bounds.
 import assert from 'node:assert/strict';
+import {removeCurrentCatalogStability} from './immutable-current-catalog-stability-source.mjs';
 import {removeOrdinaryProgressObservations} from './immutable-ordinary-progress-source-proof.mjs';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -20,7 +21,7 @@ export function extendCurrentBoundedOrdinaryStage(prior){
  s.sourceSha256=sha(s.sql);assert.deepEqual(removeCurrentBoundedOrdinaryStage(p),prior);return p;
 }
 export function removeCurrentBoundedOrdinaryStage(program){
- assert.equal(arguments.length,1);const p=structuredClone(program),s=p.statements[0];
+ assert.equal(arguments.length,1);const p=removeCurrentCatalogStability(program),s=p.statements[0];
  if(!s.sql.includes(marker))return p;
  const addition=currentBoundedOrdinaryStageSql()+'\nCOMMIT;\n';assert.equal(s.sql.split(addition).length,2);
  s.sql=s.sql.replace(addition,'COMMIT;\n');s.sourceSha256=sha(s.sql);

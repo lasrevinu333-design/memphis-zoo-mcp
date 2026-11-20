@@ -56,6 +56,7 @@ export async function withIsolatedCurrentVendorPrivileges({verifiedArchive,sourc
  current();assert.equal(typeof run,'function');assert.equal(typeof verifyTarget,'function');assert.match(runId,/^[1-9][0-9]*$/);
  const expected='mz_schema_rebuild_'+runId,url=new URL(connectionString);
  assert.equal(url.protocol,'postgresql:');assert.ok(['localhost','127.0.0.1'].includes(url.hostname));
+ assert.equal(url.search,'');assert.equal(url.hash,'');assert.match(url.port,/^[1-9][0-9]{0,4}$/);assert.ok(Number(url.port)<=65535);
  assert.equal(decodeURIComponent(url.pathname),'/'+expected);assert.equal(decodeURIComponent(url.username),'supabase_admin');
  let databaseOid,beforeRoles,beforeMembers,setupVerified=false,callbackInvoked=false,retired=false,
   setupClosed=false,retirementClosed=false,value,failure;

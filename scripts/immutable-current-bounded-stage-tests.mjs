@@ -9,6 +9,7 @@ import {createInterface} from 'node:readline';
 import * as archiveApi from './disaster-recovery-archive.mjs';
 import {recordImmutableFreshFailure,recordImmutableFreshProgress} from './immutable-private-stage-diagnostic.mjs';
 import {currentBoundedOrdinaryStageSql,extendCurrentBoundedOrdinaryStage,removeCurrentBoundedOrdinaryStage,removeCurrentBoundedOrdinaryConsumerSource} from './immutable-current-bounded-stage-source.mjs';
+import {removeCurrentCatalogStability} from './immutable-current-catalog-stability-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
 const text=readFileSync(new URL('./immutable-private-data-import.mjs',import.meta.url),'utf8');
@@ -58,7 +59,7 @@ function fixture(options={}){
 }
 test('whole fd53 predecessor and all51 guard definitions survive exactly',()=>{
  const prior=removeCurrentBoundedOrdinaryStage(program);assert.equal(sha(JSON.stringify(prior,null,2)+'\n'),'fd53fda1891932c4cae89fc1f6f4b1c6116515ad2120aca6c41a1d5302cc84da');
- assert.deepEqual(extendCurrentBoundedOrdinaryStage(prior),program);assert.deepEqual(program.recipes,prior.recipes);
+ assert.deepEqual(extendCurrentBoundedOrdinaryStage(prior),removeCurrentCatalogStability(program));assert.deepEqual(program.recipes,prior.recipes);
  assert.equal(program.statements.length,13);assert.equal(program.statements[0].sql.split(currentBoundedOrdinaryStageSql()).length,2);
  for(let i=1;i<13;i++)assert.deepEqual(program.statements[i],prior.statements[i]);
 });

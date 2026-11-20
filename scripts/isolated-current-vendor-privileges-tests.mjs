@@ -67,6 +67,13 @@ test('callback failure still retires exact owned grants and never replays the or
  assert.equal(failure.code,'ISOLATED_VENDOR_PRIVILEGES_REFUSED');assert.equal(failure.vendor_privileges.retirement_verified,true);
  assert.equal(w.state.callbacks,1);assert.deepEqual(w.state.members,w.baseline);assert.doesNotMatch(JSON.stringify(failure),/PRIVATE ORIGINAL ROW/);
 });
+test('fixed loopback privilege route rejects connection options, fragments and implicit or zero ports before any client',async()=>{
+ const base='postgresql://supabase_admin:fixture@127.0.0.1:5555/mz_schema_rebuild_123';
+ for(const connectionString of [base+'?host=example.com',base+'?options=-c%20role%3Dpostgres',base+'#ignored',
+  base.replace(':5555/','/'),base.replace(':5555/',':0/')]){
+  const w=world();w.options.connectionString=connectionString;await assert.rejects(()=>w.execute());assert.equal(w.state.clients,0);assert.equal(w.state.callbacks,0);
+ }
+});
 test('lost setup commit acknowledgment reconciles only cleanup and cannot start or retry the restore',async()=>{
  const w=world({lostCommit:true});let failure;try{await w.execute();}catch(error){failure=error;}
  assert.equal(w.state.callbacks,0);assert.equal(w.state.commands.filter(s=>s.startsWith('GRANT ')).length,2);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {removeOrdinaryProgressObservations} from './immutable-ordinary-progress-source-proof.mjs';
+import {removeCurrentCatalogStability} from './immutable-current-catalog-stability-source.mjs';
 import {privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,privateRestoreStreamDiagnostic,privateEvidenceReceipt} from './run-official-local-storage-rehearsal.mjs';
 import {immutableFreshDiagnosticFields} from './immutable-private-stage-diagnostic.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -17,7 +18,8 @@ test('every importer and diagnostic predecessor byte survives only the exact obs
   assert.equal(removeOrdinaryProgressObservations(name,prior),prior);
   assert.throws(()=>removeOrdinaryProgressObservations(name,current+' '));
  }
- const program=readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url));
+ const current=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
+ const program=Buffer.from(JSON.stringify(removeCurrentCatalogStability(current),null,2)+'\n');
  assert.equal(sha(program),'6f35188dc390ec414f55270dbe6f472ea7887a7c028b777528916e6dff029661');
  assert.ok(program.equals(readFileSync(new URL('../proposals/immutable-private-current-postgres-program-absence-candidate.json',import.meta.url))));
  assert.throws(()=>removeOrdinaryProgressObservations('caller-selected-file',source('immutable-private-data-import.mjs')));
