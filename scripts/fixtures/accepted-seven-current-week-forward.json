@@ -1,0 +1,97 @@
+{
+  "schema": "custodial.accepted-seven-forward-source-selection.v1",
+  "constructor_migrations": 310,
+  "forward": [
+    {
+      "name": "20261103004520_authoritative_events_cancellation.sql",
+      "bytes": 11704,
+      "sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b"
+    },
+    {
+      "name": "20261110235223_active_cleaning_dashboard_status_precedence.sql",
+      "bytes": 1003,
+      "sha256": "155cdc57039955cb05988ae6de620e8c2329a5364635fce92d2139a005aab98b"
+    },
+    {
+      "name": "20261110235651_native_active_session_gps_binding.sql",
+      "bytes": 13069,
+      "sha256": "4e2e53ccb2e98159900febcf9f03cf04718daa6a4353029f570576937fa7ae0c"
+    },
+    {
+      "name": "20261111160601_active_work_gps_reader_policy.sql",
+      "bytes": 5305,
+      "sha256": "7f6eee0ea560ac796e3b6975a689eeb8bfa892cddade1024ff7ace4334d6650a"
+    },
+    {
+      "name": "20261111172325_assigned_phone_location.sql",
+      "bytes": 10456,
+      "sha256": "6bbbf5492f9e33a850935118feec0cdab4ac8e80218df934371e454b04875ca6"
+    },
+    {
+      "name": "20261113132242_native_provider_best_effort_timing.sql",
+      "bytes": 311142,
+      "sha256": "c92c06fd99e141a758846dfb69f045fd26415ef84f4a3f49d298f1f77c1aa5bc"
+    },
+    {
+      "name": "20261113164433_approved_manual_exact_shift_count_compatibility.sql",
+      "bytes": 431456,
+      "sha256": "07f9e9b3fd84273578cee74fcfde65b4babb7195614d1a2a2850863c46ed132a"
+    },
+    {
+      "name": "20261115094558_manual_off_day_phone_targets.sql",
+      "bytes": 28720,
+      "sha256": "148cb9730bf5c0966793c97a529d180a03d575940eb196e1fd4dc26e7610a69a"
+    },
+    {
+      "name": "20261115133604_native_alert_generation_pending.sql",
+      "bytes": 19748,
+      "sha256": "79dc01a924668455a4438e11fc644a290e7caad8f39bdacf211548b363c99e8b"
+    },
+    {
+      "name": "20261115205201_accepted_seven_pattern_update_reuse_existing_capacity.sql",
+      "bytes": 1326046,
+      "sha256": "ebbf6b7ff9c2c11d711be7e222c3b27c176cd22993de2ae1cd295cd3991f35bd"
+    }
+  ],
+  "deferred": [
+    {
+      "name": "20261120002521_messenger_direct_reopen_intents_v2.sql",
+      "bytes": 11453,
+      "sha256": "62b5102a0f0b5fe601d9d67509c199919808001f00f4d88d0faca5f7dac96fe6"
+    },
+    {
+      "name": "20261120010931_messenger_direct_intent_cleanup.sql",
+      "bytes": 2836,
+      "sha256": "1aed43cb28f280d7a42ac2764795c94b6cf8643954b9dfc2076f85b23283bee4"
+    }
+  ],
+  "production": false,
+  "release_admission": false,
+  "prerequisites": [
+    {
+      "path": "scripts/fixtures/accepted-seven-live-canary-parity.sql",
+      "name": "accepted-seven-live-canary-parity.sql",
+      "bytes": 271967,
+      "sha256": "4d872fb0ea1c499abf202f7fbd4be93a27fa5e47011f72a074892b436cb37bd0",
+      "before": "20261113132242_native_provider_best_effort_timing.sql",
+      "fixture_only": true
+    },
+    {
+      "path": "proposals/native-departure-v2.proposed.sql",
+      "name": "native-departure-v2.proposed.sql",
+      "bytes": 135491,
+      "sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70",
+      "before": "20261113132242_native_provider_best_effort_timing.sql",
+      "fixture_only": false
+    },
+    {
+      "path": "scripts/fixtures/accepted-seven-digest-callsite-retention-current310.sql",
+      "name": "accepted-seven-digest-callsite-retention-current310.sql",
+      "bytes": 79108,
+      "sha256": "f3f4fc230b2f593dffba332dc4d473590ab5a5562615adc43ccc6d89dc60c943",
+      "before": "20261113164433_approved_manual_exact_shift_count_compatibility.sql",
+      "fixture_only": true,
+      "source": "Exact inverse-proven current310 constructor actor counterpart; production eight-owner SQL unchanged"
+    }
+  ]
+}

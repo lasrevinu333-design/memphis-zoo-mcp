@@ -8,11 +8,12 @@ import {postgresJsonbContentDigest} from '../src/static-weekly-schedule-compiler
 import {mapApprovedStaticTemplateCandidate as map,prepareApprovedStaticTemplateProjection} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {loadSixPersonAbsenceSource} from './fixtures/six-person-absence-source.mjs';
 import {loadFullNineV6Source} from './fixtures/full-nine-v6-source.mjs';
+import {readHistoricalOwnerConfig} from './fixtures/historical-owner-config-source.mjs';
 
 const started=performance.now(),deadline=createStaticWeeklyDeadline(60_000);
 const sha=x=>createHash('sha256').update(x).digest('hex');
 installStaticWeeklySha256HexAccelerator(sha);
-const configBytes=fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url));
+const configBytes=readHistoricalOwnerConfig();
 assert.equal(sha(configBytes),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
 const config=JSON.parse(configBytes),clone=structuredClone;
 let checks=0;
@@ -253,10 +254,14 @@ const dated=clone(changed);dated.selection.kind='DATED_ABSENCE';const datedResul
 check('dated mapping preserves all unrelated days and original exceptions',()=>{assert.deepEqual(datedResult.candidateSource.version.assignments.filter(r=>r.dayOfWeek!==1),source.version.assignments.filter(r=>r.dayOfWeek!==1));assert.deepEqual(datedResult.candidateSource.exceptions,source.exceptions);});
 for(const field of ['lunch','shift','acceptedRouteAnchorLocationId','qualifications','restrictions'])check(`${field} incompatibility fails without solver fallback`,()=>{
  const a=clone(base);for(const r of a.currentSource.version.slotAvailability.filter(r=>r.slotId===kaili)){
-  if(field==='lunch')r.lunch={start:'11:00',end:'12:00'};else if(field==='shift')r.shift={start:'10:00',end:'17:00'};
+  if(field==='lunch')r.lunch={start:'09:00',end:'10:00'};else if(field==='shift')r.shift={start:'10:00',end:'17:00'};
   else if(field==='acceptedRouteAnchorLocationId')r[field]='unknown-anchor';else if(field==='qualifications')r[field]=[];else r[field]=[source.version.assignments.find(w=>w.ownerSlotId===kaili).locationId];
  }
- assert.throws(()=>map(a));
+ assert.throws(()=>prepareApprovedStaticTemplateProjection(a));
+});
+check('a different full-hour lunch outside fixed work is not itself an incompatibility',()=>{
+ const a=clone(base);for(const r of a.currentSource.version.slotAvailability.filter(r=>r.slotId===kaili))r.lunch={start:'11:00',end:'12:00'};
+ assert.doesNotThrow(()=>map(a));
 });
 check('Karen dated absence produces five available: no invented six fallback',()=>{
  const a=clone(base);a.selection.kind='DATED_ABSENCE';a.selection.availablePersonIds=a.selection.availablePersonIds.filter(p=>p!==config.slots.KAREN.personId);

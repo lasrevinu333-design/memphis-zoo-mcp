@@ -18,8 +18,20 @@ export function catalogConnectionOptions({connectionString,caPem}) {
 // account's already granted cron-table access. row_security=off makes a
 // filtered/insufficiently privileged read fail instead of passing as empty.
 export const NATIVE_CRON_CATALOG_SQL=SCHEMA_CATALOG_QUERIES.cron_jobs.replace('custodial_release_identity.custodial_schema_identity_cron_jobs()','cron.job');
+export const CATALOG_RENDERING_SEARCH_PATH='pg_catalog,public,extensions';
+const CATALOG_CONTEXT_SAVEPOINT='custodial_catalog_rendering_context';
+const READ_SEARCH_PATH="select pg_catalog.current_setting('search_path') as search_path";
+const SET_SEARCH_PATH="select pg_catalog.set_config('search_path', $1, true) as search_path";
 export async function captureCatalogFromSnapshot(client) {
   await client.query('set local row_security = off');
+  const previous=(await client.query(READ_SEARCH_PATH)).rows?.[0]?.search_path;
+  assert.ok(typeof previous==='string'&&!previous.includes('\0'),'Complete caller search_path required');
+  // An SQL error aborts a PostgreSQL transaction. A local savepoint lets us
+  // restore the caller's DATA rendering context on both success and failure.
+  await client.query('savepoint '+CATALOG_CONTEXT_SAVEPOINT);
+  const setPath=async value=>assert.equal((await client.query(SET_SEARCH_PATH,[value])).rows?.[0]?.search_path,value,'Catalog search_path context was not applied');
+  try {
+  await setPath(CATALOG_RENDERING_SEARCH_PATH);
   // Server-side JSON uses exactly the same timestamp/bigint representation as
   // the existing Docker/MCP capture, and the common reader retains rejection
   // of unsupported foreign tables and stand-alone composite types.
@@ -30,7 +42,19 @@ export async function captureCatalogFromSnapshot(client) {
     assert.ok(result?.rows?.length===1&&Array.isArray(result.rows[0].catalog_rows),'Complete source catalog response required');
     return {rows:result.rows[0].catalog_rows.map(row=>{if(!Object.hasOwn(row,'object_comment'))return row;const next={...row,comment:row.object_comment};delete next.object_comment;return next;})};
   }});
+  await setPath(previous);
+  await client.query('release savepoint '+CATALOG_CONTEXT_SAVEPOINT);
   return inventory;
+  } catch(error) {
+    try {
+      await client.query('rollback to savepoint '+CATALOG_CONTEXT_SAVEPOINT);
+      await setPath(previous);
+      await client.query('release savepoint '+CATALOG_CONTEXT_SAVEPOINT);
+    } catch(cleanupError) {
+      throw new AggregateError([error,cleanupError],'Catalog capture failed and caller rendering context could not be restored.');
+    }
+    throw error;
+  }
 }
 
 export async function readCatalogReadOnly({connectionString,caPem,Client=pg.Client}) {

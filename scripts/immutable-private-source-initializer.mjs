@@ -2,10 +2,12 @@
 // The caller owns its normal authenticated connection, transaction and BOTH
 // global fences. This function never begins, commits, resumes or retries one.
 import assert from 'node:assert/strict';
+import {recordImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import pg from 'pg';
-import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
+import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource,
+ readVerifiedImmutableBootstrapOwnerProfile,readVerifiedImmutableBootstrapStatement} from './immutable-private-source-bootstrap.mjs';
 import {reconcileVerifiedImmutableBootstrapAcls} from './immutable-private-source-acl.mjs';
 import {postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 import {restoreCronJobs,verifyRestoredCronJobs,normalizedCronJobs} from './disaster-recovery-cron.mjs';
@@ -37,39 +39,22 @@ const contextSql=`select current_user actor,session_user session_actor,current_d
    and l.classid=((hashtextextended(f.name,0)>>32)&4294967295)::oid
    and l.objid=(hashtextextended(f.name,0)&4294967295)::oid and l.objsubid=1)) held_fences`;
 
-function unwrapSource(statement){
- if(statement.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql'){
-  // This reviewed DO-only Source must stay inside the original transaction.
-  assert.equal(statement.sourceSha256,'2b8c5dad21a56d6132688a998ab3ae3df78584686c8b2f4fdd7baf7bbafd527d');
-  assert.equal(sha(statement.sql),statement.sourceSha256);
-  return statement.sql;
- }
- if(statement.sourcePath==='proposals/immutable-original-manager-push-restore.sql'){
-  // This one newly admitted wrapper is fixed program Source, never caller SQL.
-  assert.equal(statement.sourceSha256,'2a9dd3a1050d0f7e7714abdd8feeb4259eea54287c68ffacd787b9072a9f7f9d');
-  assert.equal(sha(statement.sql),statement.sourceSha256);
- }
- const outer=['proposals/immutable-private-owner-context.sql','proposals/immutable-original-employee-restore.sql',
-  'proposals/immutable-original-device-boundary-restore.sql','proposals/immutable-original-authority-reconciliation.sql',
-  'proposals/immutable-original-manager-push-restore.sql'].includes(statement.sourcePath);
- if(!outer)return statement.sql;
- const begin=statement.sourcePath==='proposals/immutable-private-owner-context.sql'?'\nBEGIN;':'\nBEGIN;\n';
- assert.equal(statement.sql.split(begin).length,2);assert.match(statement.sql,/\nCOMMIT;\s*$/);
- // Only the fixed Source's declared outer wrapper is omitted. Its owner,
- // predecessor, RLS/ACL, ALWAYS and currentness checks are not rewritten.
- return statement.sql.replace(begin,'\n').replace(/\nCOMMIT;\s*$/,'\n');
-}
 
 export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive}={}){
+ let initializerStage='PREPARE_SOURCE',initializerOperation,sourceStatement;
+ try{
  if(!native(db)||attempted.has(db))throw new Error('Original fresh Source initializer is unavailable.');
  attempted.add(db); // No second attempt on a connection with an uncertain write.
  const source=await prepareVerifiedImmutableBootstrapSource(verifiedArchive);
+ const ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive);
  let originalContext;
- const checkSource=()=>{assert.ok(native(db));assertVerifiedImmutableBootstrapSource(source,verifiedArchive);};
+ const checkSource=()=>{assert.ok(native(db));assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
+  assert.deepEqual(readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive),ownerProfile);};
  const readContext=async()=>{
+  initializerOperation='READ_NATIVE_CONTEXT';
   checkSource();const result=await Reflect.apply(nativeQuery,db,[contextSql]);checkSource();
   assert.equal(result.rowCount,1);const row=result.rows[0];
-  assert.equal(row.actor,'supabase_admin');assert.equal(row.session_actor,row.actor);assert.equal(row.readonly,'off');
+  assert.equal(row.actor,ownerProfile.actor);assert.equal(row.session_actor,row.actor);assert.equal(row.readonly,'off');
   assert.equal(row.replication,'origin');assert.equal(row.row_security,'off');assert.equal(row.search_path,'pg_catalog');
   assert.equal(row.database_owner,'postgres');assert.equal(row.dr_owner,'postgres');
   assert.equal(row.original_owned_relations,5);assert.equal(row.active_leases,0);assert.equal(row.held_fences,2);
@@ -79,9 +64,10 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   if(originalContext)assert.deepEqual(row,originalContext,'Original Source owner/transaction/fence changed');
   return row;
  };
+ initializerStage='VERIFY_NATIVE_CONTEXT';
  originalContext=Object.freeze(await readContext());
  await readContext(); // Autocommit has a different xid; refuse before effects.
- const query=async(sql,params=[])=>{await readContext();checkSource();const result=await Reflect.apply(nativeQuery,db,[sql,params]);
+ const query=async(sql,params=[])=>{await readContext();checkSource();initializerOperation='EXECUTE_QUERY';const result=await Reflect.apply(nativeQuery,db,[sql,params]);
   checkSource();await readContext();return result;};
  const inventory=name=>JSON.parse(source.inventory['inventory/'+name]);
  // Only the two fixed original metadata members, selected by the same signed
@@ -98,6 +84,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    ?`custodial_dr.immutable_import_text_record(null::public.${name},(${expression})::text)`
    :`pg_catalog.json_populate_record(null::public.${name},${expression})`;
  };
+ initializerStage='VERIFY_EMPTY_RELATIONS';
  const relations=inventory('original-relations.json');assert.ok(Array.isArray(relations)&&relations.length>0);
  const actual=(await query(`select n.nspname schema_name,c.relname table_name,c.relkind::text relation_kind,c.relispartition is_partition,
   pg_get_userbyid(c.relowner) owner_name,c.relrowsecurity,c.relforcerowsecurity
@@ -144,17 +131,51 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    'Fresh Source count membership/order/original transaction differs');
   assert.equal(values.row_count,'0','Fresh Source target contains original application DATA');
  }
+ // The owning backup-only driver may seed cron during its existing isolated
+ // schema-administrator setup. Admit no caller flag or inferred privilege:
+ // current-postgres Source + actual native loopback/disposable identity +
+ // exact signed rows AND counter, before the first original/control effect.
+ const parameters=Object.getOwnPropertyDescriptor(db,'connectionParameters')?.value;
+ const parameter=key=>parameters&&!types.isProxy(parameters)?Object.getOwnPropertyDescriptor(parameters,key)?.value:undefined;
+ const seededIsolatedCron=ownerProfile.id==='immutable-private-current-postgres'
+  && /^mz_schema_rebuild_[1-9][0-9]*$/.test(originalContext.database)
+  && ['127.0.0.1','localhost'].includes(parameter('host'))&&parameter('database')===originalContext.database;
+ let seededCron=null;
+ if(seededIsolatedCron){
+  initializerStage='VERIFY_ISOLATED_CRON_SETUP';
+  const execution=(await query("select current_setting('cron.launch_active_jobs',true) cron_execution")).rows;
+  assert.deepEqual(execution,[{cron_execution:'off'}],'Isolated cron execution must remain disabled');
+  seededCron=inventory('cron-jobs.json');assert.ok(Array.isArray(seededCron));
+  const sourceDatabase=source.sourceBinding.summary.database_snapshot?.database_name;
+  assert.equal(typeof sourceDatabase,'string');assert.ok(sourceDatabase.length>0);
+  const verified=await verifyRestoredCronJobs(Object.freeze({query}),seededCron,{sourceDatabase});
+  checkSource();await readContext();assert.equal(verified.target_database,originalContext.database);
+  assert.equal(verified.differences.length,0,'Exact signed isolated cron setup required before original effects');
+ }
  const before=(await query(`select (select count(*)::int from custodial_dr.restore_control) controls,
   (select count(*)::int from custodial_dr.restore_manifests) manifests,
   (select count(*)::int from custodial_dr.restore_events) events,
   (select count(*)::int from supabase_migrations.schema_migrations) migrations,
   (select count(*)::int from cron.job) jobs,
   to_regclass('custodial_dr.immutable_private_import_context')::text existing_import`)).rows[0];
- assert.deepEqual(before,{controls:0,manifests:0,events:0,migrations:0,jobs:0,existing_import:null});
+ assert.deepEqual(before,{controls:0,manifests:0,events:0,migrations:0,jobs:seededIsolatedCron?seededCron.length:0,existing_import:null});
+ initializerStage='INITIALIZE_CONTROL';
  await query('insert into custodial_dr.restore_control(singleton) values(true)');
+ initializerStage='RECONCILE_ARCHIVED_ACLS';
  const acl=await reconcileVerifiedImmutableBootstrapAcls(db,source,verifiedArchive);await readContext();
  const recipeIdentities=Object.freeze(source.recipes.map(recipe=>recipe.identity));
- assert.equal(recipeIdentities.length,25);assert.equal(new Set(recipeIdentities).size,25);
+ const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?51:25;
+ assert.equal(recipeIdentities.length,recipeCount);assert.equal(new Set(recipeIdentities).size,recipeCount);
+ if(recipeCount===51){
+  assert.equal(recipeIdentities.at(-26),'custodial_coverall.bind_manual_delivery_after_acceptance()');
+  assert.equal(recipeIdentities.at(-25),'custodial_leadership_private.bind_registration_generation()');
+  assert.equal(recipeIdentities.at(-24),'public.custodial_oc24_completion_selection_guard()');
+  assert.equal(recipeIdentities.at(-23),'public.sch_guard_operational_coverage_template()');
+  assert.equal(recipeIdentities.at(-22),'public.sch_guard_restricted_coverage_template()');
+ assert.equal(recipeIdentities.at(-21),'public.sch_daily_absence_override_regenerate_trigger()');
+  assert.equal(recipeIdentities.at(-20),'public.static_weekly_reject_legacy_daily_schedule_write()');
+  assert.deepEqual(recipeIdentities.slice(-19),["custodial_coverall.reconcile_manual_delivery_after_lunch()","public.capture_system_feedback_email_intent()","public.custodial_sessions_preserve_original_identity()","public.gemini_console_require_live_worker()","public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()","public.ops_manager_notification_bind_credential()","public.prevent_duplicate_daily_schedule_assignment()","public.sch_apply_default_coverage_purpose()","public.sch_clear_scan_alerts_after_scan_event()","public.sch_guard_operational_daily_assignment()","public.sch_guard_restricted_daily_assignment()","public.sch_guard_restricted_location_coverage_template()","public.sch_pto_absence_sync_trigger()","public.static_weekly_component_guard()","public.static_weekly_sch022_occurrence_gate()","public.static_weekly_sch022_publication_gate()","public.static_weekly_v8_guard_vacancy_closure()","public.static_weekly_version_guard()","public.sync_migration_log_summary()"]);
+ }
  // One fresh, ordered native catalog read per side, never a cached verdict.
  // LEFT JOIN retains a missing overload as a refused row rather than omitting it.
  const readRecipeCatalog=async()=>{
@@ -163,8 +184,8 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
    from unnest($1::text[]) with ordinality i(identity,ordinality)
    left join pg_catalog.pg_proc p on p.oid=to_regprocedure(i.identity) and p.prokind='f'
    order by i.ordinality`,[recipeIdentities]);
-  assert.equal(result.rowCount,25);assert.equal(result.rows.length,25);
-  assert.equal(new Set(result.rows.map(row=>row.identity)).size,25);
+  assert.equal(result.rowCount,recipeCount);assert.equal(result.rows.length,recipeCount);
+  assert.equal(new Set(result.rows.map(row=>row.identity)).size,recipeCount);
   for(const [index,row] of result.rows.entries()){
    assert.deepEqual(Object.keys(row).sort(),['definition','identity','ordinal','owner','prosrc']);
    assert.equal(row.ordinal,index+1);assert.equal(row.identity,recipeIdentities[index]);
@@ -172,36 +193,47 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   }
   return result.rows;
  };
+ initializerStage='VERIFY_PREDECESSORS';
  const originalRecipes=await readRecipeCatalog();
  for(const [index,recipe] of source.recipes.entries()){
-  const original=originalRecipes[index];assert.equal(original.owner,'supabase_admin');
+  const original=originalRecipes[index];assert.equal(original.owner,ownerProfile.actor);
   assert.equal(original.definition,recipe.before);assert.equal(sha(original.prosrc),recipe.beforeBodyHash);
  }
- for(const statement of source.statements)await query(unwrapSource(statement));
+ initializerStage='INSTALL_PINNED_STATEMENT';
+ for(const [index,statement] of source.statements.entries()){
+  sourceStatement=String(index+1).padStart(2,'0');initializerOperation='READ_PINNED_STATEMENT';
+  await query(readVerifiedImmutableBootstrapStatement(source,verifiedArchive,statement));
+ }
+ sourceStatement=undefined;
  // The base proposal installs its original INSERT-only guard. Apply ONLY
  // the pinned complete successor recipe after the private six-effect scope
  // exists and before the first original import seals target_shape. Existing
  // owner/ACL/definer/config and the normal fence remain unchanged.
+ initializerStage='INSTALL_APPLICATION_GUARD';
  const applicationGuard=source.recipes.find(recipe=>recipe.identity==='custodial_dr.guard_application_mutation()');
  assert.ok(applicationGuard);await query(applicationGuard.after);
+ initializerStage='VERIFY_SUCCESSORS';
  const installedRecipes=await readRecipeCatalog();
  for(const [index,recipe] of source.recipes.entries()){
-  const installed=installedRecipes[index];assert.equal(installed.owner,'supabase_admin');
+  const installed=installedRecipes[index];assert.equal(installed.owner,ownerProfile.actor);
   assert.equal(installed.definition,recipe.after);assert.equal(sha(installed.prosrc),recipe.afterBodyHash);
  }
+ initializerStage='VERIFY_OWNER_FENCE';
  await query('select custodial_dr.immutable_import_owner_fence()');
+ initializerStage='RESTORE_METADATA';
  // V2's Source-only precheck cannot normalize native columns in JavaScript.
  // Compare the COMPLETE actual decoded row before any bootstrap DATA write.
  // This JSON view verifies release metadata only; exact typed DATA remains
  // the original text member, restored/compared through the native v2 codec.
  if(metadataCatalog.find(table=>table.schema_name==='public'&&table.table_name==='release_deployment_manifest').data_encoding===postgresTextColumnsLineEncoding){
   const observed=(await query(`select pg_catalog.row_to_json(r)::text original_row
-   from ${metadataRecord('release_deployment_manifest','$1::json')} r`,[source.releaseRows[0]])).rows;
+   from ${metadataRecord('release_deployment_manifest','$1::json')} r`,[source.deployedReleaseRow])).rows;
   assert.equal(observed.length,1);
   assert.deepEqual(JSON.parse(observed[0].original_row),source.sourceBinding.source_identity.release);
  }
  const ledgerRaw=source.inventory['inventory/migration-ledger.json'],ledger=inventory('migration-ledger.json');
  assert.ok(Array.isArray(ledger));
+ initializerStage='RESTORE_MIGRATION_LEDGER';
  const migrations=await query(`insert into supabase_migrations.schema_migrations(version,name,statements)
   select r.version,r.name,r.statements
   from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
@@ -213,6 +245,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  // port keeps Source/native owner/xid/two-fence checks around EVERY await;
  // it neither shadows db.query nor grants later effect authority.
  const cronRaw=source.inventory['inventory/cron-jobs.json'],cron=inventory('cron-jobs.json');assert.ok(Array.isArray(cron));
+ initializerStage='RESTORE_CRON';
  const sourceDatabase=source.sourceBinding.summary.database_snapshot?.database_name;
  assert.equal(typeof sourceDatabase,'string');assert.ok(sourceDatabase.length>0&&!sourceDatabase.includes('\0'));
  assert.ok(Buffer.byteLength(sourceDatabase,'utf8')<=63);
@@ -221,7 +254,8 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   from custodial_dr.restore_control where singleton`)).rows;
  assert.deepEqual(cronControl,[{generation:'0',mutations_paused:false,state:'READY',restore_id:null}]);
  const cronPort=Object.freeze({query});
- const restoredCron=await restoreCronJobs(cronPort,cron,{sourceDatabase});
+ const restoredCron=seededIsolatedCron?await verifyRestoredCronJobs(cronPort,cron,{sourceDatabase})
+  :await restoreCronJobs(cronPort,cron,{sourceDatabase});
  checkSource();await readContext();
  assert.equal(restoredCron.target_database,originalContext.database);
  const expectedCron=normalizedCronJobs(cron,{sourceDatabase,targetDatabase:originalContext.database});
@@ -233,13 +267,19 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  assert.ok(isDeepStrictEqual(verifiedCron.expected,expectedCron),'Original mapped cron inventory differs');
  assert.equal(verifiedCron.differences.length,0,'Original verified cron state differs');
  const cronExpectedRaw=JSON.stringify(expectedCron); // Closed TEXT/boolean/safe port fields; BIGINT IDs remain TEXT.
- await query(`insert into public.release_deployment_manifest select * from ${metadataRecord('release_deployment_manifest','$1::json')}`,[source.releaseRows[0]]);
+ initializerStage='RESTORE_RELEASES';
+ const releaseOriginals='['+source.releaseRows.join(',')+']';
+ const released=await query(`insert into public.release_deployment_manifest
+  select r.* from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
+  cross join lateral ${metadataRecord('release_deployment_manifest','e.image')} r order by e.ordinality`,[releaseOriginals]);
+ assert.equal(released.rowCount,source.releaseRows.length);
  const expected=`with original as(select value image,ordinality from json_array_elements($1::json) with ordinality),
   expected as(select case when image->>'object_kind'='function' and $2::jsonb ? (image->>'object_identity')
    then jsonb_set(jsonb_set(image::jsonb,'{definition_sql}',$2::jsonb->(image->>'object_identity')->'definition_sql'),
     '{definition_sha256}',$2::jsonb->(image->>'object_identity')->'definition_sha256')::json
    else image end image,ordinality from original)`;
  const args=['['+source.registryRows.join(',')+']',JSON.stringify(source.registrySource)];
+ initializerStage='RESTORE_REGISTRY';
  const inserted=await query(expected+` insert into public.custodial_release_authority_restore_inventory
   select r.* from expected e cross join lateral ${metadataRecord('custodial_release_authority_restore_inventory','e.image')} r order by e.ordinality`,args);
  assert.equal(inserted.rowCount,source.registryRows.length);
@@ -247,14 +287,24 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   left join public.custodial_release_authority_restore_inventory t on t.inventory_id=(e.image->>'inventory_id')::uuid
   where t.inventory_id is null or to_jsonb(t) is distinct from to_jsonb(${metadataRecord('custodial_release_authority_restore_inventory','e.image')})`,args)).rows;
  assert.deepEqual(compared,[{n:0}]);
+ initializerStage='VERIFY_RESTORED_METADATA';
  const metadataCounts=(await query(`select
   (select count(*)::int from public.release_deployment_manifest) releases,
   (select count(*)::int from public.custodial_release_authority_restore_inventory) registry,
   (select count(*)::int from cron.job) jobs`)).rows[0];
- assert.deepEqual(metadataCounts,{releases:1,registry:source.registryRows.length,jobs:cron.length});
- const releaseRows=(await query(`select count(*)::int n from public.release_deployment_manifest t
-  where to_jsonb(t)=to_jsonb(${metadataRecord('release_deployment_manifest','$1::json')})`,[source.releaseRows[0]])).rows;
- assert.deepEqual(releaseRows,[{n:1}]);
+ assert.deepEqual(metadataCounts,{releases:source.releaseRows.length,registry:source.registryRows.length,jobs:cron.length});
+ const releaseCompared=(await query(`with expected as(
+  select to_jsonb(r) image from pg_catalog.json_array_elements($1::json) e(image)
+  cross join lateral ${metadataRecord('release_deployment_manifest','e.image')} r),
+  actual as(select to_jsonb(t) image from public.release_deployment_manifest t),
+  mismatch as((select image from expected except all select image from actual) union all
+   (select image from actual except all select image from expected))
+  select count(*)::int n from mismatch`,[releaseOriginals])).rows;
+ assert.deepEqual(releaseCompared,[{n:0}]);
+ const deployed=(await query(`select count(*)::int n,
+  count(*) filter(where to_jsonb(t)=to_jsonb(${metadataRecord('release_deployment_manifest','$1::json')}))::int matching
+  from public.release_deployment_manifest t where status='deployed'`,[source.deployedReleaseRow])).rows;
+ assert.deepEqual(deployed,[{n:1,matching:1}]);
  const restoredLedger=(await query(`select version::text,name::text,statements from supabase_migrations.schema_migrations
   order by array_position($1::text[],version::text)`,[ledger.map(row=>row.version)])).rows;
  assert.deepEqual(restoredLedger,ledger);
@@ -263,6 +313,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   mismatch as((select image from expected except all select image from actual) union all
     (select image from actual except all select image from expected)) select count(*)::int n from mismatch`,[cronExpectedRaw])).rows;
  assert.deepEqual(cronCompared,[{n:0}]);
+ initializerStage='VERIFY_FINAL_STATE';
  const control=(await query(`select authority_generation::text generation,mutations_paused,state,restore_id
   from custodial_dr.restore_control where singleton`)).rows;
  assert.deepEqual(control,[{generation:'0',mutations_paused:false,state:'READY',restore_id:null}]);
@@ -290,4 +341,8 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   backend_pid:originalContext.backend_pid,transaction_id:originalContext.transaction_id,guard_recipes:source.recipes.length,
   source_statements:source.statements.length,authority_scope_functions:authority.length,registry_rows:source.registryRows.length,acl,
   initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false});
+ }catch(error){
+  recordImmutableFreshFailure(error,{initializer_stage:initializerStage,initializer_operation:initializerOperation,source_statement:sourceStatement});
+  throw error;
+ }
 }

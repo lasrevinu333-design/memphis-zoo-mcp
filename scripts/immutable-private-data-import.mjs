@@ -1,3 +1,4 @@
+import {recordImmutableFreshFailure,classifyImmutableImportPermission,classifyImmutableImportPermissionContext,classifyImmutableImportGuard} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import {createInterface} from 'node:readline';
@@ -8,9 +9,12 @@ import {TLSSocket} from 'node:tls';
 import {readVerifiedPrivateImportSource,openVerifiedRestoreTableData,decodeRestoreTableRowLine,createRestoreRowUtf8Guard,
   createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding,readVerifiedImmutableBootstrapInventory,
   assertRestoreRowMutationFidelity,assertVerifiedLegacyRestoreDataCurrent} from './disaster-recovery-archive.mjs';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
+import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
 import {deriveOriginalAuthEnumDescriptors} from './immutable-original-enum-source.mjs';
 import {splitSchemaStatements} from './isolated-event-owner-schema.mjs';
-import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapSourceRows} from './immutable-private-source-bootstrap.mjs';
+import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapSourceRows,
+ readVerifiedImmutableBootstrapOwnerProfile,readVerifiedImmutableBootstrapStatement} from './immutable-private-source-bootstrap.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {initializeVerifiedImmutableFreshSource} from './immutable-private-source-initializer.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent,readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
@@ -86,22 +90,42 @@ function sameFreshNativePort(db,original){
   const current=captureFreshNativePort(db);
   if(!original||current.connection!==original.connection||current.stream!==original.stream||current.processID!==original.processID)fail();
 }
-function fail(cause,code='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED') {
+function fail(cause,code='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',fields) {
   const error=Object.assign(new Error(code),{code,outcome:'UNKNOWN',retry_safe:false});
-  if(cause){privateFailures.set(error,cause);
+  if(cause&&typeof cause==='object'&&!types.isProxy(cause)){privateFailures.set(error,cause);
     const field=Object.getOwnPropertyDescriptor(cause,'code');
     if(field&&Object.hasOwn(field,'value')&&typeof field.value==='string'&&/^[0-9A-Z]{5}$/.test(field.value))error.sql_state=field.value;
     // Fixed shipping guard vocabulary only. Never expose raw PG detail,
     // values, SQL or cause; this diagnostic cannot create retry authority.
     const message=Object.getOwnPropertyDescriptor(cause,'message');
-    if(error.sql_state==='55000'&&message&&Object.hasOwn(message,'value')&&[
+    if(['55000','P0001'].includes(error.sql_state)&&message&&Object.hasOwn(message,'value')&&[
       'Immutable import original global fence unavailable','Immutable import Source inventory epoch unavailable',
       'Immutable import Source inventory context changed','Immutable import Source inventory original changed',
       'Immutable import original context changed','Immutable import full target catalog mismatch',
       'Immutable private guard kind unsupported','IMMUTABLE_MIXED_GENERATED_ONLY_INSERT_UNSUPPORTED',
       'IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED','Immutable import current Source registry unavailable or stale',
+      "Immutable import manifest field type invalid",
+      "Immutable import manifest original target absent",
+      "Immutable import member type invalid",
+      "Immutable import private source member invalid",
+      "Immutable import catalog shape invalid",
+      "Immutable import catalog invalid",
+      "Immutable import relation kind unsupported",
+      "Immutable import exact columns changed",
+      "Immutable import original primary key changed",
+      "Immutable import release bootstrap not exact",
+      "Immutable import current Source registry bootstrap not exact",
+      "Immutable import target DATA is not fresh",
+      "Immutable import private owner/schema boundary changed",
+      "Immutable import exact constraints or policy changed",
+      "Immutable import ALWAYS/source guard unqualified",
+      "Immutable import exact ALWAYS scope changed",
+      "Immutable import exact recovery metadata unavailable",
+      "Immutable import original target identity changed",
     ].includes(message.value))error.import_refusal=message.value;
   }
+  const permission=classifyImmutableImportPermission(cause);
+  if(fields||permission)recordImmutableFreshFailure(error,{...fields,...(permission?{fresh_refusal:permission}:{})});
   throw error; // No raw PG detail/body/cause on the observable failure.
 }
 function closed(value,keys) {
@@ -359,11 +383,14 @@ async function inactiveOriginalForeignKeys(verifiedArchive,original,table,foreig
 // their constraint definitions. Catalog order is not an INSERT dependency
 // order. Observe actual target FKs without deferring/disabling their guards.
 async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext) {
+  let importValidation='PLANNER_CONTEXT';
+  try {
   sameSource(verifiedArchive,original);await assertContext();sameSource(verifiedArchive,original);
   const selected=original.selection.databaseTables;
   const identity=(schema,table)=>JSON.stringify([schema,table]);
   const originals=new Map(selected.map(table=>[identity(table.schema_name,table.table_name),table]));
   if(originals.size!==selected.length||!selected.length)fail();
+  importValidation='PLANNER_CATALOG_RESULT';
   const result=await sql(`select s.schema_name,s.table_name,c.oid::text as relation_oid,
     c.relkind::text as relation_kind,c.relpersistence::text as persistence,c.relispartition as is_partition,
     case when c.oid is null then null else coalesce((
@@ -393,6 +420,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   const relations=new Map(),oids=new Set(),constraintOids=new Set();
   const oid=value=>typeof value==='string'&&/^[1-9][0-9]*$/.test(value)&&BigInt(value)<=4294967295n;
   for(const value of result.rows){
+    importValidation='PLANNER_RELATION';
     const row=closed(value,['schema_name','table_name','relation_oid','relation_kind','persistence','is_partition','foreign_keys']);
     const key=identity(row.schema_name,row.table_name);
     if(!originals.has(key)||relations.has(key)||!oid(row.relation_oid)||oids.has(row.relation_oid)
@@ -400,6 +428,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
       ||!Array.isArray(row.foreign_keys)||types.isProxy(row.foreign_keys))fail();
     const dependencies=[];
     for(const value of row.foreign_keys){
+      importValidation='PLANNER_FOREIGN_KEY';
       const fk=closed(value,['constraint_oid','parent_schema_name','parent_table_name','parent_relation_oid','validated','deferrable','initially_deferred','match_type','columns']);
       if(!oid(fk.constraint_oid)||constraintOids.has(fk.constraint_oid)||!oid(fk.parent_relation_oid)
         ||fk.validated!==true||typeof fk.deferrable!=='boolean'||typeof fk.initially_deferred!=='boolean'
@@ -408,6 +437,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
       if(!parent||!['s','f'].includes(fk.match_type)||!Array.isArray(fk.columns)||types.isProxy(fk.columns)||!fk.columns.length
         ||Reflect.ownKeys(fk.columns).length!==fk.columns.length+1)fail();
       const childNames=new Set(),parentNames=new Set();
+      importValidation='PLANNER_FK_COLUMNS';
       fk.columns=Object.freeze(fk.columns.map(value=>{
         const column=closed(value,['name','data_type','generated','identity','parent_name','parent_data_type','parent_generated','parent_identity']);
         const a=child.columns.find(c=>c.name===column.name),p=parent.columns.find(c=>c.name===column.parent_name);
@@ -422,6 +452,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   }
   // Finish graph validation before any ordinary row is inserted. A selected
   // private parent is staged, not yet inserted; it is NOT an available parent.
+  importValidation='PLANNER_GRAPH';
   const parents=new Map(),children=new Map(),selfTables=new Set(),edges=[];
   for(const key of originals.keys()){parents.set(key,new Set());children.set(key,new Set());}
   for(const [child,row] of relations)for(const fk of row.dependencies){
@@ -451,6 +482,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
   for(const {child,parent,fk} of edges)if(reaches(parent,child)){
     if(!candidates.has(child))candidates.set(child,[]);candidates.get(child).push(fk);
   }
+  importValidation='PLANNER_INACTIVE_FK_SOURCE';
   for(const [child,fks] of candidates){
     const observed=await inactiveOriginalForeignKeys(verifiedArchive,original,originals.get(child),fks,sql,assertContext);
     sameSource(verifiedArchive,original);for(const oid of observed)inactive.add(oid);
@@ -460,6 +492,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     parents.get(child).add(parent);children.get(parent).add(child);
   }
   await assertContext();sameSource(verifiedArchive,original);
+  importValidation='PLANNER_TOPOLOGY';
   const ready=[...parents.keys()].filter(key=>parents.get(key).size===0).sort(),ordered=[];
   while(ready.length){
     const key=ready.shift();ordered.push(originals.get(key));
@@ -475,6 +508,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     ['public','auth','storage'].includes(table.schema_name)&&BigInt(table.row_count)>1n
     &&!selfTables.has(identity(table.schema_name,table.table_name))
     &&!(table.schema_name==='public'&&['release_deployment_manifest','custodial_release_authority_restore_inventory'].includes(table.table_name)));
+  importValidation='PLANNER_BATCH_CATALOG';
   if(setCandidates.length){
     sameSource(verifiedArchive,original);await assertContext();sameSource(verifiedArchive,original);
     const profiles=await sql(`select s.schema_name,s.table_name,c.oid::text as relation_oid,
@@ -496,6 +530,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     const wanted=new Set(setCandidates.map(table=>identity(table.schema_name,table.table_name))),seen=new Set();
     const profileOid=value=>typeof value==='string'&&/^[1-9][0-9]{0,9}(?![\s\S])/.test(value)&&BigInt(value)<=4294967295n;
     let guardOid,guardSeen=false;
+    importValidation='PLANNER_BATCH_ROW';
     for(const value of profiles.rows){
       const row=closed(value,['schema_name','table_name','relation_oid','guard_oid','insert_triggers']);
       const key=identity(row.schema_name,row.table_name);
@@ -532,6 +567,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     const selected=Object.freeze({schema_name:table.schema_name,table_name:table.table_name});
     selfOrdinaryConsumers.set(selected,Object.freeze({verifiedArchive,original,table}));return selected;
   }));
+  } catch(error){recordImmutableFreshFailure(error,{import_validation:importValidation});throw error;}
 }
 
 // Internal DATA consumer, not a target admission or alternate client port.
@@ -651,6 +687,8 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
 // all effects stay in the caller's original exclusive transaction. The normal
 // CLI's pre-connect private APPLY hold remains until that route is qualified.
 export async function stageVerifiedImmutableFreshData(options) {
+  let freshStage='ADMIT_FRESH_STAGE';
+  try{
   const {db,verifiedArchive,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId}=closed(options,
     ['db','verifiedArchive','originalIntentEnvelope','intentVerifyKey','intentVerifyKeyId']);
   const native=()=>{
@@ -681,16 +719,23 @@ export async function stageVerifiedImmutableFreshData(options) {
     return captured;
   };
   current();
+  freshStage='VERIFY_ORIGINAL_FIDELITY';
   await requireLegacyOriginalDataFidelity(verifiedArchive,original,current);
   current();
   if(original.selection.databaseTables.some(table=>table.data_encoding!==postgresTextColumnsLineEncoding))
     try{assertVerifiedLegacyRestoreDataCurrent(verifiedArchive);}catch(error){fail(error,'IMMUTABLE_LEGACY_DATA_FIDELITY_UNPROVEN');}
+  freshStage='INITIALIZE_SOURCE';
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
+  const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?51
+    :initializedOwner.id==='immutable-private-legacy-supabase-admin'&&initializedOwner.actor==='supabase_admin'?25:null;
   if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
     ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false
     ||initialized.restore_complete!==false||initialized.admission_resumed!==false
-    ||initialized.guard_recipes!==25||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
+    ||initializedRecipeCount===null||initialized.guard_recipes!==initializedRecipeCount
+    ||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
+  freshStage='PREPARE_RESTORE_CONTROL';
   const prepared=await prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent});
   const captured=current(),intent=captured.intent;
   const expected=Object.freeze({database_oid:initialized.database_oid,backend_pid:initialized.backend_pid,
@@ -700,13 +745,16 @@ export async function stageVerifiedImmutableFreshData(options) {
   // Save the first target state under this SAME authenticated original and
   // native transaction before archive DATA can replace ordinary authority.
   // These protected rows are reconciliation DATA, never effect admission.
+  freshStage='CAPTURE_PRE_RESTORE_STATE';
   await capturePreRestoreState(db,{restoreId:intent.restore_id,generation:intent.authority_generation});
   current();
   // Never recapture caller objects after the initializer/control awaits. The
   // private intent token supplies the same detached signed original envelope.
+  freshStage='IMPORT_ORIGINAL_DATA';
   const imported=await stageVerifiedImmutablePrivateData({db,verifiedArchive,
     originalIntentEnvelope:captured.envelope,intentVerifyKey,intentVerifyKeyId});
   current();
+  freshStage='VERIFY_STAGED_DATA';
   const staged=closed(imported,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);
   for(const key of witnessKeys)if(!isDeepStrictEqual(staged[key],expected[key]))fail();
   if(staged.private_rows!==expectedPrivateRows||staged.transaction_authority!==false||staged.admission_resumed!==false)fail();
@@ -719,6 +767,7 @@ export async function stageVerifiedImmutableFreshData(options) {
   return Object.freeze({schema:'custodial.immutable-private-fresh-data-staged.v1',...expected,
     private_rows:staged.private_rows,source_initialized:true,transaction_authority:false,
     restore_complete:false,admission_resumed:false});
+  }catch(error){recordImmutableFreshFailure(error,{fresh_stage:freshStage});throw error;}
 }
 
 // One original fresh DATA transaction decision. The caller still owns its
@@ -857,7 +906,7 @@ export async function inspectCommittedImmutableFreshData(options) {
       if(!isDeepStrictEqual(last,before))unavailable();
       const values=nativeData(reply,'rows');
       if(nativeData(reply,'command')!=='SELECT'||nativeData(reply,'rowCount')!==nativeData(values,'length'))unavailable();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     // Only this privately admitted SAME original's genuine signed table tags
     // choose the pure DATA profile. V1-only workflows have no new query.
@@ -965,13 +1014,17 @@ export async function stageVerifiedImmutablePrivateData(options) {
     source_identity_sha256:binding.source_identity_sha256,source_project_ref:binding.project_ref,target_project_ref:intent.target_project_ref,
     actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,
     target_release_identity:intent.target_release_identity,catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers});
+  let importOperation='BEGIN_IMPORT';
+  try {
   async function sql(text,args=[]) {
     sameSource(verifiedArchive,original);
-    let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error);}
+    let result;try{result=await Reflect.apply(query,db,[text,args]);}catch(error){fail(error,'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',
+      {import_operation:importOperation,...classifyImmutableImportPermissionContext(error,original.selection.databaseTables),...classifyImmutableImportGuard(error,original.selection.databaseTables)});}
     sameSource(verifiedArchive,original);return result;
   }
   const initial=await sql('select custodial_dr.begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb) as context',
     [intent.restore_id,String(intent.authority_generation),binding.archive_digest,JSON.stringify(manifest)]);
+  importOperation='VERIFY_INITIAL_WITNESS';
   const witness=Object.freeze(contextWitness(initial));
   if(witness.restore_id!==intent.restore_id||witness.authority_generation!==String(intent.authority_generation)
     ||witness.archive_digest!==binding.archive_digest)fail();
@@ -986,7 +1039,9 @@ export async function stageVerifiedImmutablePrivateData(options) {
     const result=await sql(text,[...args,JSON.stringify(witness)]);
     if(!isDeepStrictEqual(contextWitness(result),witness))fail();
   }
+  importOperation='PLAN_ORDINARY_ORDER';
   const ordinaryOrder=await planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext);
+  importOperation='STAGE_PRIVATE_ORIGINALS';
   let total=0;
   for(const selected of original.selection.privateTables) {
     sameSource(verifiedArchive,original);
@@ -1011,17 +1066,20 @@ export async function stageVerifiedImmutablePrivateData(options) {
     finally{input.close();data.stream.destroy();guard.destroy();await settled.catch(()=>{});
       try{await data.close();}catch(cleanup){if(firstFailure)throw new AggregateError([firstFailure,cleanup],'Immutable private source cleanup failed',{cause:firstFailure});throw cleanup;}}
   }
+  importOperation='CONSUME_ORDINARY_ORIGINALS';
   for(const selected of ordinaryOrder)
     await consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext);
   // All ORIGINAL EOF/digests/counts precede the only guarded finish/inserts.
   sameSource(verifiedArchive,original);
   await assertContext();sameSource(verifiedArchive,original);
+  importOperation='FINISH_IMPORT';
   const finished=await sql('select custodial_dr.finish_immutable_private_import() as result');
   if(finished.rowCount!==1)fail();
   const result=closed(finished.rows[0].result,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);
   for(const name of witnessKeys)if(!isDeepStrictEqual(result[name],witness[name]))fail();
   if(result.private_rows!==String(total)||result.transaction_authority!==false||result.admission_resumed!==false)fail();
   return Object.freeze(result); // NOT a COMMIT, restart/resend authority or effect receipt.
+  } catch(error){recordImmutableFreshFailure(error,{import_operation:importOperation});throw error;}
 }
 
 // Prepare DATA only from this module's actual original acknowledged decision.
@@ -1299,7 +1357,6 @@ export async function commitVerifiedImmutableFreshAuthority(options){
 const committedAuthorityDataReads=new WeakMap();
 const committedAuthorityPostReadbacks=new WeakMap(),freshPostAuthorityFenceAttempts=new WeakSet();
 const committedAuthorityOrdinaryReads=new WeakSet();
-const committedAuthoritySourceSha256='e60545804e8c76d94769c6b80426e3dcb86f0bdf47527cd42b5735eb7eff600a';
 const committedAuthorityTargets=Object.freeze([
   ['public','device_auth_credentials','credential_id','employee_credentials',"(o.image).revoked_at is null",['revoked_at','revoked_reason']],
   ['public','device_auth_enrollment_codes','enrollment_id','employee_enrollment',"(o.image).revoked_at is null",['revoked_at']],
@@ -1357,14 +1414,15 @@ const committedAuthorityReadOnlySql=`select pg_catalog.jsonb_build_object(
  'isolation',pg_catalog.current_setting('transaction_isolation'),'replication',pg_catalog.current_setting('session_replication_role'),
  'row_security',pg_catalog.current_setting('row_security'),'search_path',pg_catalog.current_setting('search_path'),
  'first_schema',(pg_catalog.current_schemas(true))[1]::text) context`;
-function captureCommittedAuthorityReadOnly(value,completion){
+function captureCommittedAuthorityReadOnly(value,completion,verifiedArchive){
+  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
   const observed=closed(value,['database_oid','backend_pid','transaction_id','actor','session_actor','read_only','isolation',
     'replication','row_security','search_path','first_schema']);
   if(observed.database_oid!==completion.database_oid||observed.backend_pid!==completion.backend_pid
     ||typeof observed.transaction_id!=='string'||!/^[1-9][0-9]{0,18}(?![\s\S])/.test(observed.transaction_id)
     ||BigInt(observed.transaction_id)>9223372036854775807n
     ||[completion.transaction_id,completion.original_transaction_id].includes(observed.transaction_id)
-    ||observed.actor!=='supabase_admin'||observed.session_actor!==observed.actor||observed.read_only!=='on'
+    ||observed.actor!==ownerProfile.actor||observed.session_actor!==observed.actor||observed.read_only!=='on'
     ||observed.isolation!=='repeatable read'||observed.replication!=='origin'||observed.row_security!=='off'
     ||observed.search_path!=='pg_catalog, pg_temp'||observed.first_schema!=='pg_catalog')fail();
   return Object.freeze(observed);
@@ -1376,7 +1434,8 @@ function committedAuthoritySingleContext(reply){
     ||Reflect.ownKeys(values).length!==2||nativeData(values,'length')!==1)fail();
   return closed(nativeData(values,'0'),['context']).context;
 }
-function captureCommittedAuthorityFrame(value,completion,expectedPid){
+function captureCommittedAuthorityFrame(value,completion,expectedPid,source,verifiedArchive){
+  const ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive);
   const frame=closed(value,['database_oid','backend_pid','transaction_id','snapshot','read_only','isolation','replication',
     'row_security','search_path','first_schema','actor','session_actor','control_owner','held_fences','control','manifest',
     'completion','effect_transaction_started_at','finite_effect_time']);
@@ -1389,7 +1448,7 @@ function captureCommittedAuthorityFrame(value,completion,expectedPid){
     ||typeof frame.snapshot!=='string'||!/^[0-9]+:[0-9]+:[0-9,]*(?![\s\S])/.test(frame.snapshot)
     ||frame.read_only!=='on'||frame.isolation!=='repeatable read'||frame.replication!=='origin'
     ||frame.row_security!=='off'||frame.search_path!=='pg_catalog, pg_temp'||frame.first_schema!=='pg_catalog'
-    ||frame.actor!=='supabase_admin'||frame.session_actor!==frame.actor||frame.control_owner!==frame.actor
+    ||frame.actor!==ownerProfile.actor||frame.session_actor!==frame.actor||frame.control_owner!==frame.actor
     ||frame.held_fences!==2||typeof frame.control!=='string'||typeof frame.manifest!=='string'
     ||!isDeepStrictEqual(frame.completion,completion)||frame.finite_effect_time!==true
     ||typeof frame.effect_transaction_started_at!=='string'||!frame.effect_transaction_started_at.length)fail();
@@ -1399,7 +1458,7 @@ async function readCommittedAuthorityFrame(db,verifiedArchive,descriptor){
   currentCommittedAuthorityData(db,verifiedArchive,descriptor);
   const reply=await Reflect.apply(query,db,[committedAuthorityFrameSql,committedAuthorityScopeArgs(descriptor.completion)]);
   currentCommittedAuthorityData(db,verifiedArchive,descriptor);
-  const frame=captureCommittedAuthorityFrame(committedAuthoritySingleContext(reply),descriptor.completion,descriptor.port.processID);
+  const frame=captureCommittedAuthorityFrame(committedAuthoritySingleContext(reply),descriptor.completion,descriptor.port.processID,descriptor.source,verifiedArchive);
   if(descriptor.frame&&!isDeepStrictEqual(frame,descriptor.frame))fail();
   return frame;
 }
@@ -1495,10 +1554,11 @@ export async function inspectCommittedImmutableFreshAuthorityData(options){
     };
     readPhase='READ_ONLY_SNAPSHOT';beforeSource();
     const initialReply=await Reflect.apply(query,db,[committedAuthorityReadOnlySql]);beforeSource();
-    const initial=captureCommittedAuthorityReadOnly(committedAuthoritySingleContext(initialReply),completion);
+    const initial=captureCommittedAuthorityReadOnly(committedAuthoritySingleContext(initialReply),completion,verifiedArchive);
     readPhase='CURRENT_SOURCE';beforeSource();descriptor.source=await prepareVerifiedImmutableBootstrapSource(verifiedArchive);beforeSource();
     const recipes=descriptor.source.statements.filter(row=>row.sourcePath==='proposals/immutable-original-authority-reconciliation.sql');
-    if(recipes.length!==1||recipes[0].sourceSha256!==committedAuthoritySourceSha256)unavailable();
+    if(recipes.length!==1)unavailable();
+    readVerifiedImmutableBootstrapStatement(descriptor.source,verifiedArchive,recipes[0]);
     committedAuthorityDataReads.set(db,descriptor);
     const current=()=>currentCommittedAuthorityData(db,verifiedArchive,descriptor);
     current();
@@ -1537,7 +1597,7 @@ export async function inspectCommittedImmutableFreshAuthorityData(options){
       await readCommittedAuthorityFrame(db,verifiedArchive,descriptor);current();
       const values=nativeData(reply,'rows');
       if(nativeData(reply,'command')!=='SELECT'||nativeData(reply,'rowCount')!==nativeData(values,'length'))unavailable();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     const hasTextColumns=state.original.selection.databaseTables.some(table=>table.data_encoding===postgresTextColumnsLineEncoding);
     if(hasTextColumns){readPhase='TEXT_HELPER_SOURCE';await textHelpersCurrent();current();}
@@ -1671,7 +1731,8 @@ const immutableTextHelperSourceSql = `select p.oid::pg_catalog.text oid,p.pronam
     join pg_catalog.pg_language l on l.oid=p.prolang
     where n.nspname='custodial_dr' and p.proname in ('immutable_import_text_projection','immutable_import_text_record')
     order by p.proname collate pg_catalog."C",p.oid`;
-function immutableTextHelperSource(values,previous){
+function immutableTextHelperSource(values,previous,verifiedArchive){
+  const hashes=immutableTextCodecSourceHashes(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive));
   const dense=value=>{
     if(!value||types.isProxy(value)||!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype
       ||Reflect.ownKeys(value).length!==value.length+1)fail();
@@ -1680,9 +1741,9 @@ function immutableTextHelperSource(values,previous){
   const keys=['oid','name','arguments','returns','argument_names','body','definition','config','source_attributes'];
   const expected=[
     ['immutable_import_text_projection','2283','25',['original_record'],
-      '814c1bfe130b62bbd6ffbd278b6b7b1b23546d4942a2dccbec29083d1a65c3b8'],
+      hashes.projection],
     ['immutable_import_text_record','2283 25','2283',['prototype','original_row_utf8'],
-      '030a130aa642d5517aa4acc154de267c16034d94a6ead01b299f7653fdff1fcb'],
+      hashes.record],
   ];
   const config=['search_path=pg_catalog','extra_float_digits=3','datestyle=ISO, YMD',
     'timezone=UTC','intervalstyle=postgres','bytea_output=hex'];
@@ -1745,6 +1806,8 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
     'database_oid',(select oid::text from pg_catalog.pg_database where datname=pg_catalog.current_database()),
     'database_name',pg_catalog.current_database(),'backend_pid',pg_catalog.pg_backend_pid(),
     'actor',current_user,'session_actor',session_user,
+    'control_owner',(select pg_catalog.pg_get_userbyid(relowner) from pg_catalog.pg_class
+      where oid=pg_catalog.to_regclass('custodial_dr.restore_control') and relkind='r'),
     'transaction_id',pg_catalog.pg_current_xact_id_if_assigned()::text,
     'virtual_xid',(select virtualtransaction::text from pg_catalog.pg_locks
       where pid=pg_catalog.pg_backend_pid() and locktype='virtualxid' and granted),
@@ -1778,7 +1841,9 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
         ||Object.hasOwn(db,'query')||Client.prototype.query!==query)refuse();
     };
     native();const original=readVerifiedPrivateImportSource(verifiedArchive);
-    const source=()=>{native();sameSource(verifiedArchive,original);};
+    const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+    const source=()=>{native();sameSource(verifiedArchive,original);
+      if(!isDeepStrictEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile))refuse();};
     const nativeRead=async(sql,params=[])=>{
       // Only this actual native-query catch can observe an SQLSTATE. Source,
       // decoder and cleanup errors cannot supply one. Stop own later queries
@@ -1827,11 +1892,11 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
       source();const reply=await nativeRead(contextSql);source();
       const observed=rows(reply);if(observed.length!==1)refuse();
       const value=closed(closed(observed[0],['context']).context,['database_oid','database_name','backend_pid',
-        'actor','session_actor','transaction_id','virtual_xid','snapshot_id','transaction_started_at',
+        'actor','session_actor','control_owner','transaction_id','virtual_xid','snapshot_id','transaction_started_at',
         'read_only','isolation','row_security','search_path','first_schema','float_digits']);
       if(!oid(value.database_oid)||typeof value.database_name!=='string'||!value.database_name
         ||!Number.isInteger(value.backend_pid)||value.backend_pid<=0||value.backend_pid>2147483647
-        ||typeof value.actor!=='string'||!value.actor||value.actor!==value.session_actor
+        ||value.actor!==ownerProfile.actor||value.actor!==value.session_actor||value.control_owner!==value.actor
         ||(value.transaction_id!==null&&(!decimal(value.transaction_id)||value.transaction_id==='0'))
         ||typeof value.virtual_xid!=='string'||!(/^[1-9][0-9]*\/[1-9][0-9]*$/).test(value.virtual_xid)
         ||typeof value.snapshot_id!=='string'||!(/^[0-9]+:[0-9]+:[0-9,]*$/).test(value.snapshot_id)
@@ -1850,7 +1915,7 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
     let originalTextHelpers;
     const textHelpersCurrent=async()=>{
       const values=await read(immutableTextHelperSourceSql);source();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     await boundary();
     const originalCatalog=await read(catalogSql);
@@ -1860,7 +1925,7 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
         'persistence','is_partition','owner_name','inheritance_count','dropped_count','columns','primary_key']);
       if(actual.schema_name!==schema||actual.table_name!==table.table_name||!oid(actual.relation_oid)
         ||actual.relation_kind!=='r'||actual.persistence!=='p'||actual.is_partition!==false
-        ||typeof actual.owner_name!=='string'||!actual.owner_name||actual.inheritance_count!=='0'||actual.dropped_count!=='0'
+        ||actual.owner_name!==ownerProfile.actor||actual.inheritance_count!=='0'||actual.dropped_count!=='0'
         ||!isDeepStrictEqual(actual.columns,table.columns)||!isDeepStrictEqual(actual.primary_key,table.primary_key))refuse();
     }
     if(originalCatalog[0].relation_oid===originalCatalog[1].relation_oid)refuse();
@@ -1972,6 +2037,8 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     'database_oid',(select oid::text from pg_catalog.pg_database where datname=pg_catalog.current_database()),
     'database_name',pg_catalog.current_database(),'backend_pid',pg_catalog.pg_backend_pid(),
     'actor',current_user,'session_actor',session_user,
+    'control_owner',(select pg_catalog.pg_get_userbyid(relowner) from pg_catalog.pg_class
+      where oid=pg_catalog.to_regclass('custodial_dr.restore_control') and relkind='r'),
     'transaction_id',pg_catalog.pg_current_xact_id_if_assigned()::text,
     'virtual_xid',(select virtualtransaction::text from pg_catalog.pg_locks
       where pid=pg_catalog.pg_backend_pid() and locktype='virtualxid' and granted),
@@ -2078,6 +2145,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     const native=()=>{if(!db||types.isProxy(db)||Object.getPrototypeOf(db)!==Client.prototype
       ||Object.hasOwn(db,'query')||Client.prototype.query!==query)refuse();};
     native();const original=readVerifiedPrivateImportSource(verifiedArchive);
+    const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
     const authorityData=committedAuthorityDataReads.get(db);
     if(authorityData){
       if(!authorityData.frame||!committedAuthorityOrdinaryReads.has(authorityData))refuse();
@@ -2095,6 +2163,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     const originalEnums=deriveOriginalAuthEnumDescriptors(enumSchema);
     const source=()=>{
       native();sameSource(verifiedArchive,original);
+      if(!isDeepStrictEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile))refuse();
       if(authorityData)currentCommittedAuthorityData(db,verifiedArchive,authorityData);
       // This newly consumed original dependency remains the SAME authenticated
       // schema through every existing synchronous Source/actual-await boundary.
@@ -2154,11 +2223,11 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     const context=async()=>{
       source();const reply=await nativeRead(contextSql);source();const observed=rows(reply);
       if(observed.length!==1)refuse();
-      const value=closed(closed(observed[0],['context']).context,['database_oid','database_name','backend_pid','actor','session_actor',
+      const value=closed(closed(observed[0],['context']).context,['database_oid','database_name','backend_pid','actor','session_actor','control_owner',
         'transaction_id','virtual_xid','snapshot_id','transaction_started_at','read_only','isolation','row_security','search_path','first_schema',
         'timezone','date_style','interval_style','float_digits']);
       if(!oid(value.database_oid)||!name(value.database_name)||!Number.isInteger(value.backend_pid)||value.backend_pid<=0||value.backend_pid>2147483647
-        ||!name(value.actor)||value.actor!==value.session_actor
+        ||value.actor!==ownerProfile.actor||value.actor!==value.session_actor||value.control_owner!==value.actor
         ||(value.transaction_id!==null&&(!decimal(value.transaction_id)||value.transaction_id==='0'))
         ||typeof value.virtual_xid!=='string'||!(/^[1-9][0-9]*\/[1-9][0-9]*$/).test(value.virtual_xid)
         ||typeof value.snapshot_id!=='string'||!(/^[0-9]+:[0-9]+:[0-9,]*$/).test(value.snapshot_id)
@@ -2177,7 +2246,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     let originalTextHelpers;
     const textHelpersCurrent=async()=>{
       const values=await read(immutableTextHelperSourceSql);source();
-      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers);
+      originalTextHelpers=immutableTextHelperSource(values,originalTextHelpers,verifiedArchive);
     };
     const catalog=await read(catalogSql,enumParameters),byId=new Map();
     for(const row of catalog){

@@ -3,9 +3,10 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {copyFileSync,existsSync,lstatSync,mkdirSync,readFileSync,readdirSync,realpathSync,symlinkSync} from 'node:fs';
+import {copyFileSync,existsSync,lstatSync,mkdirSync,readFileSync,readdirSync,realpathSync,symlinkSync,writeFileSync} from 'node:fs';
 import {dirname,relative,resolve,sep} from 'node:path';
 import {withCurrentMigrationSourceFixture} from './current-migration-source-fixtures.mjs';
+import {restoreAcceptedSevenHistoricalSource} from './accepted-seven-source-successor.mjs';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const PLAN_SHA='4d0ce42a8777bb6493e14ed43207cacd03a80463204c3f9e98182d487c7c4c2d';
 const PREDECESSORS_SHA='fb4ce1a406eb82c7cf619d695847aa42505207ff9f64858e8558efdbb2b933f3';
@@ -59,6 +60,10 @@ export async function withSealedCanonical304SourceFixture(root,run){
     assert.ok(target.startsWith(fixture+'/'));
     if(existsSync(target))continue; // Already-selected genuine304 closure wins.
     mkdirSync(dirname(target),{recursive:true});copyFileSync(source,target);
+    if(path.startsWith('src/')&&path.endsWith('.js')){
+     const current=readFileSync(source,'utf8'),historical=restoreAcceptedSevenHistoricalSource(path,current);
+     if(historical!==current)writeFileSync(target,historical);
+    }
    }
    // Never execute current bytes while merely comparing their historical view.
    for(const r of selected.predecessors.files){

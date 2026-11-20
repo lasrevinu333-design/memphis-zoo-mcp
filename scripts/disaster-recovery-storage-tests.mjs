@@ -10,7 +10,7 @@ import { isProxy } from "node:util/types";
 import { pipeline } from "node:stream/promises";
 import pg from "pg";
 import { materializeVerifiedArchive, readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection,
-  openVerifiedRestoreTableData, decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder } from "./disaster-recovery-archive.mjs";
+  openVerifiedRestoreTableData, decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder, postgresTextColumnsLineEncoding } from "./disaster-recovery-archive.mjs";
 import { stableJson, signBinding, restoreIntentBinding } from "./disaster-recovery-crypto.mjs";
 import {
   captureStorageSupportedState,
@@ -35,14 +35,16 @@ if (process.argv.includes("--storage-fresh-local-provider-contract-only")) {
   const hash=v=>createHash("sha256").update(v).digest("hex");
   const now=Date.now(),approved=new Date(now-1000).toISOString(),expires=new Date(now+1800000).toISOString();
   function input(profile="native-text-v4-fresh-supabase-admin"){
-    const role="supabase_admin";
+    const role=profile==='immutable-private-fresh-postgres'?'postgres':'supabase_admin';
+    const ownerProfile=profile==='immutable-private-fresh-postgres'?{id:'immutable-private-current-postgres',actor:'postgres'}
+      :profile==='immutable-private-fresh-supabase-admin'?{id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'}:undefined;
     const intent={restore_id:"11111111-1111-4111-8111-111111111111",authority_generation:1,retry_of_restore_id:null,
       archive_digest:"a".repeat(64),source_project_ref:"original-project",target_project_ref:"isolated-project",
       source_identity_sha256:"b".repeat(64),target_migration_head:"20261026065000",target_release_identity:null,
       actor:"synthetic-pure-contract-test",approved_at:approved,expires_at:expires,resume_after_verification:false};
     const originalIntentEnvelope={format:"memphis-zoo-production-restore-intent.v1",algorithm:"hmac-sha256",key_id:keyId,intent,
       signature:signBinding(restoreIntentBinding(intent),key)};
-    const binding={purpose:"custodial-immutable-fresh-local-storage-provider",source_profile:profile,
+    const binding={purpose:"custodial-immutable-fresh-local-storage-provider",source_profile:profile,...(ownerProfile?{owner_profile:ownerProfile}:{}),
       original_intent_sha256:hash(stableJson(originalIntentEnvelope)),restore_id:intent.restore_id,authority_generation:1,
       archive_digest:intent.archive_digest,source_identity_sha256:intent.source_identity_sha256,
       source_project_ref:intent.source_project_ref,target_project_ref:intent.target_project_ref,approved_at:approved,expires_at:expires,
@@ -54,11 +56,11 @@ if (process.argv.includes("--storage-fresh-local-provider-contract-only")) {
         archived_migrations_74_full_tuple_sha256:"f".repeat(64),file_backend_namespace_sha256:"1".repeat(64)}};
     return {providerEnvelope:{format:"custodial.immutable-fresh-local-storage-provider.v1",algorithm:"hmac-sha256",key_id:keyId,binding,signature:signBinding(binding,key)},
       originalIntentEnvelope,intentVerifyKey:key,intentVerifyKeyId:keyId,serviceKey,jwtSecret,databaseUrl:`postgresql://${role}:unit@127.0.0.1:54329/mz_schema_rebuild_contract`,
-      expected:{source_profile:profile,expected_session_user:role,expected_database_owner:"postgres",archive_digest:intent.archive_digest,
+      expected:{source_profile:profile,...(ownerProfile?{owner_profile:ownerProfile}:{}),expected_session_user:role,expected_database_owner:"postgres",archive_digest:intent.archive_digest,
         source_project_ref:intent.source_project_ref,source_identity_sha256:intent.source_identity_sha256,archived_storage_inventory_sha256:"e".repeat(64)}};
   }
   let cases=0;
-  for(const profile of ["native-text-v4-fresh-supabase-admin","immutable-private-fresh-supabase-admin"]){
+  for(const profile of ["native-text-v4-fresh-supabase-admin","immutable-private-fresh-supabase-admin","immutable-private-fresh-postgres"]){
     assert.equal(validateFreshLocalStorageProviderData(input(profile)).binding.source_profile,profile);cases++;
   }
   const mutations=[
@@ -105,9 +107,37 @@ if (process.argv.includes("--storage-fresh-local-provider-contract-only")) {
     x.databaseUrl=`postgresql://${actor}:unit@127.0.0.1:54329/mz_schema_rebuild_contract`;
     x.providerEnvelope.signature=signBinding(x.providerEnvelope.binding,key);assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;
   }
+  for(const profile of ['immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres']){
+    for(const mutate of [
+      x=>delete x.expected.owner_profile,
+      x=>delete x.providerEnvelope.binding.owner_profile,
+      x=>x.providerEnvelope.binding.owner_profile={id:'immutable-private-current-postgres',actor:'supabase_admin'},
+      x=>x.expected.owner_profile={id:'immutable-private-legacy-supabase-admin',actor:'postgres'},
+      x=>x.providerEnvelope.binding.host_target.session_user=profile==='immutable-private-fresh-postgres'?'supabase_admin':'postgres',
+      x=>x.databaseUrl=x.databaseUrl.replace('127.0.0.1','remote.invalid'),
+      x=>x.expected.owner_profile.extra=true,
+      x=>x.providerEnvelope.binding.source_profile='native-text-v4-fresh-supabase-admin',
+    ]){const x=input(profile);mutate(x);x.providerEnvelope.signature=signBinding(x.providerEnvelope.binding,key);
+      assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;}
+  }
+  {const x=input();x.providerEnvelope.binding.owner_profile={id:'immutable-private-current-postgres',actor:'postgres'};
+    x.providerEnvelope.signature=signBinding(x.providerEnvelope.binding,key);assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;}
+  {const x=input('immutable-private-fresh-postgres');
+    const {expected,...options}=x;
+    assert.throws(()=>captureVerifiedFreshLocalStorageProvider({...options,verifiedArchive:{ownerProfile:expected.owner_profile}}));cases++;}
   // Execute the actual runtime owner branch as pure control logic. No signed
   // archive/provider/native identity is fabricated by this focused test port.
   const runtimeSource=readFileSync(new URL('./disaster-recovery-storage.mjs',import.meta.url),'utf8');
+  const principalCheck=runtimeSource.match(/if\(privateOwnerProfile && \(value.actor!==privateOwnerProfile.actor \|\| value.session_actor!==value.actor\)\)contextUnavailable\("PRINCIPAL"\);/)?.[0];
+  assert.ok(principalCheck);
+  for(const actor of ['postgres','supabase_admin']){
+    const inspect=(actual,session)=>runInNewContext(principalCheck,{privateOwnerProfile:{actor},value:{actor:actual,session_actor:session},
+      contextUnavailable:()=>{throw new Error('PRIVATE_OWNER_MISMATCH');}});
+    inspect(actor,actor);cases++;
+    for(const [actual,session] of [['other',actor],[actor,'other'],['other','other']]){
+      assert.throws(()=>inspect(actual,session),/PRIVATE_OWNER_MISMATCH/);cases++;
+    }
+  }
   const ownerStart=runtimeSource.indexOf("      if(owner!==null)await verify(jwt('authenticated',owner));");
   const ownerEnd=runtimeSource.indexOf('      const foreign=',ownerStart);
   assert.ok(ownerStart>=0 && ownerEnd>ownerStart);
@@ -125,6 +155,7 @@ if (process.argv.includes("--storage-fresh-local-provider-contract-only")) {
   assert.equal(owned.length,1);assert.equal(owned[0].role,'authenticated');cases++;
   assert.equal((await principalBranch('immutable-private-fresh-supabase-admin',null,true)).length,0);cases++;
   for(const [profile,row]of [['immutable-private-fresh-supabase-admin',{owner:null,owner_id:null}],
+    ['immutable-private-fresh-postgres',{owner:null,owner_id:null}],
     ['unrecognized-profile',{owner:null,owner_id:null}],['native-text-v4-fresh-supabase-admin',{owner:null}],
     ['native-text-v4-fresh-supabase-admin',{owner:undefined,owner_id:null}],
     ['native-text-v4-fresh-supabase-admin',{owner:null,owner_id:'unexpected-principal'}]]){
@@ -1310,7 +1341,7 @@ if (process.argv.includes("--storage-context-first-constraint-only")) {
   const compile = text => new Function("ports", `const {isProxy,stableJson,pipeline,Transform,StorageTableClient,storageTableQuery,
     storageScalarTypeOids,STORAGE_TABLE_PARAMETER_BYTES,STORAGE_TABLE_PARAMETER_ROWS,readVerifiedArchiveSourceBinding,
     readVerifiedRestoreTableSelection,openVerifiedRestoreTableData,decodeRestoreTableRowLine,
-    createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding}=ports;
+    createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding}=ports;
     ${text} return compareVerifiedStorageTableData;`);
   const subject = compile(body), reference = compile(referenceBody);
   const original = Object.freeze({ database_oid: "42", backend_pid: "7", transaction_id: "12", snapshot: "12:13:",
@@ -1329,13 +1360,13 @@ if (process.argv.includes("--storage-context-first-constraint-only")) {
       }
     }
     const binding = Object.freeze({ recording_only: true });
-    const selection = Object.freeze({ databaseTables: [], storageTables: [] });
+    const selection = Object.freeze({ privateTables: [], databaseTables: [], storageTables: [] });
     const fn = factory({ isProxy, stableJson, pipeline, Transform, StorageTableClient: RecordingClient,
       storageTableQuery: RecordingClient.prototype.query, storageScalarTypeOids: ["25"],
       STORAGE_TABLE_PARAMETER_BYTES: 16 * 1024 * 1024, STORAGE_TABLE_PARAMETER_ROWS: 65536,
       readVerifiedArchiveSourceBinding: () => binding, readVerifiedRestoreTableSelection: () => selection,
       openVerifiedRestoreTableData: () => assert.fail("No table reader in predicate-only recording"),
-      decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder, postgresJsonTextLineEncoding: "postgres-json-text-line.v1" });
+      decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder, postgresJsonTextLineEncoding: "postgres-json-text-line.v1",postgresTextColumnsLineEncoding });
     try { return { value: await fn({ db: new RecordingClient(), verifiedArchive: {} }), calls }; }
     catch (error) { return { error, calls }; }
   }
@@ -1418,7 +1449,7 @@ if (process.argv.includes("--storage-first-native-refusal-only")) {
   const compile = new Function("ports", `const {isProxy,stableJson,pipeline,Transform,StorageTableClient,storageTableQuery,
     storageScalarTypeOids,STORAGE_TABLE_PARAMETER_BYTES,STORAGE_TABLE_PARAMETER_ROWS,readVerifiedArchiveSourceBinding,
     readVerifiedRestoreTableSelection,openVerifiedRestoreTableData,decodeRestoreTableRowLine,
-    createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding}=ports;
+    createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding}=ports;
     ${source.slice(start, end).replace("export async function", "async function")}
     return compareVerifiedStorageTableData;`);
   const sqlError = code => {
@@ -1435,7 +1466,7 @@ if (process.argv.includes("--storage-first-native-refusal-only")) {
       row_count: "1", data_encoding: "postgres-json-text-line.v1", primary_key: [],
       columns: [{ name: "id", data_type: "text", generated: "", identity: "" }] };
     const binding = Object.freeze({ recording_only: true });
-    const selection = Object.freeze({ databaseTables: [table], storageTables: [table] });
+    const selection = Object.freeze({ privateTables: [], databaseTables: [table], storageTables: [table] });
     const context = { database_oid: "42", backend_pid: "7", transaction_id: "12", snapshot: "12:13:",
       actor: "UNIT_RECORDING", session_actor: "UNIT_RECORDING", read_only: "on", isolation: "repeatable read",
       replication: "origin", row_security: "on", search_path: "pg_catalog", first_schema: "pg_catalog", timezone: "UTC",
@@ -1476,7 +1507,7 @@ if (process.argv.includes("--storage-first-native-refusal-only")) {
         return { table, stream: Readable.from([Buffer.from(mode === "data-utf8" ? [0xff] : wire)]),
           verified: Promise.resolve({ data_file: table.data_file, bytes: Buffer.byteLength(wire), sha256: createHash("sha256").update(wire).digest("hex") }),
           close: async () => { trace.closes++; if (mode === "native-loan-cleanup" || mode === "data-close-code-spoof") throw sqlError("XX000"); } };
-      }, decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder, postgresJsonTextLineEncoding: "postgres-json-text-line.v1" });
+      }, decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder, postgresJsonTextLineEncoding: "postgres-json-text-line.v1",postgresTextColumnsLineEncoding });
     let error, value;
     try { value = await fn(mode === "input" ? {} : { db, verifiedArchive: {} }); } catch (caught) { error = caught; }
     assert.equal(trace.closes, trace.opens, "Every opened recording loan is closed");

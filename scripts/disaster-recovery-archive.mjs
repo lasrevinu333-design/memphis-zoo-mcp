@@ -29,6 +29,7 @@ const schemaSectionSnapshots = new WeakMap();
 // No cached source lifetime/currentness or target/import admission verdict.
 const restoreTableSelectionParses = new WeakMap();
 const immutableBootstrapInventoryReads = new WeakMap();
+const migrationTargetCaptureReads = new WeakMap();
 const schemaSectionProfiles = Object.freeze([
   Object.freeze({ section: "pre-data", path: "inventory/application-schema-pre-data.sql" }),
   Object.freeze({ section: "post-data", path: "inventory/application-schema-post-data.sql" }),
@@ -700,8 +701,8 @@ export async function collectVerifiedRestoreBootstrapRows(verifiedArchive) {
   const selection = readVerifiedRestoreTableSelection(verifiedArchive, {databaseOnly: true});
   const members = ["release_deployment_manifest", "custodial_release_authority_restore_inventory"].map(name => {
     const table = selection.databaseTables.find(value => value.schema_name === "public" && value.table_name === name);
-    if (!table || (name === "release_deployment_manifest" ? table.row_count !== "1" : BigInt(table.row_count) === 0n))
-      throw Object.assign(new Error("Bootstrap requires one original release and nonempty original registry."), {
+    if (!table || BigInt(table.row_count) === 0n)
+      throw Object.assign(new Error("Bootstrap requires nonempty original release history and original registry."), {
         code: "IMMUTABLE_BOOTSTRAP_ORIGINAL_ROWS_UNAVAILABLE", source_member: "public." + name,
       });
     const path = table.data_file, original = context.files.get(path), sha256 = context.checksums.get(path);
@@ -836,13 +837,29 @@ export function readVerifiedMigrationTargetCaptureSource(archive) {
     return {path,original,sha256};
   });
   requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  // Cache immutable authenticated Source DATA only. Every hit still proves the
+  // original named members, inode/ctime/size/link identity and live binding
+  // before and after use. No target observation or effect verdict is cached.
+  const cached=migrationTargetCaptureReads.get(context);
+  if(cached){
+    requireBootstrapMemberPins(archive,sourceBinding,context,members);
+    if(cached.sourceBinding!==sourceBinding)throw new Error('Target-capture cached source changed.');
+    requireBootstrapMemberPins(archive,sourceBinding,context,members);
+    return cached;
+  }
   const fd=openSync(context.directory,DIRECTORY_FLAGS),values=[];
   try {for(const member of members){
     values.push(JSON.parse(requireSectionFile(fd,member,member.original,true).sql));
     requireBootstrapMemberPins(archive,sourceBinding,context,members);
   }} finally {closeSync(fd);}
   requireBootstrapMemberPins(archive,sourceBinding,context,members);
-  return {sourceBinding,binding:values[0],catalog:values[1],ledger:values[2]};
+  const queue=[...values];while(queue.length){const value=queue.pop();if(value&&typeof value==='object'){
+    queue.push(...Object.values(value));Object.freeze(value);
+  }}
+  const result=Object.freeze({sourceBinding,binding:values[0],catalog:values[1],ledger:values[2]});
+  requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  migrationTargetCaptureReads.set(context,result);
+  return result;
 }
 
 function sha256(value) {

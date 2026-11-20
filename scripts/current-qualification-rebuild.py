@@ -136,8 +136,13 @@ try:
   specpath=pathlib.Path(consumer_spec)
   assert specpath.is_absolute() and not specpath.is_symlink() and specpath.resolve()==specpath and specpath.stat().st_uid==os.getuid() and stat.S_IMODE(specpath.stat().st_mode)==0o600
   spec=json.loads(specpath.read_text());assert set(spec)=={'schema','script','args','relay','relay_sha256','runtime'} and spec['schema']=='custodial.current310-local-ci-consumer.v1'
-  allowed={'completion-taxonomy-database-tests.mjs','current-owned-scheduler-browser-tests.mjs','current-qualified-recovery-qualification-tests.mjs','current-qualified-final-closure-tests.mjs'}
-  assert spec['script'] in allowed and spec['args']==[], 'Only the separately named current qualification consumers, without arbitrary arguments'
+  allowed={'completion-taxonomy-database-tests.mjs','current-owned-scheduler-browser-tests.mjs','current-qualified-recovery-qualification-tests.mjs','current-qualified-final-closure-tests.mjs','accepted-seven-update-database-tests.mjs'}
+  assert spec['script'] in allowed, 'Only the separately named current qualification consumers'
+  if spec['script']=='accepted-seven-update-database-tests.mjs':
+   original_args=[str(pathlib.Path(spec['runtime'])/'seven-result'),str(pathlib.Path(spec['runtime'])/'recorded-history.json')]
+   assert spec['args'] in [original_args,original_args+['--current-week-regression']]
+   assert hashlib.sha256(pathlib.Path(spec['args'][1]).read_bytes()).hexdigest()=='a760bc82ee4f15806e84b856a7b7d9920e86d737f89a56d72635da16972d6f65'
+  else:assert spec['args']==[], 'Other qualification consumers retain no arbitrary arguments'
   runtime=pathlib.Path(spec['runtime']);assert runtime.is_absolute() and runtime.resolve()==runtime and runtime==D.parent and runtime.stat().st_uid==os.getuid()
   relay_source=pathlib.Path(spec['relay']);assert relay_source.is_file() and not relay_source.is_symlink() and relay_source.resolve()==relay_source and relay_source.is_relative_to(runtime)
   assert hashlib.sha256(relay_source.read_bytes()).hexdigest()==spec['relay_sha256']
@@ -148,7 +153,7 @@ try:
   descriptor_path=O/'CONSUMER_DATABASE.json';descriptor_path.write_text(json.dumps(descriptor,indent=2)+'\n');descriptor_path.chmod(0o600)
   env={k:v for k,v in os.environ.items() if k in ['PATH','LANG','JAVA_HOME']};env.update(HOME=str(runtime/'home'),TMPDIR=str(runtime/'tmp'),TZ='America/Chicago',CUSTODIAL_CURRENT310_OWNED_CI_DESCRIPTOR=str(descriptor_path))
   frontend=B.parent/'frontend'
-  argv=['bwrap','--unshare-net','--unshare-pid','--die-with-parent','--ro-bind','/','/','--bind',str(runtime),str(runtime),'--ro-bind',str(runtime/'backend-deps/node_modules'),str(B/'node_modules'),*([] if spec['script']=='completion-taxonomy-database-tests.mjs' else ['--ro-bind',str(runtime/'frontend-deps/node_modules'),str(frontend/'node_modules')]),'--ro-bind','/run/docker.sock','/run/docker.sock','--tmpfs','/tmp','--dev','/dev','--proc','/proc','node',str(B/'scripts'/spec['script']),*spec['args']]
+  argv=['bwrap','--unshare-net','--unshare-pid','--die-with-parent','--ro-bind','/','/','--bind',str(runtime),str(runtime),'--ro-bind',str(runtime/'backend-deps/node_modules'),str(B/'node_modules'),*([] if spec['script'] in ['completion-taxonomy-database-tests.mjs','accepted-seven-update-database-tests.mjs'] else ['--ro-bind',str(runtime/'frontend-deps/node_modules'),str(frontend/'node_modules')]),'--ro-bind','/run/docker.sock','/run/docker.sock','--tmpfs','/tmp','--dev','/dev','--proc','/proc','node',str(B/'scripts'/spec['script']),*spec['args']]
   env.update(NODE_ENV='test',PLAYWRIGHT_BROWSERS_PATH='/home/eric/.cache/ms-playwright',NODE_EXTRA_CA_CERTS=str(runtime/'localhost-cert.pem'))
   if spec['script']=='current-owned-scheduler-browser-tests.mjs':
    # The unchanged original guardian must run in the real host context, outside
@@ -179,7 +184,7 @@ try:
     (O/'BROWSER_LEASE.json').write_text(json.dumps(browser_record,indent=2)+'\n')
    assert browser_record['released'] and consumer is not None
   else:
-   with (O/'CONSUMER.log').open('w') as output:consumer=subprocess.run(argv,cwd=B,env=env,stdout=output,stderr=subprocess.STDOUT,timeout=420)
+   with (O/'CONSUMER.log').open('w') as output:consumer=subprocess.run(argv,cwd=B,env=env,stdout=output,stderr=subprocess.STDOUT,timeout=1800 if spec['script']=='accepted-seven-update-database-tests.mjs' else 420)
   result['consumer']={'script':spec['script'],'exit_code':consumer.returncode,'log_sha256':hashlib.sha256((O/'CONSUMER.log').read_bytes()).hexdigest(),'no_API_table_sequence_defaults_after':sql(q).stdout.strip()=='0'}
   assert consumer.returncode==0,'Current SQL CI consumer failed: '+spec['script']
   assert result['consumer']['no_API_table_sequence_defaults_after'],'Consumer changed forbidden defaults'

@@ -20,6 +20,15 @@ test('capture age, not receipt time or session, decides live versus stale',()=>{
  for(const patch of [{observed_at:new Date(now+1).toISOString()},{latitude:Infinity},{accuracy_m:0},{received_at:null}]){assert.equal(phoneLocations([{...row,...patch}],now)[0].position,null);}
  assert.throws(()=>phoneLocations([row,row],now));
 });
+test('every assigned phone inside the actual zoo perimeter is visible; outside coordinates are withheld',()=>{
+ const rows=Array.from({length:9},(_,i)=>({...row,device_id:`KIOSK_${String(i+2).padStart(2,'0')}`,sample_id:id(i+20)}));
+ const phones=phoneLocations(rows,now);assert.equal(phones.length,9);assert.ok(phones.every(x=>x.state==='live'&&x.position));
+ for(const point of [[35.145,-89.99],[35.15,-90],[35.1483611,-89.9874406]]){
+  const outside=phoneLocations([{...row,latitude:point[0],longitude:point[1]}],now)[0];
+  assert.equal(outside.state,'unavailable');assert.equal(outside.position,null);assert.equal(outside.reason,'outside_zoo_perimeter');
+  assert.equal(outside.lastObservedAt,row.observed_at);assert.ok(!('latitude' in outside)&&!('longitude' in outside));
+ }
+});
 test('actual HTTP parser preserves signed bytes; anonymous/public cannot read; authority changes withhold response',async()=>{
  const app=express();app.use(createGeneralJsonMiddleware());let writes=0,verifyBytes=null,change=false;
  const manager={role:'ops_manager',manager_id:id(5),credential_id:id(6),device_id:'manager',permissions:{schema:'custodial.manager-permissions.v1',read:true}};

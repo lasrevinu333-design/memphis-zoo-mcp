@@ -178,7 +178,8 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
   witness=deriveFixedStaticWeeklyOwnershipWitness(problem,{rowOwners,deadline,allowCapacity:true}),
   // Lunch is temporary inherited custody, not a new normal area assignment.
   // Its scoped view cannot alter the fixed-owner model or stored work facts.
-  lunchProblem={...problem,work:problem.work.map(w=>approvedManualInheritedEligibility(w,ownerConfig,'INHERITED_ALERTS_AND_ISSUES_ONLY'))},
+  lunchProblem=problem.version.manualGroupRatingAuthority?.acceptedSevenOnCallLunch?problem:
+   {...problem,work:problem.work.map(w=>approvedManualInheritedEligibility(w,ownerConfig,'INHERITED_ALERTS_AND_ISSUES_ONLY'))},
   lunch=deriveLunchCoverageFromPreparedProblem(lunchProblem,witness.assignments);
  assert.equal(lunch.status,'PLANNED',JSON.stringify(lunch.lunches.filter(l=>l.status!=='PLANNED').map(l=>({slot:l.normalOwnerSlotId,reason:l.reason}))));
  const byWork=new Map(problem.work.map(w=>[w.key,w])),byRaw=new Map(assignments.map(w=>[`${w.dayOfWeek}:${w.workId}`,w])),

@@ -1,6 +1,6 @@
 import {validateApprovedManualCoverAllFacts,applyApprovedManualTypedCoverAllChanges} from './approved-manual-coverall-facts.js';
 import {approvedManualEmploymentPeriod,approvedManualEmploymentChanges} from './approved-manual-employment-integration.js';
-import {readApprovedManualWeek as readApprovedManualWeekForInitial} from './approved-manual-week.js';
+import {readApprovedManualWeekForSource} from './accepted-manual-week-selection.js';
 import assert from 'node:assert/strict';
 import {assertExceptionCommand} from './static-weekly-schedule-model.js';
 import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
@@ -157,7 +157,7 @@ export function approvedManualInitialEmploymentWorkerInput({basis,actor,operatio
  assert.equal(basis.originalCommand,null);assert.equal(basis.managerId,actor.managerId);
  assert.equal(basis.actor.manager_name,actor.managerName);assert.ok(Array.isArray(basis.employmentByDate));
  const {basisDigest,...body}=basis;assert.equal(basisDigest,digest(body));
- const facts=approvedManualPeriodStaffingFacts({week:readApprovedManualWeekForInitial(),source:basis.normalSource,exceptions:basis.preparedExceptions});
+ const facts=approvedManualPeriodStaffingFacts({week:readApprovedManualWeekForSource(basis.normalSource),source:basis.normalSource,exceptions:basis.preparedExceptions});
  return captureApprovedManualPeriodWorkerInput({schema:'custodial.approved-manual-period-worker-input.v2',source:basis.normalSource,
   ownerConfig:basis.ownerConfig,frameStart:basis.frameStart,changes:facts.changes,priorDays:basis.priorDayBases,acceptedExceptions:basis.preparedExceptions,
   priorProjection:basis.priorProjection,actor,expectedRevision:basis.authorityRevision,idempotencyKey:`coverall-initial:${operationId}`,

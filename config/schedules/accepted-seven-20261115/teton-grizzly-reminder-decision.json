@@ -1,0 +1,24 @@
+{
+  "schema": "custodial.accepted-seven-assignment-reminder-decision.v1",
+  "authority": "Eric's instruction relayed by existing source chat 6af912c3-a6a4-8191-8c0e-4cdd08ce303a",
+  "recordedAt": "2026-11-15T22:27:28.662769Z",
+  "acceptedCandidateSha256": "22d067bd595e2450bb32cd36903df94628eb6df055a44f992b3aba9f242bbee7",
+  "manualDataDigest": "fe0257dbd8cb4dd2f63c4da1997342067945e87a6ce516aee0698debef5d9a58",
+  "locationCode": "TETON",
+  "groupId": "7b5749c0-f37b-4ffd-948d-ed09f3554b6b",
+  "primaryLocationId": "e127dc20-98ea-4c21-9a8d-5274d29f8508",
+  "includedLocationIds": [
+    "e127dc20-98ea-4c21-9a8d-5274d29f8508",
+    "a269e6f3-dbdc-481a-aa0b-fb3cdfde8606",
+    "7f890aeb-87df-4255-9116-9d465b4b5121"
+  ],
+  "reminder": "Grizzly Underwater Viewing",
+  "placement": "In the existing Teton/Teton restrooms assignment label wherever paired in the pending seven-person schedule",
+  "partOfExistingTetonAssignment": true,
+  "newLocation": false,
+  "newNfcTag": false,
+  "changesOwnershipOrShiftOrLunch": false,
+  "extraCleaningTasksFromOldAssistantClaimIncluded": false,
+  "historicalAssignmentsRewritten": false,
+  "actualPublicationReadbackRequired": true
+}

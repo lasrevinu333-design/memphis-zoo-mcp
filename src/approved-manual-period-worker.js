@@ -1,7 +1,7 @@
 import {validateApprovedManualLunchPrior} from './approved-manual-lunch-retention.js';
 import {captureStaticWeeklyPreparationData} from './static-weekly-staffing-preview.js';
 import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
-import {readApprovedManualWeek} from './approved-manual-week.js';
+import {readApprovedManualWeekForSource} from './accepted-manual-week-selection.js';
 import {solveApprovedManualAbsencePeriod} from './approved-manual-absence.js';
 import {prepareApprovedManualPeriodProjection} from './approved-manual-period-projection.js';
 import {approvedManualEmploymentPeriod,approvedManualEmploymentChanges,assertApprovedManualEmploymentProjection} from './approved-manual-employment-integration.js';
@@ -60,7 +60,7 @@ export function captureApprovedManualPeriodWorkerResult(result,input){
 // Called only inside the already owned compiler child. The installed fused
 // HiGHS runtime and original absolute deadline cover the entire operation.
 export async function prepareApprovedManualPeriodWorkerData(input,deadline){
- const captured=captureApprovedManualPeriodWorkerInput(input),week=readApprovedManualWeek(),
+ const captured=captureApprovedManualPeriodWorkerInput(input),week=readApprovedManualWeekForSource(captured.source),
   employment=captured.employmentByDate?approvedManualEmploymentPeriod({frameStart:captured.frameStart,expectedRevision:captured.expectedRevision,employmentByDate:captured.employmentByDate}):null,
   changes=employment?approvedManualEmploymentChanges({week,changes:captured.changes,employment}):captured.changes;
  let period=await solveApprovedManualAbsencePeriod({week,source:captured.source,ownerConfig:captured.ownerConfig,

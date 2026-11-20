@@ -1,0 +1,52 @@
+{
+  "format": "custodial.original-storage-insert-guards.v1",
+  "source": "Read-only original vendor function and trigger metadata. No object data.",
+  "guards": [
+    {
+      "type": 7,
+      "when": null,
+      "nargs": 1,
+      "owner": "supabase_storage_admin",
+      "table": "buckets",
+      "schema": "storage",
+      "columns": [],
+      "enabled": "O",
+      "trigger": "protect_bucket_control_insert",
+      "args_hex": "736572766963655f726f6c6500",
+      "function": "storage.protect_bucket_control_columns()",
+      "internal": false,
+      "new_table": null,
+      "old_table": null,
+      "constraint": false,
+      "deferrable": false,
+      "definition": "CREATE OR REPLACE FUNCTION storage.protect_bucket_control_columns()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n  configuration_changed boolean;\nBEGIN\n  IF TG_OP = 'INSERT' THEN\n    IF NEW.lifecycle_configuration IS NOT NULL\n       OR NEW.lifecycle_configuration_generation IS NOT NULL THEN\n      IF NOT pg_has_role(current_user, TG_ARGV[0], 'MEMBER') THEN\n        RAISE EXCEPTION 'only members of the configured storage service role may insert lifecycle policy state'\n          USING ERRCODE = '42501',\n                HINT = format(\n                  'Insert with both lifecycle columns NULL and configure lifecycle through the Storage API afterward, or insert as a member of %I.',\n                  TG_ARGV[0]\n                );\n      END IF;\n    END IF;\n\n    RETURN NEW;\n  END IF;\n\n  configuration_changed =\n    OLD.lifecycle_configuration IS DISTINCT FROM NEW.lifecycle_configuration\n    OR OLD.lifecycle_configuration_generation IS DISTINCT FROM NEW.lifecycle_configuration_generation;\n\n  IF NOT configuration_changed THEN\n    RETURN NEW;\n  END IF;\n\n  IF NEW.type IS DISTINCT FROM 'STANDARD' THEN\n    RAISE EXCEPTION 'bucket versioning and lifecycle controls require a Standard bucket'\n      USING ERRCODE = '0A000';\n  END IF;\n\n  IF NEW.lifecycle_configuration IS NULL\n     AND NEW.lifecycle_configuration_generation IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  IF NEW.lifecycle_configuration IS NULL\n     OR NEW.lifecycle_configuration_generation IS NULL\n     OR OLD.lifecycle_configuration IS NOT DISTINCT FROM NEW.lifecycle_configuration\n     OR OLD.lifecycle_configuration_generation IS NOT DISTINCT FROM NEW.lifecycle_configuration_generation THEN\n    RAISE EXCEPTION 'a changed lifecycle policy requires a new non-null generation'\n      USING ERRCODE = '22023';\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+      "security_definer": false,
+      "definition_sha256": "dac4257ed931d18bac0cbbc3135d0c75a36aae55309059d2913ed5e6792fa8de",
+      "initially_deferred": false
+    },
+    {
+      "type": 21,
+      "when": null,
+      "nargs": 0,
+      "owner": "supabase_storage_admin",
+      "table": "buckets",
+      "schema": "storage",
+      "columns": [
+        "lifecycle_configuration_generation"
+      ],
+      "enabled": "O",
+      "trigger": "wake_lifecycle_on_policy_write",
+      "args_hex": "",
+      "function": "storage.wake_lifecycle_state()",
+      "internal": false,
+      "new_table": null,
+      "old_table": null,
+      "constraint": false,
+      "deferrable": false,
+      "definition": "CREATE OR REPLACE FUNCTION storage.wake_lifecycle_state()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nBEGIN\n    IF TG_OP = 'INSERT' AND NEW.lifecycle_configuration IS NULL THEN\n        RETURN NEW;\n    END IF;\n\n    PERFORM storage.reconcile_lifecycle_state(NEW.id, false);\n    RETURN NEW;\nEND;\n$function$\n",
+      "security_definer": true,
+      "definition_sha256": "f3833a33d3a145ae4adeb51ac688fcebd58fe060b95f536d1e88b498628e5a96",
+      "initially_deferred": false
+    }
+  ]
+}

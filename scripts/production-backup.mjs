@@ -17,8 +17,10 @@ import { Readable } from "node:stream";
 import { finished, pipeline } from "node:stream/promises";
 import { promisify, types } from "node:util";
 import pg from "pg";
+import { createBackupPgDumpExecutor, captureBackupExporterIdentity } from "./production-backup-pg-dump-retry.mjs";
 import {captureCatalogFromSnapshot} from "./schema-catalog-readonly-client.mjs";
 import {bindBackupSchemaExtension} from "./backup-release-schema-binding.mjs";
+import {assertBackupSchemaBoundary} from "./backup-source-preflight.mjs";
 import { captureProductionBackupOriginalMetadata,readProductionBackupOriginalRelease } from "./production-backup-original-metadata.mjs";
 import {
   archiveSignatureBinding,
@@ -48,7 +50,7 @@ import {
 } from "./production-backup-pg-dump-command.mjs";
 
 const { Client } = pg;
-const execFileAsync = promisify(execFile);
+const rawExecFileAsync = promisify(execFile);
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
@@ -274,11 +276,36 @@ let migrationLedger = [];
 let cronJobs = [];
 let extensionInventory = [];
 let snapshot = null;
+let backupExporterIdentity = null;
 let migrationHead = null;
 let releaseIdentity = null;
 let sourceSchemaBinding = null;
 let applicationSchemaSections = null;
 let originalMetadata = null;
+
+// This wrapper leaves the source-pinned capture commands and validations intact.
+// Retry only a proven pre-auth refusal while the original guarded exporter lives.
+const execFileAsync = createBackupPgDumpExecutor({
+  run: rawExecFileAsync,
+  inventoryDir: join(backupDir, "inventory"),
+  assertExporterLive: async () => {
+    if (!backupTransactionMayBeOpen || !snapshot || !backupExporterIdentity) throw new Error("Exporter unavailable.");
+    const identity = await captureBackupExporterIdentity(client);
+    if (identity.backend_pid !== backupExporterIdentity.backend_pid || identity.virtualxid !== backupExporterIdentity.virtualxid) {
+      throw new Error("Exporter transaction changed.");
+    }
+    const result = await client.query(`select
+      txid_current_snapshot()::text snapshot_id,
+      date_trunc('milliseconds', transaction_timestamp()) = $1::timestamptz same_transaction,
+      current_setting('transaction_read_only') read_only,
+      current_setting('transaction_isolation') isolation`, [snapshot.captured_at]);
+    const row = result.rows[0];
+    if (result.rowCount !== 1 || row.snapshot_id !== snapshot.snapshot_id
+        || row.same_transaction !== true || row.read_only !== 'on' || row.isolation !== 'repeatable read') {
+      throw new Error("Exporter transaction changed.");
+    }
+  },
+});
 
 const endBackupClient = Client.prototype.end;
 let backupTransactionMayBeOpen = false;
@@ -293,7 +320,6 @@ try {
   for (const statement of backupNativeTextOutputStatements) await client.query(statement);
   const exportedSnapshotResult = await client.query("select pg_export_snapshot() exported_snapshot");
   const exportedSnapshot = String(exportedSnapshotResult.rows[0]?.exported_snapshot || "");
-  applicationSchemaSections = await captureApplicationSchema(exportedSnapshot);
   const snapshotResult = await client.query(`
     select current_database() database_name, current_setting('server_version') server_version,
            current_setting('TimeZone') timezone, transaction_timestamp() captured_at,
@@ -301,16 +327,16 @@ try {
            $1::text schema_export_snapshot
   `, [exportedSnapshot]);
   snapshot = snapshotResult.rows[0];
+  backupExporterIdentity = await captureBackupExporterIdentity(client);
 
-  const migrationResult = await client.query("select max(version)::text migration_head from supabase_migrations.schema_migrations");
-  migrationHead = String(migrationResult.rows[0]?.migration_head || "").trim();
-  if (!/^\d{14}$/.test(migrationHead)) throw new Error("The production migration head is unavailable or malformed.");
   const migrationLedgerResult = await client.query(`
     select version::text, name::text, statements
     from supabase_migrations.schema_migrations
     order by version
   `);
   migrationLedger = migrationLedgerResult.rows;
+  migrationHead = String(migrationLedger.at(-1)?.version || "").trim();
+  if (!/^\d{14}$/.test(migrationHead)) throw new Error("The production migration head is unavailable or malformed.");
   if (!migrationLedger.length || String(migrationLedger.at(-1)?.version || "") !== migrationHead) {
     throw new Error("The captured migration ledger does not terminate at the production migration head.");
   }
@@ -351,11 +377,13 @@ try {
       || !/^[0-9a-f]{64}$/.test(String(releaseIdentity.migration_manifest_sha256 || ""))) {
     throw new Error("The production release identity is incomplete or malformed.");
   }
-  if (String(releaseIdentity.migration_head) !== migrationHead) {
-    // Preserve both true identities; admit only the exact previously applied
-    // source extension, never an arbitrary drift or invented deployed release.
+  {
+    // Always enforce the selected exact ledger/catalog contract. Equal heads
+    // do not prove an unchanged deployed identity or an approved database.
+    // Preserve both true identities; never invent an application upgrade.
+    const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension-v2.active.json",import.meta.url),"utf8"));
+    assertBackupSchemaBoundary({projectRef,releaseIdentity,migrationLedger,declaration});
     const catalog=await captureCatalogFromSnapshot(client);
-    const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension.json",import.meta.url),"utf8"));
     sourceSchemaBinding=bindBackupSchemaExtension({projectRef,releaseIdentity,migrationLedger,catalog,declaration,
       readSource:(filename,location)=>readFileSync(new URL((location==="retained_installed"?"../release/installed-source/":"../supabase/migrations/")+filename,import.meta.url))});
     writeJson(join(backupDir,"inventory","source-catalog.json"),catalog);
@@ -370,6 +398,10 @@ try {
   });
   writeJson(join(backupDir, "inventory", "runtime-contract.json"), runtimeContract);
   writeJson(join(backupDir, "inventory", "runtime-configuration.json"), runtimeConfiguration);
+
+  // Reject stale source/runtime contracts before additional pg_dump connections.
+  // Keep the original exported repeatable-read, read-only snapshot.
+  applicationSchemaSections = await captureApplicationSchema(exportedSnapshot);
 
   const namespaceResult = await client.query(`
     select nspname schema_name,has_schema_privilege(current_user,oid,'USAGE') usage_allowed

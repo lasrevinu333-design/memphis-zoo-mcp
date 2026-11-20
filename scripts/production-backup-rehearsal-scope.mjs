@@ -3,17 +3,31 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
 import {materializeVerifiedArchive,readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection} from './disaster-recovery-archive.mjs';
 import {requireSigningKey} from './disaster-recovery-crypto.mjs';
 
 // Detached provenance/result DATA only. Neither function admits SQL, restores
 // rows, resumes an app or signs candidate migration/runtime attestations.
-export function assertBackupOnlySourceBinding({summary,run,backupRunId,repository}) {
+const IMMUTABLE_BACKUP_LAUNCHERS=Object.freeze({
+ '5e150a484915849d41ae330babcc4f28cb488729':Object.freeze({repository:'lasrevinu333-design/memphis-zoo-mcp',
+  toolCommit:'685d6213d449fcc8dafcba24a47c7e6df0da3db2',workflowSha256:'29b2c38abfee2891f32a3cd9d38437a697c4577bb38528417097d8d93cf77259'}),
+});
+export function assertBackupOnlySourceBinding({summary,run,backupRunId,repository,launcherWorkflowSource=null}) {
   assert.match(String(backupRunId),/^[1-9][0-9]*(?![\s\S])/);
   assert.equal(String(run.id),String(backupRunId));
   assert.equal(run.repository.full_name,repository);
   assert.equal(run.status,'completed');assert.equal(run.conclusion,'success');
-  assert.equal(run.head_sha,summary.source_identity.backup_tool_commit);
+  assert.match(run.head_sha,/^[a-f0-9]{40}$/);assert.match(summary.source_identity.backup_tool_commit,/^[a-f0-9]{40}$/);
+  if(run.head_sha!==summary.source_identity.backup_tool_commit){
+    // A launcher run and its immutable checkout are separate Git identities.
+    // Admit only this verified published pair and its complete exact workflow;
+    // mere ancestry, arbitrary refs and caller-declared tool values still fail.
+    const launcher=Object.hasOwn(IMMUTABLE_BACKUP_LAUNCHERS,run.head_sha)?IMMUTABLE_BACKUP_LAUNCHERS[run.head_sha]:null;assert.ok(launcher,'Unknown backup launcher identity');
+    assert.equal(repository,launcher.repository);assert.equal(summary.source_identity.backup_tool_commit,launcher.toolCommit);
+    assert.equal(typeof launcherWorkflowSource,'string');
+    assert.equal(createHash('sha256').update(launcherWorkflowSource).digest('hex'),launcher.workflowSha256,'Exact complete published launcher workflow required');
+  }
   assert.equal(run.path,'.github/workflows/production-disaster-recovery-backup.yml');
   assert.ok(Number.isSafeInteger(summary.database_row_count)&&summary.database_row_count>0,
     'Populated original DATA is required.');
@@ -83,7 +97,13 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
         writeFileSync(p+'/backup-run-provenance.json',raw,{mode:0o600,flag:'wx'});
       }
       const run=JSON.parse(readFileSync(p+'/backup-run-provenance.json','utf8'));
-      assertBackupOnlySourceBinding({summary,run,backupRunId:process.env.BACKUP_RUN_ID,repository:process.env.GITHUB_REPOSITORY});
+      let launcherWorkflowSource=null;
+      if(run.head_sha!==summary.source_identity.backup_tool_commit){
+        assert.match(run.head_sha,/^[a-f0-9]{40}$/);
+        launcherWorkflowSource=execFileSync('git',['show',run.head_sha+':.github/workflows/production-disaster-recovery-backup.yml'],
+          {encoding:'utf8',maxBuffer:2*1024*1024});
+      }
+      assertBackupOnlySourceBinding({summary,run,backupRunId:process.env.BACKUP_RUN_ID,repository:process.env.GITHUB_REPOSITORY,launcherWorkflowSource});
       if(mode==='restore-result') {
         const restore=JSON.parse(readFileSync(p+'/backup-only-owned-restore-result.json','utf8'));
         console.log(JSON.stringify(backupOnlyRestoreReceipt({summary,restore,toolCommit:process.env.GITHUB_SHA,backupRunId:process.env.BACKUP_RUN_ID,archiveDigest:binding.archive_digest,

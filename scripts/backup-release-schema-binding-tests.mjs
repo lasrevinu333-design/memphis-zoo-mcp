@@ -24,7 +24,7 @@ for(const[label,change]of [['mismatched runtime',x=>x.summary.source_identity.re
 const ca='-----BEGIN CERTIFICATE-----\nsynthetic-certificate\n-----END CERTIFICATE-----',url='postgresql://fixture:fixture-secret@db.fixture.supabase.co:5432/postgres?sslmode=disable&application_name=bad';
 test('TLS verification cannot be overridden in the configured URL',()=>{const options=catalogConnectionOptions({connectionString:url,caPem:ca});assert.equal(options.ssl.rejectUnauthorized,true);assert.equal(options.ssl.ca,ca);assert.equal(new URL(options.connectionString).searchParams.has('sslmode'),false);assert.equal(options.statement_timeout,15000);});
 for(const [label,value]of [['missing certificate',{connectionString:url,caPem:''}],['not postgres',{connectionString:'https://example.invalid',caPem:ca}],['missing credentials',{connectionString:'postgres://example.invalid/db',caPem:ca}]])test(label+' refused',()=>assert.throws(()=>catalogConnectionOptions(value)));
-function fake({fail=false,readOnly='on'}={}){const calls=[];let ended=false;class Client{constructor(options){assert.equal(options.ssl.rejectUnauthorized,true);}async connect(){calls.push('connect');}async query(sql){calls.push(sql);if(sql.startsWith('select current_setting'))return{rows:[{read_only:readOnly}]};if(sql.startsWith('begin')||sql==='rollback'||sql==='set local row_security = off')return{rows:[]};const queries=[...Object.values(SCHEMA_CATALOG_QUERIES).filter(q=>q!==SCHEMA_CATALOG_QUERIES.cron_jobs),NATIVE_CRON_CATALOG_SQL,UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY,CatalogSource.RECOVERY_SCHEMA_OWNERS_QUERY,CatalogSource.APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY].filter(q=>typeof q==='string');assert.ok(queries.some(q=>sql==="select coalesce(json_agg(row_to_json(q)),'[]'::json) as catalog_rows from ("+q+") q"),'only source-controlled complete catalog queries may run');if(fail)throw Object.assign(Error('fixture-secret may not escape'),{code:'XX000'});return{rows:[{catalog_rows:[]}]};}async end(){ended=true;}}return{Client,calls,ended:()=>ended};}
+function fake({fail=false,readOnly='on'}={}){const calls=[];let ended=false;class Client{constructor(options){assert.equal(options.ssl.rejectUnauthorized,true);}async connect(){calls.push('connect');}async query(sql,args){calls.push(sql);if(sql==="select pg_catalog.current_setting('search_path') as search_path")return{rows:[{search_path:'pg_catalog,public'}]};if(sql==="select pg_catalog.set_config('search_path', $1, true) as search_path")return{rows:[{search_path:args[0]}]};if(/^(savepoint |release savepoint |rollback to savepoint )custodial_catalog_rendering_context$/.test(sql))return{rows:[]};if(sql.startsWith('select current_setting'))return{rows:[{read_only:readOnly}]};if(sql.startsWith('begin')||sql==='rollback'||sql==='set local row_security = off')return{rows:[]};const queries=[...Object.values(SCHEMA_CATALOG_QUERIES).filter(q=>q!==SCHEMA_CATALOG_QUERIES.cron_jobs),NATIVE_CRON_CATALOG_SQL,UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY,CatalogSource.RECOVERY_SCHEMA_OWNERS_QUERY,CatalogSource.APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY].filter(q=>typeof q==='string');assert.ok(queries.some(q=>sql==="select coalesce(json_agg(row_to_json(q)),'[]'::json) as catalog_rows from ("+q+") q"),'only source-controlled complete catalog queries may run');if(fail)throw Object.assign(Error('fixture-secret may not escape'),{code:'XX000'});return{rows:[{catalog_rows:[]}]};}async end(){ended=true;}}return{Client,calls,ended:()=>ended};}
 test('all catalog queries execute in one verified read-only snapshot and rollback',async()=>{const f=fake();const rows=await readCatalogReadOnly({connectionString:url,caPem:ca,Client:f.Client});assert.deepEqual(Object.keys(rows),Object.keys(SCHEMA_CATALOG_QUERIES));assert.equal(f.calls[1],'begin isolation level repeatable read read only deferrable');assert.equal(f.calls.at(-1),'rollback');assert.equal(f.ended(),true);});
 test('failure still rolls back and closes without leaking connection text',async()=>{const f=fake({fail:true});await assert.rejects(readCatalogReadOnly({connectionString:url,caPem:ca,Client:f.Client}),e=>e.code==='XX000'&&!String(e.stack).includes('fixture-secret')&&!e.cause);assert.equal(f.calls.at(-1),'rollback');assert.equal(f.ended(),true);});
 test('read-write transaction is refused before catalog data is requested',async()=>{const f=fake({readOnly:'off'});await assert.rejects(readCatalogReadOnly({connectionString:url,caPem:ca,Client:f.Client}));assert.equal(f.calls.length,4);assert.equal(f.ended(),true);});
@@ -76,8 +76,11 @@ function recoveryCatalogFixture({rows=recoveryCatalogRows(),relations=[],types=[
  class Client{
   constructor(options){assert.equal(options.ssl.rejectUnauthorized,true);}
   async connect(){calls.push('connect');}
-  async query(sql){
+  async query(sql,args){
    calls.push(sql);
+   if(sql==="select pg_catalog.current_setting('search_path') as search_path")return{rows:[{search_path:'pg_catalog,public'}]};
+   if(sql==="select pg_catalog.set_config('search_path', $1, true) as search_path")return{rows:[{search_path:args[0]}]};
+   if(/^(savepoint |release savepoint |rollback to savepoint )custodial_catalog_rendering_context$/.test(sql))return{rows:[]};
    if(sql.startsWith('select current_setting'))return{rows:[{read_only:'on'}]};
    if(sql.startsWith('begin')||sql==='rollback'||sql==='set local row_security = off')return{rows:[]};
    const prefix="select coalesce(json_agg(row_to_json(q)),'[]'::json) as catalog_rows from (";
@@ -277,4 +280,52 @@ test('unknown retained source location refuses before a source file can be borro
  assert.throws(()=>bindBackupSchemaExtension(x),/Unknown installed source location/);assert.equal(opened,false);
  const a=archive();a.binding={...a.binding,extensions:a.binding.extensions.map(row=>({...row}))};a.binding.extensions.at(-1).source_location='other';
  assert.throws(()=>verifyArchivedSchemaExtension(a),/Unknown installed source location/);
+});
+
+// Source/component PostgreSQL-context model: statement failure aborts the
+// transaction until ROLLBACK TO SAVEPOINT. No actual database is contacted.
+function renderingContextFixture({initial='"$user", public',failCatalog=false,failRestore=false,invalidPrior=false}={}){
+ let path=initial,savepoint=null,aborted=false;const calls=[],catalogPaths=[];
+ const read="select pg_catalog.current_setting('search_path') as search_path",set="select pg_catalog.set_config('search_path', $1, true) as search_path";
+ return{calls,catalogPaths,path:()=>path,aborted:()=>aborted,query:async(sql,args)=>{
+  calls.push({sql,args});
+  if(sql==='rollback to savepoint custodial_catalog_rendering_context'){assert.ok(savepoint!==null);aborted=false;path=savepoint;return{rows:[]};}
+  if(aborted)throw Object.assign(Error('transaction is aborted'),{code:'25P02'});
+  if(sql==='set local row_security = off')return{rows:[]};
+  if(sql===read)return{rows:[{search_path:invalidPrior?null:path}]};
+  if(sql==='savepoint custodial_catalog_rendering_context'){savepoint=path;return{rows:[]};}
+  if(sql==='release savepoint custodial_catalog_rendering_context'){assert.ok(savepoint!==null);savepoint=null;return{rows:[]};}
+  if(sql===set){assert.equal(args.length,1);if(failRestore&&args[0]===initial)throw Error('synthetic restoration failure');path=args[0];return{rows:[{search_path:path}]};}
+  const prefix="select coalesce(json_agg(row_to_json(q)),'[]'::json) as catalog_rows from (";
+  assert.ok(sql.startsWith(prefix)&&sql.endsWith(') q'),'Only fixed catalog wrapper allowed');catalogPaths.push(path);
+  if(failCatalog){aborted=true;throw Object.assign(Error('synthetic catalog SQL failure'),{code:'XX000'});}
+  const query=sql.slice(prefix.length,-3);let rows=[];
+  if(query===SCHEMA_CATALOG_QUERIES.constraints)rows=[{schema_name:'public',table_name:'fixture',constraint_name:'fixture_digest',constraint_type:'c',definition:`CHECK ((${path.includes('extensions')?'':'extensions.'}digest('fixture', 'sha256') IS NOT NULL))`,validated:true}];
+  return{rows:[{catalog_rows:rows}]};
+ }};
+}
+test('catalog rendering is identical for owner and backup defaults and restores exact caller contexts',async()=>{
+ const {captureCatalogFromSnapshot,CATALOG_RENDERING_SEARCH_PATH}=await import('./schema-catalog-readonly-client.mjs');
+ const backup=renderingContextFixture({initial:'pg_catalog,public'}),owner=renderingContextFixture({initial:'"$user", public, extensions'});
+ const a=await captureCatalogFromSnapshot(backup),b=await captureCatalogFromSnapshot(owner);assert.deepEqual(a,b);assert.equal(fingerprintSchemaCatalog(a).fingerprint,fingerprintSchemaCatalog(b).fingerprint);
+ assert.equal(backup.path(),'pg_catalog,public');assert.equal(owner.path(),'"$user", public, extensions');
+ for(const f of [backup,owner]){assert.ok(f.catalogPaths.length>20);assert.ok(f.catalogPaths.every(p=>p===CATALOG_RENDERING_SEARCH_PATH));assert.equal(f.calls.at(-1).sql,'release savepoint custodial_catalog_rendering_context');assert.equal(f.aborted(),false);}
+});
+test('SQL failure rolls back local savepoint before restoring caller DATA rendering context',async()=>{
+ const {captureCatalogFromSnapshot}=await import('./schema-catalog-readonly-client.mjs');const f=renderingContextFixture({initial:'pg_catalog',failCatalog:true});
+ await assert.rejects(captureCatalogFromSnapshot(f),e=>e.code==='XX000');assert.equal(f.path(),'pg_catalog');assert.equal(f.aborted(),false);
+ assert.deepEqual(f.calls.slice(-3).map(c=>c.sql),['rollback to savepoint custodial_catalog_rendering_context',"select pg_catalog.set_config('search_path', $1, true) as search_path",'release savepoint custodial_catalog_rendering_context']);
+ assert.deepEqual(f.calls.at(-2).args,['pg_catalog']);assert.equal(f.calls.some(c=>c.sql==='rollback'),false,'Caller transaction is not ended by the catalog adapter');
+});
+test('failed context restoration never returns a successful catalog',async()=>{
+ const {captureCatalogFromSnapshot}=await import('./schema-catalog-readonly-client.mjs');const f=renderingContextFixture({failRestore:true});
+ await assert.rejects(captureCatalogFromSnapshot(f),AggregateError);
+});
+test('malformed prior search_path refuses before context mutation or catalog capture',async()=>{
+ const {captureCatalogFromSnapshot}=await import('./schema-catalog-readonly-client.mjs');const f=renderingContextFixture({invalidPrior:true});
+ await assert.rejects(captureCatalogFromSnapshot(f),/caller search_path/);assert.equal(f.catalogPaths.length,0);assert.equal(f.calls.some(c=>c.sql.startsWith('savepoint')),false);
+});
+test('prior search_path is restored only as a parameter, never interpolated SQL',async()=>{
+ const {captureCatalogFromSnapshot}=await import('./schema-catalog-readonly-client.mjs');const prior='"strange; name", public',f=renderingContextFixture({initial:prior});
+ await captureCatalogFromSnapshot(f);assert.equal(f.path(),prior);assert.equal(f.calls.some(c=>c.sql.includes(prior)),false);assert.deepEqual(f.calls.at(-2).args,[prior]);
 });

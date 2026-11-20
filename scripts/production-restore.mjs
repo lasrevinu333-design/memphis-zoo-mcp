@@ -6,6 +6,7 @@ import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import pg from "pg";
+import {privateRestoreFailureDiagnostic,privateRestoreStageDiagnostic} from "./run-official-local-storage-rehearsal.mjs";
 import { verifyRestoredLeadershipGeneration } from "./leadership-restore-generation.mjs";
 import { types } from "node:util";
 import {verifyArchivedSchemaExtension} from "./backup-release-schema-binding.mjs";
@@ -16,7 +17,7 @@ import {stageVerifiedImmutablePrivateData,stageVerifiedImmutableFreshData,commit
   reconcileCommittedImmutableFreshAuthority,commitVerifiedImmutableFreshAuthority} from './immutable-private-data-import.mjs';
 import {readVerifiedImmutableFreshDatabaseCommitOutcome,
   readVerifiedImmutableFreshAuthorityCommitOutcome} from './immutable-private-fresh-restore-recovery.mjs';
-import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
+import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
 import { createClient } from "@supabase/supabase-js";
 import {
   requireSigningKey,
@@ -52,6 +53,18 @@ import {
   suspendUnvalidatedRestoreChecks,
 } from "./restore-unvalidated-checks.mjs";
 
+// Diagnostics are not an archive/profile/target selector and grant no effects.
+// Only the exact isolated host invocation retains these closed records.
+const privateDiagnosticsRequested=process.env.RESTORE_PRIVATE_DIAGNOSTICS==='bounded-v1'
+  &&process.env.REHEARSAL_SCOPE==='backup_only'&&process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER==='true'
+  &&process.env.RESTORE_DATABASE_ONLY==='true';
+let privateDiagnosticPhase='LOAD_CONFIGURATION';
+function tracePrivateRestore(event,error=null,phase=privateDiagnosticPhase){
+  if(privateDiagnosticsRequested)console.error(JSON.stringify(privateRestoreStageDiagnostic(phase,event,error)));
+}
+function privateRestorePhase(phase){privateDiagnosticPhase=phase;tracePrivateRestore('ENTER');}
+async function runRestoreLifecycle(){
+privateRestorePhase('LOAD_CONFIGURATION');
 const { Client } = pg;
 const sourceInput = String(process.env.RESTORE_SOURCE_DIR || "").trim();
 const sourceInputDir = sourceInput ? resolve(sourceInput) : "";
@@ -80,6 +93,7 @@ function sha256File(path) {
   });
 }
 
+privateRestorePhase('MATERIALIZE_ARCHIVE');
 const verifiedArchive = materializeVerifiedArchive({
   sourceDir: sourceInputDir,
   archiveVerifyKey,
@@ -95,7 +109,7 @@ const verifiedArchive = materializeVerifiedArchive({
 const cleanupVerifiedArchive = verifiedArchive.cleanup;
 let archiveSuccessOutput, archiveLifecycleFailure, archiveCleanupFailure;
 let archiveLifecycleFailed = false, archiveCleanupFailed = false;
-let archiveFreshFailureOutput;
+let archiveFreshFailureOutput,archiveContainsPrivateData=false;
 try {
   archiveSuccessOutput = await (async () => {
 const sourceDir = verifiedArchive.directory;
@@ -120,6 +134,7 @@ function verifiedArchivePath(relativePath, description) {
 if (!/^[a-z0-9]{20}$/.test(String(summary.project_ref || ""))) throw new Error("Archive project identity is invalid.");
 if (!summary.source_identity || typeof summary.source_identity !== "object") throw new Error("Archive source identity is missing.");
 
+privateRestorePhase('VALIDATE_ARCHIVE_INVENTORY');
 const catalog = JSON.parse(readFileSync(join(sourceDir, "inventory", "table-catalog.json"), "utf8"));
 const buckets = JSON.parse(readFileSync(join(sourceDir, "inventory", "storage-buckets.json"), "utf8"));
 const objects = JSON.parse(readFileSync(join(sourceDir, "inventory", "storage-objects.json"), "utf8"));
@@ -169,6 +184,7 @@ for (const object of objects) {
   }
 }
 for (const table of catalog) verifiedArchivePath(table.data_file, `Database table ${table.schema_name}.${table.table_name}`);
+privateRestorePhase('SELECT_ORIGINAL_TABLES');
 let tableSelection = archiveAdmission.restore_compatible
   ? selectVerifiedRestoreTables({summary,catalog,checksumPaths,databaseOnly}) : null;
 if (tableSelection !== null) {
@@ -183,6 +199,7 @@ if (tableSelection !== null) {
 // substitute for the still-missing owning original-DATA import contract.
 const privateImportBlocker = tableSelection?.privateTables.length
   ? "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED" : null;
+archiveContainsPrivateData=privateImportBlocker!==null;
 // Native TEXT uses the ordinary owner only for the existing isolated DB-only
 // target. Full production and mixed legacy/native DATA retain their pre-connect
 // hold. The signed tag chooses representation, never a target or effect grant.
@@ -213,6 +230,7 @@ function safeBootstrapPrerequisite(error){
   return allowed.includes(member.value)?{code:code.value,source_member:member.value}:{};
 }
 if(privateImportBlocker){
+  privateRestorePhase('PREPARE_ORIGINAL_SOURCE');
   try{
     immutableBootstrapSource=await prepareVerifiedImmutableBootstrapSource(verifiedArchive);
     assertVerifiedImmutableBootstrapSource(immutableBootstrapSource,verifiedArchive);
@@ -220,6 +238,7 @@ if(privateImportBlocker){
       guard_recipes:immutableBootstrapSource.recipes.length,source_statements:immutableBootstrapSource.statements.length,
       target_authority:false,transaction_authority:false,import_authority:false,resume_allowed:false});
   }catch(error){
+    tracePrivateRestore('PREREQUISITE_REFUSED',error);
     immutableBootstrapSource=null;
     // Do not expose signed private row/SQL details from a failed preparation.
     immutableBootstrapPreparation=Object.freeze({status:'CURRENT_SOURCE_OR_ORIGINAL_METADATA_UNAVAILABLE',
@@ -251,6 +270,7 @@ if (!apply) {
   }, null, 2);
 }
 
+privateRestorePhase('VALIDATE_TARGET_SCOPE');
 if (!databaseUrl) throw new Error("SUPABASE_DB_URL is required for restore apply.");
 if (databaseOnly) {
   let target;
@@ -272,11 +292,13 @@ if (databaseOnly) {
 if (projectRef !== summary.project_ref) throw new Error("The signed archive project does not equal the confirmed restore target.");
 if (!databaseOnly && !secret) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for a production restore apply.");
 
+privateRestorePhase('CAPTURE_ORIGINAL_INTENT');
 const intentVerifyKey = requireSigningKey(process.env.RESTORE_INTENT_VERIFY_KEY, "RESTORE_INTENT_VERIFY_KEY");
 if (intentVerifyKey === archiveVerifyKey) throw new Error("Archive and restore-intent verification keys must be independent.");
 const intentVerifyKeyId = String(process.env.RESTORE_INTENT_VERIFY_KEY_ID || "").trim();
 const intentEnvelope = JSON.parse(String(process.env.RESTORE_INTENT_JSON || "null"));
 const intent = captureVerifiedOriginalRestoreIntent(intentEnvelope, intentVerifyKey, intentVerifyKeyId);
+privateRestorePhase('VALIDATE_ORIGINAL_INTENT');
 if (!/^[0-9a-f-]{36}$/i.test(String(intent.restore_id || ""))) throw new Error("Restore intent ID is invalid.");
 if (!Number.isSafeInteger(intent.authority_generation) || intent.authority_generation < 1) throw new Error("Restore intent generation is invalid.");
 if (intent.retry_of_restore_id !== null && !/^[0-9a-f-]{36}$/i.test(String(intent.retry_of_restore_id || ""))) {
@@ -309,6 +331,7 @@ if (freshStorageProviderInput || freshStorageServiceKey || freshStorageJwtSecret
   if (!databaseOnly || !(freshPrivateDatabase || nativeTextDatabase) || !freshStorageProviderInput || !freshStorageServiceKey || !freshStorageJwtSecret)
     throw new Error("Fresh local Storage requires the existing authenticated whole-fresh database route.");
   const providerEnvelope=JSON.parse(freshStorageProviderInput);
+  privateRestorePhase('CAPTURE_LOCAL_PROVIDER');
   freshStorageProvider = captureVerifiedFreshLocalStorageProvider({verifiedArchive,
     originalIntentEnvelope:intentEnvelope,intentVerifyKey,intentVerifyKeyId,
     providerEnvelope,serviceKey:freshStorageServiceKey,jwtSecret:freshStorageJwtSecret,databaseUrl});
@@ -316,6 +339,12 @@ if (freshStorageProviderInput || freshStorageServiceKey || freshStorageJwtSecret
     if(providerEnvelope.binding.source_profile!=="native-text-v4-fresh-supabase-admin")
       throw new Error("Fresh native whole-archive restore requires its authenticated Supabase administrator profile.");
     freshNativeRestoreTarget=Object.freeze({...providerEnvelope.binding.host_target});
+  }else if(freshPrivateDatabase){
+    privateRestorePhase('VERIFY_LOCAL_PROVIDER_OWNER');
+    const owner=readVerifiedImmutableBootstrapOwnerProfile(immutableBootstrapSource,verifiedArchive);
+    if(stableJson(providerEnvelope.binding.owner_profile)!==stableJson(owner)
+      || providerEnvelope.binding.host_target.session_user!==owner.actor || new URL(databaseUrl).username!==owner.actor)
+      throw new Error("Fresh private Storage owner differs from the authenticated original source.");
   }
 }
 
@@ -394,6 +423,7 @@ function requireOrdinaryRestoreIntentFresh() {
 }
 await preflightOrdinaryLegacyRestoreData();
 
+privateRestorePhase('CREATE_NATIVE_CLIENT');
 const db = new Client(restoreClientOptions);
 // Fixed, local read snapshot only: no caller query/body/profile or effect
 // authority. Each checkpoint must observe a new snapshot, never a saved flag.
@@ -508,12 +538,15 @@ async function readExactOriginalStorageSnapshot() {
   phase = "FINAL_SOURCE"; current(); native("I");
   return observation;
 }
-let restorePhase = "connect";
+let restorePhase = "connect"; privateRestorePhase(restorePhase);
 let restoreTable = null;
 let prepared = false;
 let mutationFenceHeld = false;
 db.on("error", (error) => {
-  console.error(JSON.stringify({ ok: false, restore_phase: restorePhase, restore_table: restoreTable, connection_error: error instanceof Error ? error.message : String(error) }));
+  tracePrivateRestore("NATIVE_CLIENT_ERROR",error);
+  if(freshPrivateDatabase)console.error(JSON.stringify({ok:false,restore_phase:restorePhase,restore_table:null,
+    ...privateRestoreFailureDiagnostic(error,'database_connection')}));
+  else console.error(JSON.stringify({ ok: false, restore_phase: restorePhase, restore_table: restoreTable, connection_error: error instanceof Error ? error.message : String(error) }));
 });
 
 async function recordEvent(phase, outcome, evidence = {}) {
@@ -799,7 +832,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     // The six effects already committed through the private original factory.
     // Persist their observed evidence only; never call legacy invalidation or
     // claim a legacy pre-restore snapshot/release-preservation operation.
-    restorePhase = "record_fresh_original_authority_evidence";
+    restorePhase = "record_fresh_original_authority_evidence"; privateRestorePhase(restorePhase);
     const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation, archiveTables: catalog });
     requireFreshContinuation();
     const authorityEvidence = {invalidated,leadership_generation:leadershipGeneration,authority_commit:databaseEvidence.authority_commit,
@@ -812,7 +845,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
   }
   let cronEvidence = null;
   if (summary.format === "memphis-zoo-disaster-recovery.v4") {
-    restorePhase = "restore_cron";
+    restorePhase = "restore_cron"; privateRestorePhase(restorePhase);
     requireFreshContinuation();
     // The fresh initializer restored cron in its original unpaused DATA
     // transaction. Once paused, observe it in a read-only snapshot; never
@@ -852,7 +885,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     requireFreshContinuation();
   }
 
-  restorePhase = "restore_storage";
+  restorePhase = "restore_storage"; privateRestorePhase(restorePhase);
   requireFreshContinuation();
   await setControl("STORAGE_RESTORING");
   requireFreshContinuation();
@@ -1065,7 +1098,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
   await recordEvent("STORAGE", storageVerified ? "PASSED" : "HELD", storageEvidence);
   requireFreshContinuation();
 
-  restorePhase = "post_restore_verification";
+  restorePhase = "post_restore_verification"; privateRestorePhase(restorePhase);
   requireFreshContinuation();
   await setControl("VERIFYING");
   requireFreshContinuation();
@@ -1207,7 +1240,9 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
   requireFreshContinuation();
 }
 try {
+  privateRestorePhase('CONNECT_NATIVE_CLIENT');
   await db.connect();
+  privateRestorePhase('ACQUIRE_RESTORE_SESSION_LOCK');
   await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
   restoreSessionLockHeld = true;
 try {
@@ -1219,7 +1254,9 @@ try {
     let transactionAttempted = false, commitInvoked = false;
     try {
       requireOriginalArchiveSource();
-      restorePhase = "fresh_private_database_transaction";
+      const owner=readVerifiedImmutableBootstrapOwnerProfile(immutableBootstrapSource,verifiedArchive);
+      if(new URL(databaseUrl).username!==owner.actor)throw new Error("Fresh private actor differs from the authenticated original owner.");
+      restorePhase = "fresh_private_database_transaction"; privateRestorePhase(restorePhase);
       transactionAttempted = true;
       await db.query("begin");
       requireOriginalArchiveSource();
@@ -1234,10 +1271,10 @@ try {
       requireOriginalArchiveSource();
       await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-fence',0))");
       requireOriginalArchiveSource();
-      restorePhase = "stage_fresh_private_database";
+      restorePhase = "stage_fresh_private_database"; privateRestorePhase(restorePhase);
       await stageVerifiedImmutableFreshData({db,verifiedArchive,originalIntentEnvelope:intentEnvelope,intentVerifyKey,intentVerifyKeyId});
       requireOriginalArchiveSource();
-      restorePhase = "commit_fresh_private_database";
+      restorePhase = "commit_fresh_private_database"; privateRestorePhase(restorePhase);
       commitInvoked = true;
       const committed = await commitVerifiedImmutableFreshData({db,verifiedArchive});
       transactionAttempted = false;
@@ -1247,7 +1284,7 @@ try {
       // Keep the original private module state, same native connection and
       // both actual fences. The source registry's existing SHARE-lock check
       // remains mandatory; no cached old-xid or missing-lock fallback.
-      restorePhase = "read_committed_fresh_original_data";
+      restorePhase = "read_committed_fresh_original_data"; privateRestorePhase(restorePhase);
       transactionAttempted = true;
       await db.query("begin isolation level repeatable read read only");
       requireOriginalArchiveSource();
@@ -1296,11 +1333,11 @@ try {
       transactionAttempted = false;
       // The private factory owns BEGIN and all DATA locks before its first
       // snapshot SELECT; an already-open caller snapshot is never admitted.
-      restorePhase = "reconcile_committed_fresh_original_authority";
+      restorePhase = "reconcile_committed_fresh_original_authority"; privateRestorePhase(restorePhase);
       transactionAttempted = true;
       const authorityStaged = await reconcileCommittedImmutableFreshAuthority({db,verifiedArchive});
       requireOriginalArchiveSource();
-      restorePhase = "commit_fresh_original_authority";
+      restorePhase = "commit_fresh_original_authority"; privateRestorePhase(restorePhase);
       freshAuthorityCommitInvoked = true;
       const authorityCommitted = await commitVerifiedImmutableFreshAuthority({db,verifiedArchive});
       freshAuthorityCommitAcknowledged = true;
@@ -1310,7 +1347,7 @@ try {
       // Observe the exact committed CONSUMED scope in a separate actual RO
       // snapshot. The private factory alone admitted effects; this public
       // request is lookup DATA and cannot recreate any execution authority.
-      restorePhase = "read_committed_fresh_original_authority";
+      restorePhase = "read_committed_fresh_original_authority"; privateRestorePhase(restorePhase);
       transactionAttempted = true;
       await db.query("begin isolation level repeatable read read only");
       requireOriginalArchiveSource();
@@ -1337,7 +1374,7 @@ try {
       // The same MODULE's private original invocation must still own its
       // acknowledged import and authority ancestry. Compare every original
       // table under the two normal fences; never waive the six changed stores.
-      restorePhase = "read_committed_fresh_original_authority_data";
+      restorePhase = "read_committed_fresh_original_authority_data"; privateRestorePhase(restorePhase);
       const authorityDataReadback = await inspectCommittedImmutableFreshAuthorityData({db,verifiedArchive});
       requireOriginalArchiveSource();
       if (authorityDataReadback.schema !== "custodial.immutable-private-post-authority-data-readback.v1"
@@ -1356,7 +1393,7 @@ try {
       // ends. The module's private same-invocation ancestry, not public DATA,
       // admits this ONE session-fence acquisition. An unknown result is not
       // retried: normal end of the original connection drains session locks.
-      restorePhase = "hold_fresh_original_authority_post_data_fence";
+      restorePhase = "hold_fresh_original_authority_post_data_fence"; privateRestorePhase(restorePhase);
       requireOriginalArchiveSource();
       await holdVerifiedImmutableFreshPostAuthorityFence({db,verifiedArchive});
       mutationFenceHeld = true;
@@ -1408,7 +1445,7 @@ try {
       throw error;
     }
   } else {
-  restorePhase = "preflight";
+  restorePhase = "preflight"; privateRestorePhase(restorePhase);
   requireOrdinaryRestoreIntentFresh();
   const control = await db.query("select * from custodial_dr.restore_control where singleton=true for update");
   if (control.rowCount !== 1) throw new Error("The non-restored disaster-recovery control plane is unavailable.");
@@ -1437,7 +1474,7 @@ try {
   }
 
   requireOriginalArchiveSource();
-  requireRestoreIntentFresh();
+  requireRestoreIntentFresh(); privateRestorePhase(restorePhase);
   restorePhase = "pause_admission";
   requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
@@ -1468,7 +1505,7 @@ try {
     throw error;
   }
 
-  restorePhase = "drain_admitted_mutations";
+  restorePhase = "drain_admitted_mutations"; privateRestorePhase(restorePhase);
   const leaseDrainDeadline = Date.now() + 5 * 60_000;
   let activeLeaseCount = 0;
   let expiredLeaseCount = 0;
@@ -1490,16 +1527,16 @@ try {
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   } while (true);
 
-  restorePhase = "acquire_global_mutation_fence";
+  restorePhase = "acquire_global_mutation_fence"; privateRestorePhase(restorePhase);
   requireOrdinaryRestoreIntentFresh();
   await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-application-mutation-fence',0))");
   mutationFenceHeld = true;
 
-  restorePhase = "quiescent_target_identity";
+  restorePhase = "quiescent_target_identity"; privateRestorePhase(restorePhase);
   const quiescentTargetIdentity = await readTargetIdentity();
   assertIntentTargetIdentity(quiescentTargetIdentity);
 
-  restorePhase = "quiescent_snapshot";
+  restorePhase = "quiescent_snapshot"; privateRestorePhase(restorePhase);
   requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   try {
@@ -1541,7 +1578,7 @@ try {
   }
 
   requireOriginalArchiveSource();
-  restorePhase = "restore_database";
+  restorePhase = "restore_database"; privateRestorePhase(restorePhase);
   requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   let unvalidatedCheckEvidence = restoreCheckEvidence([]);
@@ -1566,7 +1603,7 @@ try {
       // same managed owner/session/transaction, original control and guards.
       // The existing importer consumes BOTH private and ordinary original DATA,
       // including exact raw TEXT/EOF/digests. Never run the ordinary loop twice.
-      restorePhase = "restore_immutable_mixed_data";
+      restorePhase = "restore_immutable_mixed_data"; privateRestorePhase(restorePhase);
       immutablePrivateDataEvidence = await stagePrivateOriginalsUnderOwnedFence();
       requireOriginalArchiveSource();
       assertIntentTargetIdentity(await readTargetIdentity());
@@ -1580,7 +1617,7 @@ try {
     if(nativeTextPlans)await nativeTextQuery(`create temporary table custodial_native_text_restore_expected(
       schema_name pg_catalog.text not null,table_name pg_catalog.text not null,raw pg_catalog.text not null) on commit preserve rows`);
     if (databaseTables.length) {
-      restorePhase = "truncate_target_tables";
+      restorePhase = "truncate_target_tables"; privateRestorePhase(restorePhase);
       // Native TEXT truncates ONLY the complete authenticated table set.
       // PostgreSQL refuses an external FK dependent; CASCADE must never reach
       // an unselected namespace just because the selected census matched.
@@ -1595,12 +1632,12 @@ try {
         await db.query(sql);
       }
     }
-    restorePhase = "suspend_unvalidated_restore_checks";
+    restorePhase = "suspend_unvalidated_restore_checks"; privateRestorePhase(restorePhase);
     requireOrdinaryRestoreIntentFresh();
     const suspendedChecks = await suspendUnvalidatedRestoreChecks(db, databaseTables);
     for (const selectedTable of databaseTables) {
       restoreTable = `${selectedTable.schema_name}.${selectedTable.table_name}`;
-      restorePhase = "restore_table";
+      restorePhase = "restore_table"; privateRestorePhase(restorePhase);
       const tableData = openVerifiedRestoreTableData(verifiedArchive, selectedTable.schema_name, selectedTable.table_name);
       let rowStream, utf8Guard, wireSettled, input, tableFailure;
       try {
@@ -1655,7 +1692,7 @@ try {
       }
     }
     restoreTable = null;
-    restorePhase = "reinstate_unvalidated_restore_checks";
+    restorePhase = "reinstate_unvalidated_restore_checks"; privateRestorePhase(restorePhase);
     requireOrdinaryRestoreIntentFresh();
     unvalidatedCheckEvidence = await reinstateUnvalidatedRestoreChecks(db, suspendedChecks);
     if(nativeTextPlans)await compareNativeTextRestorePlans(nativeTextPlans);
@@ -1697,7 +1734,7 @@ try {
     requireOriginalArchiveSource();
     if (immutablePrivateDataEvidence !== null || nativeTextDatabase) {
       if(nativeTextDatabase)requireNativeTextOwner();
-      restorePhase = nativeTextDatabase ? "commit_native_text_data" : "commit_immutable_mixed_data";
+      restorePhase = nativeTextDatabase ? "commit_native_text_data" : "commit_immutable_mixed_data"; privateRestorePhase(restorePhase);
       mixedDataCommitAttempted = true;
     }
     requireOrdinaryRestoreIntentFresh();
@@ -1719,7 +1756,7 @@ try {
     await recordDatabaseRestored();
   }
 
-  restorePhase = "authority_reconciliation";
+  restorePhase = "authority_reconciliation"; privateRestorePhase(restorePhase);
   requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   let discrepancies;
@@ -1796,6 +1833,7 @@ try {
   await continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDataEvidence,unvalidatedCheckEvidence,invalidated});
   }
 } catch (error) {
+  tracePrivateRestore("REFUSED",error);
   const outcomeUnknown = error?.outcome === "UNKNOWN" && error?.retry_safe === false;
   const code = outcomeUnknown && (error?.code === "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN"
     || error?.code === "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"
@@ -1959,15 +1997,20 @@ try {
     if(state&&Object.hasOwn(state,"value")&&typeof state.value==='string'&&/^[0-9A-Z]{5}$/.test(state.value))
       failureOutput.sql_state=state.value;
   }
+  if(freshPrivateDatabase && Object.hasOwn(failureOutput,'sql_state')){
+    const sqlState=privateRestoreFailureDiagnostic({code:failureOutput.sql_state},'archive_lifecycle').sql_state;
+    if(sqlState===undefined)delete failureOutput.sql_state;else failureOutput.sql_state=sqlState;
+  }
   if (freshPrivateDatabase) freshFailureOutput = failureOutput;
   else console.error(JSON.stringify(failureOutput));
   if (prepared && !outcomeUnknown) {
-    await setControl("PAUSED_FAILURE", { paused: true, failureReason: error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000) }).catch(() => {});
-    await recordEvent(restorePhase, "FAILED", { error: error instanceof Error ? error.message : String(error), ...uncertainty }).catch(() => {});
+    await setControl("PAUSED_FAILURE", { paused: true, failureReason: freshPrivateDatabase ? "PRIVATE_RESTORE_FAILURE" : error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000) }).catch(() => {});
+    await recordEvent(restorePhase, "FAILED", { error: freshPrivateDatabase ? "PRIVATE_RESTORE_FAILURE" : error instanceof Error ? error.message : String(error), ...uncertainty }).catch(() => {});
   }
   throw error;
 }
 } catch (error) {
+  tracePrivateRestore("REFUSED",error);
   restoreLifecycleFailed = true;
   restoreLifecycleFailure = error;
 } finally {
@@ -2087,6 +2130,7 @@ if (restoreLifecycleFailed) {
   }
   throw restoreLifecycleFailure;
 }
+if(restoreCleanupErrors.length)tracePrivateRestore("CLEANUP_ERROR",restoreCleanupErrors[0],"RESTORE_CLEANUP");
 if (restoreCleanupErrors.length === 1) throw restoreCleanupErrors[0];
 if (restoreCleanupErrors.length > 1) {
   throw new AggregateError(restoreCleanupErrors, "Production restore lifecycle cleanup failed.",
@@ -2095,19 +2139,39 @@ if (restoreCleanupErrors.length > 1) {
 return restoreSuccessOutput;
   })();
 } catch (error) {
+  tracePrivateRestore("REFUSED",error);
   archiveLifecycleFailed = true;
   archiveLifecycleFailure = error;
 } finally {
   try { await Reflect.apply(cleanupVerifiedArchive, verifiedArchive, []); }
-  catch (error) { archiveCleanupFailed = true; archiveCleanupFailure = error; }
+  catch (error) { tracePrivateRestore("CLEANUP_ERROR",error,"ARCHIVE_CLEANUP");archiveCleanupFailed = true; archiveCleanupFailure = error; }
 }
-if (archiveLifecycleFailed) {
-  if (archiveCleanupFailed) {
-    throw new AggregateError([archiveLifecycleFailure, archiveCleanupFailure],
-      "Production restore failed; verified archive cleanup also failed.", { cause: archiveLifecycleFailure });
+if(archiveContainsPrivateData && (archiveLifecycleFailed || archiveCleanupFailed)){
+  // All owned cleanup already ran. Preserve nonzero refusal without allowing
+  // Node's uncaught-error formatter to print driver SQL, rows, cause or stack.
+  if(archiveLifecycleFailed)console.error(JSON.stringify({ok:false,...privateRestoreFailureDiagnostic(archiveLifecycleFailure,'archive_lifecycle')}));
+  if(archiveCleanupFailed){
+    if(archiveFreshFailureOutput)console.error(JSON.stringify(archiveFreshFailureOutput));
+    console.error(JSON.stringify({ok:false,...privateRestoreFailureDiagnostic(archiveCleanupFailure,'archive_cleanup')}));
   }
-  throw archiveLifecycleFailure;
+  process.exitCode=1;
+}else{
+  if (archiveLifecycleFailed) {
+    if (archiveCleanupFailed) {
+      throw new AggregateError([archiveLifecycleFailure, archiveCleanupFailure],
+        "Production restore failed; verified archive cleanup also failed.", { cause: archiveLifecycleFailure });
+    }
+    throw archiveLifecycleFailure;
+  }
+  if (archiveCleanupFailed && archiveFreshFailureOutput) console.error(JSON.stringify(archiveFreshFailureOutput));
+  if (archiveCleanupFailed) throw archiveCleanupFailure;
+  tracePrivateRestore("FINISHED",null,"PRIVATE_RESTORE_FINISHED");
+  console.log(archiveSuccessOutput);
 }
-if (archiveCleanupFailed && archiveFreshFailureOutput) console.error(JSON.stringify(archiveFreshFailureOutput));
-if (archiveCleanupFailed) throw archiveCleanupFailure;
-console.log(archiveSuccessOutput);
+
+}
+try{await runRestoreLifecycle();}
+catch(error){
+  tracePrivateRestore('REFUSED',error);
+  if(privateDiagnosticsRequested)process.exitCode=1;else throw error;
+}

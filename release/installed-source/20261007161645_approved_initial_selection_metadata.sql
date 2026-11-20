@@ -1,0 +1,193 @@
+-- Exact existing postgres NEW-creator equivalence; canonical bodies/other-role revocations unchanged.
+-- Exact owner/credential-bound initial selection metadata; no baseline mutation.
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+
+-- BEGIN FINITE NEW-CREATOR PROFILE 100
+DO $creator_pre$ BEGIN
+ IF current_user<>'postgres' OR session_user<>current_user
+  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'
+  OR current_setting('session_replication_role')<>'origin'
+  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND NOT rolsuper AND rolbypassrls)
+  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='public.custodial_release_authority_restore_inventory'::regclass AND relowner='postgres'::regrole)
+  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.custodial_release_authority_restore_inventory'::regclass
+   AND tgname='trg_custodial_release_authority_restore_inventory_immutable' AND tgenabled='A')
+  OR to_regclass('pg_temp.custodial_creator_acl_100_before') IS NOT NULL
+  OR EXISTS(SELECT 1 FROM unnest(ARRAY[]::text[]) x WHERE to_regclass(x) IS NOT NULL)
+  OR EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY(ARRAY['custodial_read_approved_initial_selection_v1']::text[]))
+  OR EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i
+   CROSS JOIN LATERAL(SELECT regexp_replace(i.object_identity,'[[:space:]"]','','g') identity) clean
+   WHERE (i.object_kind IN('function','grant') AND EXISTS(SELECT 1 FROM unnest(ARRAY['custodial_read_approved_initial_selection_v1']::text[]) name
+    WHERE split_part(clean.identity,'(',1)=ANY(ARRAY[name,'public.'||name])))
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY[]::text[]) relation
+     WHERE starts_with(clean.identity,relation) OR starts_with(clean.identity,substr(relation,8)))) THEN
+  RAISE EXCEPTION 'Finite creator Source100 original owner/new-object boundary changed';
+ END IF;
+END $creator_pre$;
+CREATE TEMP TABLE custodial_creator_acl_100_before(class text NOT NULL,signature text PRIMARY KEY,object_oid oid NOT NULL,owner_oid oid NOT NULL,owner_acl jsonb NOT NULL,definition_md5 text) ON COMMIT DROP;
+-- END FINITE NEW-CREATOR PROFILE 100
+CREATE FUNCTION public.custodial_read_approved_initial_selection_v1(
+ p_manager_id uuid,p_credential_id uuid,p_device_id text,p_session_access text,p_week_start date
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public
+AS $fn$
+DECLARE choices jsonb;revision bigint;
+BEGIN
+ PERFORM public.static_weekly_v3_assert_control_plane();
+ IF p_week_start IS NULL OR NOT isfinite(p_week_start) OR extract(isodow FROM p_week_start)<>1 THEN
+  RAISE EXCEPTION USING errcode='22023',message='Approved initial selection requires a Monday week';END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));
+ -- Reuse current credential/device/registry/owner decisions, not token claims.
+ choices:=public.custodial_read_approved_schedule_choices_v1(p_manager_id,p_credential_id,p_device_id,p_session_access);
+ SELECT current_revision INTO STRICT revision FROM public.static_weekly_schedule_control WHERE singleton;
+ RETURN choices||jsonb_build_object('schema','custodial.approved-initial-selection.v1',
+  'week_start',p_week_start,'week_end',p_week_start+6,'authority_revision',revision,
+  'published',false,'snapshot_authority','SELECTION_METADATA_ONLY');
+END $fn$;
+
+DO $creator_function_before$ DECLARE spec record;p record;BEGIN
+ FOR spec IN SELECT * FROM jsonb_to_recordset($creator_specs$[{"signature":"public.custodial_read_approved_initial_selection_v1(uuid,uuid,text,text,date)","name":"custodial_read_approved_initial_selection_v1","body_md5":"8c4270a3003fe3c9134b099e5c470c0d","argument_names":["p_manager_id","p_credential_id","p_device_id","p_session_access","p_week_start"],"returns":"jsonb","language":"plpgsql","security_definer":true,"volatility":"v","config":["search_path=pg_catalog, public"],"nonowner_execute":["static_weekly_control_plane"]}]$creator_specs$::jsonb)
+  AS x(signature text,name text,body_md5 text,argument_names text[],returns text,language text,security_definer boolean,volatility text,config text[],nonowner_execute text[]) LOOP
+  SELECT f.*,l.lanname INTO STRICT p FROM pg_proc f JOIN pg_language l ON l.oid=f.prolang WHERE f.oid=to_regprocedure(spec.signature) AND f.pronamespace='public'::regnamespace;
+  IF p.proowner<>'postgres'::regrole OR p.proname<>spec.name OR md5(p.prosrc)<>spec.body_md5
+   OR p.proargnames IS DISTINCT FROM spec.argument_names OR pg_get_function_result(p.oid)<>spec.returns OR p.lanname<>spec.language
+   OR p.prosecdef<>spec.security_definer OR p.provolatile::text<>spec.volatility OR p.proconfig IS DISTINCT FROM spec.config
+   OR p.prokind<>'f' OR p.proretset OR p.provariadic<>0 OR p.pronargdefaults<>0 OR p.proisstrict OR p.proleakproof OR p.proparallel<>'u'
+   OR NOT has_function_privilege(current_user,p.oid,'EXECUTE')
+   OR NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner AND a.privilege_type='EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner AND(a.grantor<>p.proowner OR a.is_grantable)) THEN
+   RAISE EXCEPTION 'Finite creator Source100 new routine owner/body/ordinary EXECUTE unavailable';END IF;
+  INSERT INTO pg_temp.custodial_creator_acl_100_before VALUES('function',spec.signature,p.oid,p.proowner,(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner),md5(pg_get_functiondef(p.oid)));
+ END LOOP;
+END $creator_function_before$;
+REVOKE ALL ON FUNCTION public.custodial_read_approved_initial_selection_v1(uuid,uuid,text,text,date)
+ FROM PUBLIC,anon,authenticated,service_role,custodial_application_reader,static_weekly_release_operator;
+-- Pinned Supabase images add a postgres default function grant when the owner
+-- is supabase_admin. Revoke it on this new RPC, not on historical objects or
+-- global defaults; the migration owner retains its inherent object authority.
+GRANT EXECUTE ON FUNCTION public.custodial_read_approved_initial_selection_v1(uuid,uuid,text,text,date) TO static_weekly_control_plane;
+DO $creator_before_capture$ DECLARE before record;p record;c record;spec record;actual_acl jsonb;populated boolean;BEGIN
+ IF (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY(ARRAY['custodial_read_approved_initial_selection_v1']::text[]))<>1
+  OR (SELECT count(*) FROM pg_temp.custodial_creator_acl_100_before)<>1 THEN
+  RAISE EXCEPTION 'Finite creator Source100 exact new-object signature/OID census changed';END IF;
+ FOR before IN SELECT * FROM pg_temp.custodial_creator_acl_100_before LOOP
+  IF before.class='relation' THEN
+   SELECT * INTO STRICT c FROM pg_class WHERE oid=to_regclass(before.signature);
+   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner);
+   IF c.oid<>before.object_oid OR c.relowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl
+    OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity
+    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role
+     CROSS JOIN aclexplode(acldefault('r',c.relowner)) ordinary WHERE has_table_privilege(role,c.oid,ordinary.privilege_type))
+    OR EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped)
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname='custodial_disaster_restore_mutation_fence' AND tgenabled='O' AND tgfoid='custodial_dr.guard_application_mutation()'::regprocedure AND tgtype=62 AND NOT tgisinternal)
+    OR EXISTS(SELECT 1 FROM jsonb_to_recordset($creator_triggers$[]$creator_triggers$::jsonb) AS x(relation text,name text,function text,type integer,enabled text)
+     WHERE relation=before.signature AND NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname=x.name AND t.tgfoid=to_regprocedure(x.function) AND t.tgtype=x.type AND t.tgenabled::text=x.enabled AND NOT t.tgisinternal))
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'Finite creator Source100 new relation owner/ACL/RLS/trigger boundary changed';END IF;
+   EXECUTE format('SELECT EXISTS(SELECT 1 FROM ONLY %s)',c.oid::regclass) INTO populated;
+   IF populated THEN RAISE EXCEPTION 'Finite creator Source100 new relation unexpectedly populated';END IF;
+  ELSE
+   SELECT * INTO STRICT p FROM pg_proc WHERE oid=to_regprocedure(before.signature);
+   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner);
+   SELECT * INTO STRICT spec FROM jsonb_to_recordset($creator_specs$[{"signature":"public.custodial_read_approved_initial_selection_v1(uuid,uuid,text,text,date)","name":"custodial_read_approved_initial_selection_v1","body_md5":"8c4270a3003fe3c9134b099e5c470c0d","argument_names":["p_manager_id","p_credential_id","p_device_id","p_session_access","p_week_start"],"returns":"jsonb","language":"plpgsql","security_definer":true,"volatility":"v","config":["search_path=pg_catalog, public"],"nonowner_execute":["static_weekly_control_plane"]}]$creator_specs$::jsonb)
+    AS x(signature text,name text,body_md5 text,argument_names text[],returns text,language text,security_definer boolean,volatility text,config text[],nonowner_execute text[]) WHERE signature=before.signature;
+   IF p.oid<>before.object_oid OR p.proowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl
+    OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM before.definition_md5
+    OR md5(p.prosrc)<>spec.body_md5 OR p.proconfig IS DISTINCT FROM spec.config OR p.prosecdef<>spec.security_definer OR p.provolatile::text<>spec.volatility
+    OR (SELECT coalesce(array_agg(r.rolname::text ORDER BY r.rolname),'{}'::text[]) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a LEFT JOIN pg_roles r ON r.oid=a.grantee WHERE a.grantee<>p.proowner) IS DISTINCT FROM spec.nonowner_execute
+    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>p.proowner)
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role
+     WHERE has_function_privilege(role,p.oid,'EXECUTE') IS DISTINCT FROM (role=ANY(spec.nonowner_execute))) THEN
+    RAISE EXCEPTION 'Finite creator Source100 new routine owner/nonowner ACL/body changed';END IF;
+  END IF;
+ END LOOP;
+END $creator_before_capture$;
+
+
+-- Source-controlled append and exact canary rebinding. Existing helpers,
+-- grants and unrelated captured rows must remain unchanged.
+LOCK TABLE public.custodial_release_authority_restore_inventory IN ACCESS EXCLUSIVE MODE;
+CREATE TEMP TABLE initial_selection_inventory_before AS SELECT * FROM public.custodial_release_authority_restore_inventory;
+DO $capture$
+DECLARE
+ identity text:='custodial_read_approved_initial_selection_v1(uuid,uuid,text,text,date)';
+ old_surface text;new_surface text;actual_surface text;fn text;grants text;n integer;
+ saved public.custodial_release_authority_restore_inventory%ROWTYPE;
+BEGIN
+ old_surface:=pg_get_functiondef('public.custodial_release_canary_authority_surface()'::regprocedure);
+ IF public.static_weekly_digest_text(old_surface)<>'7951d2a46d1f73c11e68c9a070554799a03458b177535833ed571921f328e1b7'
+  OR public.static_weekly_digest_text(pg_get_functiondef('public.custodial_reject_release_authority_inventory_mutation()'::regprocedure))<>'7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6' THEN
+  RAISE EXCEPTION 'Initial selection recovery predecessor changed';END IF;
+ SELECT * INTO STRICT saved FROM public.custodial_release_authority_restore_inventory WHERE object_kind='function' AND object_identity='custodial_release_canary_authority_surface()';
+ IF saved.restore_order<>100071 OR saved.definition_sql IS DISTINCT FROM old_surface OR saved.definition_sha256<>public.static_weekly_digest_text(old_surface)
+  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.custodial_release_authority_restore_inventory'::regclass AND tgname='trg_custodial_release_authority_restore_inventory_immutable' AND tgenabled='A') THEN
+  RAISE EXCEPTION 'Initial selection saved surface/ALWAYS guard changed';END IF;
+ IF EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory WHERE object_identity=identity OR restore_order IN(800048,1000236)) THEN
+  RAISE EXCEPTION 'Initial selection recovery identities/orders already used';END IF;
+ IF (SELECT array_agg(r.rolname::text ORDER BY r.rolname) FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a LEFT JOIN pg_roles r ON r.oid=a.grantee
+   WHERE p.oid=('public.'||identity)::regprocedure AND a.grantee<>p.proowner AND a.privilege_type='EXECUTE') IS DISTINCT FROM ARRAY['static_weekly_control_plane']::text[] THEN
+  RAISE EXCEPTION 'Initial selection precise execute ACL changed';END IF;
+ fn:=pg_get_functiondef(('public.'||identity)::regprocedure);
+ -- Capture the exact inventory key, as consumed by the unchanged live checker.
+ -- The serializer already fixes its search_path to pg_catalog,public.
+ grants:=public.custodial_release_authority_current_grant_definition(identity);
+ IF grants IS NULL THEN RAISE EXCEPTION 'Initial selection grant capture missing';END IF;
+ new_surface:=replace(old_surface,E'  values\n',E'  values\n    (''function'','''||identity||E''',''approved initial selection metadata''),\n    (''grant'','''||identity||E''',''approved initial selection metadata''),\n');
+ IF new_surface=old_surface THEN RAISE EXCEPTION 'Initial selection canary values seam changed';END IF;
+ EXECUTE new_surface;actual_surface:=pg_get_functiondef('public.custodial_release_canary_authority_surface()'::regprocedure);
+ IF actual_surface IS DISTINCT FROM new_surface THEN RAISE EXCEPTION 'Initial selection canary serialization changed';END IF;
+ ALTER TABLE public.custodial_release_authority_restore_inventory DISABLE TRIGGER trg_custodial_release_authority_restore_inventory_immutable;
+ UPDATE public.custodial_release_authority_restore_inventory SET definition_sql=actual_surface,definition_sha256=public.static_weekly_digest_text(actual_surface),captured_at=statement_timestamp()
+  WHERE inventory_id=saved.inventory_id AND definition_sha256=saved.definition_sha256 AND restore_order=saved.restore_order;
+ GET DIAGNOSTICS n=ROW_COUNT;IF n<>1 THEN RAISE EXCEPTION 'Initial selection surface update scope changed';END IF;
+ INSERT INTO public.custodial_release_authority_restore_inventory(object_kind,object_identity,definition_sql,definition_sha256,restore_order)
+ VALUES('function',identity,fn,public.static_weekly_digest_text(fn),800048),('grant',identity,grants,public.static_weekly_digest_text(grants),1000236);
+ ALTER TABLE public.custodial_release_authority_restore_inventory ENABLE ALWAYS TRIGGER trg_custodial_release_authority_restore_inventory_immutable;
+ IF EXISTS(SELECT * FROM initial_selection_inventory_before WHERE inventory_id<>saved.inventory_id EXCEPT SELECT * FROM public.custodial_release_authority_restore_inventory)
+  OR EXISTS(SELECT * FROM public.custodial_release_authority_restore_inventory WHERE inventory_id<>saved.inventory_id AND object_identity<>identity EXCEPT SELECT * FROM initial_selection_inventory_before) THEN
+  RAISE EXCEPTION 'Unrelated initial selection recovery rows changed';END IF;
+ IF (SELECT count(*) FROM public.custodial_release_canary_authority_surface() WHERE object_identity=identity AND object_kind IN('function','grant'))<>2
+  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.custodial_release_authority_restore_inventory'::regclass AND tgname='trg_custodial_release_authority_restore_inventory_immutable' AND tgenabled='A') THEN
+  RAISE EXCEPTION 'Initial selection recovery/canary/guard readback changed';END IF;
+END $capture$;
+DROP TABLE initial_selection_inventory_before;
+
+DO $creator_after$ DECLARE before record;p record;c record;spec record;actual_acl jsonb;populated boolean;BEGIN
+ IF (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY(ARRAY['custodial_read_approved_initial_selection_v1']::text[]))<>1
+  OR (SELECT count(*) FROM pg_temp.custodial_creator_acl_100_before)<>1 THEN
+  RAISE EXCEPTION 'Finite creator Source100 exact new-object signature/OID census changed';END IF;
+ FOR before IN SELECT * FROM pg_temp.custodial_creator_acl_100_before LOOP
+  IF before.class='relation' THEN
+   SELECT * INTO STRICT c FROM pg_class WHERE oid=to_regclass(before.signature);
+   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner);
+   IF c.oid<>before.object_oid OR c.relowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl
+    OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity
+    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role
+     CROSS JOIN aclexplode(acldefault('r',c.relowner)) ordinary WHERE has_table_privilege(role,c.oid,ordinary.privilege_type))
+    OR EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped)
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname='custodial_disaster_restore_mutation_fence' AND tgenabled='O' AND tgfoid='custodial_dr.guard_application_mutation()'::regprocedure AND tgtype=62 AND NOT tgisinternal)
+    OR EXISTS(SELECT 1 FROM jsonb_to_recordset($creator_triggers$[]$creator_triggers$::jsonb) AS x(relation text,name text,function text,type integer,enabled text)
+     WHERE relation=before.signature AND NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname=x.name AND t.tgfoid=to_regprocedure(x.function) AND t.tgtype=x.type AND t.tgenabled::text=x.enabled AND NOT t.tgisinternal))
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'Finite creator Source100 new relation owner/ACL/RLS/trigger boundary changed';END IF;
+   EXECUTE format('SELECT EXISTS(SELECT 1 FROM ONLY %s)',c.oid::regclass) INTO populated;
+   IF populated THEN RAISE EXCEPTION 'Finite creator Source100 new relation unexpectedly populated';END IF;
+  ELSE
+   SELECT * INTO STRICT p FROM pg_proc WHERE oid=to_regprocedure(before.signature);
+   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner);
+   SELECT * INTO STRICT spec FROM jsonb_to_recordset($creator_specs$[{"signature":"public.custodial_read_approved_initial_selection_v1(uuid,uuid,text,text,date)","name":"custodial_read_approved_initial_selection_v1","body_md5":"8c4270a3003fe3c9134b099e5c470c0d","argument_names":["p_manager_id","p_credential_id","p_device_id","p_session_access","p_week_start"],"returns":"jsonb","language":"plpgsql","security_definer":true,"volatility":"v","config":["search_path=pg_catalog, public"],"nonowner_execute":["static_weekly_control_plane"]}]$creator_specs$::jsonb)
+    AS x(signature text,name text,body_md5 text,argument_names text[],returns text,language text,security_definer boolean,volatility text,config text[],nonowner_execute text[]) WHERE signature=before.signature;
+   IF p.oid<>before.object_oid OR p.proowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl
+    OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM before.definition_md5
+    OR md5(p.prosrc)<>spec.body_md5 OR p.proconfig IS DISTINCT FROM spec.config OR p.prosecdef<>spec.security_definer OR p.provolatile::text<>spec.volatility
+    OR (SELECT coalesce(array_agg(r.rolname::text ORDER BY r.rolname),'{}'::text[]) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a LEFT JOIN pg_roles r ON r.oid=a.grantee WHERE a.grantee<>p.proowner) IS DISTINCT FROM spec.nonowner_execute
+    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>p.proowner)
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role
+     WHERE has_function_privilege(role,p.oid,'EXECUTE') IS DISTINCT FROM (role=ANY(spec.nonowner_execute))) THEN
+    RAISE EXCEPTION 'Finite creator Source100 new routine owner/nonowner ACL/body changed';END IF;
+  END IF;
+ END LOOP;
+END $creator_after$;
+COMMIT;

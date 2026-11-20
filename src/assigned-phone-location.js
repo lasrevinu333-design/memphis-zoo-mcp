@@ -1,4 +1,5 @@
 import { hasManagerPermission } from './auth/manager-permissions.js';
+import perimeter from './memphis-zoo-perimeter.cjs';
 
 export const PHONE_POSITION_PATH = '/scan-api/phone-position';
 export const PHONE_LOCATION_PATH = '/dashboard-api/phone-locations';
@@ -41,10 +42,12 @@ export function phoneLocations(rows,now=Date.now()) {
       &&observed<=now&&observed<=received&&received<=now
       &&[row.latitude,row.longitude,row.accuracy_m].every(finite)
       &&Math.abs(row.latitude)<=90&&Math.abs(row.longitude)<=180&&row.accuracy_m>0;
+    const inZoo=measured&&perimeter.contains(row.latitude,row.longitude);
     return {deviceIdentifier:row.device_id,employeeId:row.employee_id,employeeName:String(row.employee_name||row.device_id),
-      assignmentEpoch:Number(row.assignment_epoch),state:measured?(now-observed<=120000?'live':'stale'):'unavailable',
+      assignmentEpoch:Number(row.assignment_epoch),state:inZoo?(now-observed<=120000?'live':'stale'):'unavailable',
+      ...(!measured?{}:!inZoo?{reason:'outside_zoo_perimeter',lastObservedAt:new Date(observed).toISOString()}:{}),
       // Existing map freshness window; receipt time never refreshes a capture.
-      position:measured?{sampleId:row.sample_id,observedAt:new Date(observed).toISOString(),
+      position:inZoo?{sampleId:row.sample_id,observedAt:new Date(observed).toISOString(),
         receivedAt:new Date(received).toISOString(),latitude:row.latitude,longitude:row.longitude,accuracyM:row.accuracy_m}:null};
   });
 }
@@ -71,7 +74,7 @@ export function installAssignedPhoneLocationRoutes(app,{parseJson,requireDevice,
       const rows=await runRpc('custodial_read_phone_positions',{}),instant=now();
       const phones=phoneLocations(rows,instant);
       if(principal(req)!==before)return res.status(403).json({ok:false,code:'manager_authority_changed'});
-      return res.status(200).json({ok:true,data:{phones},meta:{contract:PHONE_LOCATION_CONTRACT,generated_at:new Date(instant).toISOString()}});
+      return res.status(200).json({ok:true,data:{phones},meta:{contract:PHONE_LOCATION_CONTRACT,generated_at:new Date(instant).toISOString(),perimeter_id:perimeter.id}});
     }catch{return res.status(503).json({ok:false,code:'phone_locations_unavailable'});}
   });
 }

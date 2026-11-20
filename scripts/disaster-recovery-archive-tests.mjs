@@ -10,7 +10,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createInterface } from "node:readline";
 import { materializeVerifiedArchive, restoreArchiveAdmission, selectVerifiedRestoreTables,
-  decodeRestoreTableRowLine, postgresJsonTextLineEncoding, createRestoreRowUtf8Guard } from "./disaster-recovery-archive.mjs";
+  decodeRestoreTableRowLine, postgresJsonTextLineEncoding, createRestoreRowUtf8Guard, createRestoreRowLineBatchDecoder, postgresTextColumnsLineEncoding } from "./disaster-recovery-archive.mjs";
 import { archiveSignatureBinding, signBinding, stableJson } from "./disaster-recovery-crypto.mjs";
 
 // Actual disposable PostgreSQL + actual owning CLI. UNIT archive/intent keys,
@@ -1035,8 +1035,11 @@ if(process.argv.includes('--immutable-fresh-commit-context-source-only')){
   const body=text.slice(start).replaceAll('export async function','async function');
   let groups=0,getters=0;
   for(const mode of ['preparation','recorded','phase','shape','expired','foreign-original','foreign-control','partial-marker',
-    'history','source-withdraw','final-xid','original-xid','getter-row']){
-    const recorded=mode==='recorded'||mode==='partial-marker',calls=[],archive={},token={};let sourceWithdrawn=false;
+    'history','source-withdraw','final-xid','original-xid','getter-row',
+    'postgres','wrong-profile-actor','wrong-session','wrong-control-owner','owner-source-withdraw']){
+    const recorded=mode==='recorded'||mode==='partial-marker',calls=[],archive={},token={};let sourceWithdrawn=false,ownerWithdrawn=false;
+    const ownerProfile=Object.freeze({id:mode==='postgres'?'immutable-private-current-postgres':'immutable-private-legacy-supabase-admin',
+      actor:mode==='postgres'?'postgres':'supabase_admin'});
     const release={release_id:'UNIT_ONLY',backend_commit:'a'.repeat(40),frontend_commit:'b'.repeat(40),
       migration_head:'20261016143226',migration_manifest_sha256:'c'.repeat(64)};
     const binding={archive_digest:'d'.repeat(64),source_identity_sha256:'e'.repeat(64),project_ref:'abcdefghijklmnopqrst',source_identity:{release}};
@@ -1056,12 +1059,15 @@ if(process.argv.includes('--immutable-fresh-commit-context-source-only')){
         source_identity_sha256:binding.source_identity_sha256,source_project_ref:binding.project_ref,target_project_ref:intent.target_project_ref,
         actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,target_release_identity:release,
         catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers}};
-    const row={actor:'supabase_admin',session_actor:'supabase_admin',read_only:'off',row_security:'off',replication:'origin',search_path:'pg_catalog',
+    const row={actor:ownerProfile.actor,session_actor:ownerProfile.actor,control_owner:ownerProfile.actor,read_only:'off',row_security:'off',replication:'origin',search_path:'pg_catalog',
       context_count:1,import_context:ctx,control_count:1,control:{...control,state:recorded?'DATABASE_RESTORED':'PREPARING'},manifest_count:1,
       manifest:{restore_id:intent.restore_id,authority_generation:'1',archive_digest:binding.archive_digest,database_verified:recorded,
         storage_verified:false,authority_invalidated:false,post_restore_verified:false,database_evidence:recorded?evidence.database:{},
         storage_evidence:{},authority_evidence:{},final_manifest_sha256:null,reconciliation_manifest_sha256:null},
       events:recorded?[{restore_id:intent.restore_id,authority_generation:'1',phase:'DATABASE',outcome:'PASSED',actor:intent.actor,evidence_json:evidence.event}]:[]};
+    if(mode==='wrong-profile-actor')row.actor=row.session_actor=row.control_owner='postgres';
+    if(mode==='wrong-session')row.session_actor='different_owner';
+    if(mode==='wrong-control-owner')row.control_owner='different_owner';
     if(mode==='phase')ctx.phase='STAGING';if(mode==='shape')ctx.shape_matches=false;if(mode==='expired')ctx.unexpired=false;
     if(mode==='foreign-original')ctx.restore_id='22222222-2222-2222-2222-222222222222';
     if(mode==='foreign-control')row.control.mutations_paused=false;
@@ -1071,13 +1077,13 @@ if(process.argv.includes('--immutable-fresh-commit-context-source-only')){
       if(sql.startsWith('with owner_guard'))return{rowCount:1,rows:[{database_oid:'5',backend_pid:411,
         transaction_id:mode==='original-xid'?'0':mode==='final-xid'&&calls.length===3?'1286':'1285'}]};
       assert.ok(sql.includes('context_count')&&sql.includes('immutable_import_target_shape()'));
-      if(mode==='source-withdraw')sourceWithdrawn=true;return{rowCount:1,rows:[row]};}}
+      if(mode==='source-withdraw')sourceWithdrawn=true;if(mode==='owner-source-withdraw')ownerWithdrawn=true;return{rowCount:1,rows:[row]};}}
     const db=new RecordingClient(),make=new Function('assert','types','pg','readVerifiedPrivateImportSource',
-      'readVerifiedImmutableFreshRestoreIntent','buildVerifiedImmutableFreshDatabaseEvidence',body+
+      'readVerifiedImmutableFreshRestoreIntent','buildVerifiedImmutableFreshDatabaseEvidence','readVerifiedImmutableArchiveOwnerProfile',body+
       '\nreturn{pre:readVerifiedImmutableFreshCommitPreparation,record:readVerifiedImmutableFreshCommitRecord};');
-    const api=make(assert,types,{Client:RecordingClient},()=>original,()=>{if(sourceWithdrawn)throw Error('WITHDRAWN');return captured;},()=>evidence);
+    const api=make(assert,types,{Client:RecordingClient},()=>original,()=>{if(sourceWithdrawn)throw Error('WITHDRAWN');return captured;},()=>evidence,()=>{if(ownerWithdrawn)throw Error('WITHDRAWN');return ownerProfile;});
     const read=()=>recorded?api.record({db,verifiedArchive:archive,freshIntent:token}):api.pre({db,verifiedArchive:archive,freshIntent:token});
-    if(['preparation','recorded'].includes(mode)){
+    if(['preparation','recorded','postgres'].includes(mode)){
       const result=await read();assert.deepEqual(result,{...witness,private_rows:'2',transaction_authority:false,admission_resumed:false});
       assert.ok(Object.isFrozen(result));assert.deepEqual(calls,['fence','context','fence']);
     }else await assert.rejects(read,error=>error.code==='IMMUTABLE_FRESH_COMMIT_CONTEXT_UNAVAILABLE'&&error.retry_safe===false);
@@ -1170,6 +1176,16 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
   const ownerContextStaticOnly = process.argv.includes('--immutable-owner-context-static-only');
   const ownerContextOnly = intentOwnerJoinOnly || ownerContextStaticOnly || process.argv.includes('--immutable-owner-context-source-only');
   const { openVerifiedRestoreTableData: open, readVerifiedRestoreTableSelection: selectOriginal } = await import("./disaster-recovery-archive.mjs");
+  // Extracted Source uses the shipping closed observer functions as well as
+  // its native validators. These are inert observations, never target ports.
+  const sourceDiagnostics=await import('./immutable-private-stage-diagnostic.mjs');
+  const diagnosticNames=['recordImmutableFreshFailure','classifyImmutableImportPermission','classifyImmutableImportPermissionContext','classifyImmutableImportGuard'];
+  const compileRecordedImporterSource=(...parameters)=>{
+    const body=parameters.pop(),names=[...diagnosticNames,...['createRestoreRowLineBatchDecoder','postgresTextColumnsLineEncoding'].filter(key=>!parameters.includes(key))];
+    const compiled=new Function(...names,...parameters,body);
+    return (...values)=>compiled(...names.map(key=>key==='createRestoreRowLineBatchDecoder'?createRestoreRowLineBatchDecoder:key==='postgresTextColumnsLineEncoding'?postgresTextColumnsLineEncoding:sourceDiagnostics[key]),...values);
+  };
+
   const work = mkdtempSync(join(tmpdir(), "archive-data-consumption-test-"));
   const key = "disaster-recovery-archive-materialization-test-key-0001", keyId = "archive-materialization-test-v1";
   const hash = value => createHash("sha256").update(value).digest("hex");
@@ -1251,7 +1267,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const tag=api.postgresTextColumnsLineEncoding,encode=wire.encodeProductionBackupTextColumnsDataRow;
       assert.equal(tag,wire.productionBackupTextColumnsDataEncoding);assert.equal(tag,'postgres-text-columns-line.v2');
       assert.equal(hash(readFileSync(new URL('./production-backup-pg-dump-command.mjs',import.meta.url))),
-        '8ad52b64334f4338582429ade37ad1a3c094d6732a28ec9b5f213b5142f3d55f');
+        '6d0bb83a263e8c103c46094de05a5082c88d4cf96ead95d6d904ca3b277870d2');
       const rawNull=' { "id" : "9223372036854775807", "value" : null } ';
       const rawJSONNull=' { "id" : "9223372036854775807", "value" : "null" } ';
       const rawPrecise=' { "value" : "{  \\"n\\":9007199254740993,\\"fraction\\":0.12345678901234567890,\\"n\\":2 }", "id" : "1" } ';
@@ -1358,10 +1374,11 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         const release=[rawPrecise],registry=[rawNull,rawJSONNull],data=Buffer.from(encode(rawNull)+'\n');
         const bootstrap=(options={})=>materialize(fresh({data,ordinaryTables:[
           {schema:'public',name:'release_deployment_manifest',primaryKey:['id'],columns:table.columns.map(c=>({...c,data_type:'text',generated:'',identity:''})),
-            data:Buffer.from(encode(release[0])+'\n')},
+            data:Buffer.from((options.release??release).map(encode).join('\n')+'\n')},
           {schema:'public',name:'custodial_release_authority_restore_inventory',primaryKey:['id'],columns:table.columns.map(c=>({...c,data_type:'text',generated:'',identity:''})),
             data:options.registryWire??Buffer.from(registry.map(encode).join('\n')+'\n')}],
-          declaredRows:1+release.length+(options.count??registry.length),changeCatalog:catalog=>{
+          declaredRows:1+(options.release??release).length+(options.count??registry.length),changeCatalog:catalog=>{
+            catalog.find(t=>t.table_name==='release_deployment_manifest').row_count=String((options.release??release).length);
             catalog.find(t=>t.table_name==='custodial_release_authority_restore_inventory').row_count=String(options.count??registry.length);
           }}));
         const archive=bootstrap(),result=await api.collectVerifiedRestoreBootstrapRows(archive);
@@ -1371,6 +1388,9 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         for(const proof of result.memberProofs){const bytes=readFileSync(join(archive.directory,proof.data_file));
           assert.equal(proof.sha256,hash(bytes));assert.equal(proof.bytes,bytes.length);}
         noFds(archive);scenarios++;
+        const history=Array.from({length:5},(_,i)=>JSON.stringify({id:String(9007199254740993n+BigInt(i)),value:'original-'+i}));
+        const historical=bootstrap({release:history}),retained=await api.collectVerifiedRestoreBootstrapRows(historical);
+        assert.deepEqual(retained.releaseRows,history);assert.equal(retained.memberProofs[0].row_count,'5');noFds(historical);scenarios++;
         for(const options of [{count:3},{count:1},{registryWire:Buffer.from(encode(rawNull)+'\n')},
           {registryWire:Buffer.from(JSON.stringify('{"id":"1","value":{}}')+'\n'),count:1}]){
           const invalid=bootstrap(options);await assert.rejects(()=>api.collectVerifiedRestoreBootstrapRows(invalid));noFds(invalid);scenarios++;
@@ -1455,7 +1475,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           assert.equal(error.code,code);assert.equal(error.source_member,member);
           assert.equal(Object.hasOwn(error,'cause'),false);
           assert.deepEqual(JSON.parse(JSON.stringify(error)),{code,source_member:member});
-          assert.ok(['Fixed signed bootstrap inventory is unavailable.','Bootstrap requires one original release and nonempty original registry.',
+          assert.ok(['Fixed signed bootstrap inventory is unavailable.','Bootstrap requires nonempty original release history and original registry.',
             'Bootstrap original member is unavailable.'].includes(error.message));
           return true;
         };
@@ -1476,7 +1496,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           }
         });
         await rawRun('BOOTSTRAP_DIAGNOSTIC_NEW only fixed original row prerequisites named',async()=>{
-          for(const options of [{omitRelease:true},{releaseSchema:'auth'},{release:[]},{release:[raw,raw]},{release:[],releaseCount:1}]){
+          for(const options of [{omitRelease:true},{releaseSchema:'auth'},{release:[]},{release:[],releaseCount:1}]){
             const {archive}=bootstrap(options);await assert.rejects(()=>collect(archive),typed('IMMUTABLE_BOOTSTRAP_ORIGINAL_ROWS_UNAVAILABLE','public.release_deployment_manifest'));noFds(archive);
           }
           for(const options of [{omitRegistry:true},{registrySchema:'auth'},{registry:[]},{registryWire:Buffer.alloc(0),registryCount:1}]){
@@ -1512,8 +1532,11 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         // The unrelated malformed public.records was never consumed; the
         // importer's all-DATA gates remain separate, not waived by this getter.
       });
-      await rawRun('BOOTSTRAP_RAW_NEW release exactly one and registry exact nonzero counts required',async()=>{
-        for(const options of [{release:[]},{release:[raw,raw]},{registry:[]},{registryCount:3},{registryCount:1}]){
+      await rawRun('BOOTSTRAP_RAW_NEW complete release history and registry exact nonzero counts required',async()=>{
+        const historical=Array.from({length:5},(_,index)=>raw.replace('9223372036854775807',String(9007199254740993n+BigInt(index))));
+        const {archive:history}=bootstrap({release:historical});const retained=await collect(history);
+        assert.deepEqual(retained.releaseRows,historical);assert.equal(retained.memberProofs[0].row_count,'5');noFds(history);
+        for(const options of [{release:[]},{releaseCount:2},{releaseCount:0},{registry:[]},{registryCount:3},{registryCount:1}]){
           const {archive}=bootstrap(options);await assert.rejects(()=>collect(archive));noFds(archive);
         }
       });
@@ -1571,7 +1594,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const {createRestoreRowLineBatchDecoder,readVerifiedPrivateImportSource:sourceOf}=await import('./disaster-recovery-archive.mjs');
       assert.equal(typeof createRestoreRowLineBatchDecoder,'function','Sealed batch-decoder product prerequisite required');
       const consumer=readFileSync(new URL('./immutable-private-data-import.mjs',import.meta.url),'utf8');
-      const first=consumer.indexOf('function fail('),last=consumer.indexOf('// Stage and finish ONLY');
+      const first=consumer.indexOf('function fail('),last=consumer.indexOf('export async function stageVerifiedImmutableFreshData(');
       assert.ok(first>=0&&last>first);assert.ok(consumer.slice(first,last).includes('createRestoreRowLineBatchDecoder'));
       // Actual decoder versus the old guarded readline wire, never a copied
       // parser. Frozen batches are DATA, not target/source admission.
@@ -1631,7 +1654,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       // Reuse the existing extracted shipping-consumer fixture. Hooks observe
       // actual decoder yields/actual reader close; never replace parse results,
       // manufacture an EOF receipt, pg.Client, context or target authority.
-      const consume=new Function('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
+      const consume=compileRecordedImporterSource('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','createRestoreRowLineBatchDecoder','pipeline','createInterface','decodeRestoreTableRowLine',
         consumer.slice(first,last)+'\nreturn consumeVerifiedOrdinaryTable;')(
         types,isDeepStrictEqual,new WeakMap(),sourceOf,(...args)=>{
@@ -1707,7 +1730,9 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const {types,isDeepStrictEqual}=await import('node:util');
       const {readVerifiedPrivateImportSource:sourceOf}=await import('./disaster-recovery-archive.mjs');
       const source=readFileSync(new URL('./immutable-private-data-import.mjs',import.meta.url),'utf8');
-      const prefixStart=source.indexOf('const witnessKeys='),prefixEnd=source.indexOf('// Stage and finish ONLY');
+      const prefixStart=source.indexOf('function fail('),prefixEnd=source.indexOf('export async function stageVerifiedImmutableFreshData(');
+      const witnessConstants=source.split('\n').filter(line=>line.startsWith('const witnessKeys=')||line.startsWith('const identities=')).join('\n');
+      assert.equal(witnessConstants.split('\n').length,2);
       const sqlStart=source.indexOf('  async function sql('),sqlEnd=source.indexOf('  const initial=',sqlStart);
       const checkStart=source.indexOf('  async function assertContext(){'),checkEnd=source.indexOf('  // Private closure:',checkStart);
       const mutateStart=source.indexOf('  async function mutate('),mutateEnd=source.indexOf('  const ordinaryOrder=',mutateStart);
@@ -1716,9 +1741,9 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       // Existing extracted-shipping-source facility. Actual signed UNIT
       // readers/loops/private mutation closure; query RECORDS protocol only.
       // No pg.Client substitute, server checks or target authority are claimed.
-      const build=new Function('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
+      const build=compileRecordedImporterSource('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','pipeline','createInterface','decodeRestoreTableRowLine',
-        source.slice(prefixStart,prefixEnd)+'\nreturn function(verifiedArchive,original,witness,query){const db={};\n'+
+        witnessConstants+'\n'+source.slice(prefixStart,prefixEnd)+"\nreturn function(verifiedArchive,original,witness,query){const db={};let importOperation='BEGIN_IMPORT';\n"+
         source.slice(sqlStart,sqlEnd)+source.slice(checkStart,checkEnd)+source.slice(mutateStart,mutateEnd)+
         '\nreturn {readWitness:contextWitness,ordinary:selected=>consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mutate,assertContext),'+
         'plan:()=>planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertContext),private:async()=>{'+
@@ -1744,7 +1769,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const privateArchive=()=>materialize(fixture({data:Buffer.alloc(0),privateTables:['employee_message_original_outcomes','group_original_creations'].map(name=>({name,primaryKey:['id'],columns,data:wire([raw])}))}));
       const withSelf=(text,_args,original)=>text.includes('pg_catalog.pg_constraint')?{rowCount:original.selection.databaseTables.length,
         rows:original.selection.databaseTables.map((t,i)=>({schema_name:t.schema_name,table_name:t.table_name,relation_oid:String(11+i),relation_kind:'r',persistence:'p',is_partition:false,
-          foreign_keys:t.schema_name==='public'?[{constraint_oid:'91',parent_schema_name:t.schema_name,parent_table_name:t.table_name,parent_relation_oid:String(11+i),validated:true,deferrable:false,initially_deferred:false}]:[]}))}:reply();
+          foreign_keys:t.schema_name==='public'?[{constraint_oid:'91',parent_schema_name:t.schema_name,parent_table_name:t.table_name,parent_relation_oid:String(11+i),validated:true,deferrable:false,initially_deferred:false,match_type:'s',columns:[{name:'id',data_type:'bigint',generated:'',identity:'',parent_name:'id',parent_data_type:'bigint',parent_generated:'',parent_identity:''}]}]:[]}))}:reply();
       const contextReads=calls=>calls.filter(c=>c.text.includes('immutable_import_assert_context()')).length;
       const oidTextOnly=process.argv.includes('--immutable-witness-oid-text-only');
       await run('MUTATION_WITNESS_OID_TEXT_NEW strict OID text and bounded PID preserve private mutation witness',async()=>{
@@ -1999,7 +2024,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       // DATA loop AND SQL source-currentness wrapper. query is a recording port,
       // never a connected pg.Client or a substitute owner/target admission.
       const privateFailureRecords=new WeakMap();
-      const consume=new Function('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
+      const consume=compileRecordedImporterSource('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','pipeline','createInterface','decodeRestoreTableRowLine',
         consumer.slice(failStart,planStart)+'\nreturn async function(verifiedArchive,original,query){const db={};\n'+
         consumer.slice(sqlStart,sqlEnd)+consumer.slice(loopStart,loopEnd)+'\nreturn total;};')(
@@ -2078,14 +2103,14 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const {types,isDeepStrictEqual}=await import('node:util');
       const {readVerifiedPrivateImportSource}=await import('./disaster-recovery-archive.mjs');
       const consumer=readFileSync(new URL('./immutable-private-data-import.mjs',import.meta.url),'utf8');
-      const first=consumer.indexOf('function fail('),last=consumer.indexOf('// Stage and finish ONLY');
+      const first=consumer.indexOf('function fail('),last=consumer.indexOf('export async function stageVerifiedImmutableFreshData(');
       assert.ok(first>=0&&last>first);
       // Existing source-loop fixture pattern: compile the ACTUAL internal
       // consumer and its original-source checks, not a copied implementation.
       // Recording SQL/context callbacks below establish NO target capability.
       const privateFailureRecords=new WeakMap();
       const observedOrdinaryEof=new WeakSet(); // Actual private reader promise, observation only.
-      const {consume,scrubFailure,plan}=new Function('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
+      const {consume,scrubFailure,plan}=compileRecordedImporterSource('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','pipeline','createInterface','decodeRestoreTableRowLine',
         consumer.slice(first,last)+'\nreturn {consume:consumeVerifiedOrdinaryTable,scrubFailure:fail,plan:planVerifiedOrdinaryTables};')(
         types,isDeepStrictEqual,privateFailureRecords,readVerifiedPrivateImportSource,
@@ -2144,7 +2169,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
             relation_oid:String(100+i),relation_kind:'r',persistence:'p',is_partition:false,foreign_keys:[]}));
           const row=rows.find(table=>table.table_name===registry);
           row.foreign_keys.push({constraint_oid:'900',parent_schema_name:'public',parent_table_name:registry,
-            parent_relation_oid:row.relation_oid,validated:true,deferrable:false,initially_deferred:false});
+            parent_relation_oid:row.relation_oid,validated:true,deferrable:false,initially_deferred:false,match_type:'s',columns:[{name:'id',data_type:'bigint',generated:'',identity:'',parent_name:'id',parent_data_type:'bigint',parent_generated:'',parent_identity:''}]});
           let catalogQueries=0;
           const catalog=async(text,args)=>{catalogQueries++;assert.ok(text.includes("k.contype='f'"));
             assert.deepEqual(args,[JSON.stringify(original.selection.databaseTables.map(({schema_name,table_name})=>({schema_name,table_name})))]);
@@ -2171,7 +2196,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
             assert.equal(await consume(archive,original,table,async(text,args)=>calls.push({text,args}),async()=>{}),item.rows.length);
             const eof=await readers.at(-1).verified;assert.equal(eof.sha256,hash(encodeRows(item.rows)));
           }
-          const fixed='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)';
+          const fixed='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context';
           assert.deepEqual(calls,[{text:fixed,args:['public','ordinary_original_business',secondRaw]},
             {text:fixed,args:['auth',registry,originalRaw]},{text:fixed,args:['public',registry+'_copy',secondRaw]}]);
           assert.equal(JSON.stringify(sourceOf(archive)),before);
@@ -2191,17 +2216,17 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           assert.deepEqual(calls,[]);assert.ok(readers.at(-1).stream.closed);
         });
         await run('BOOTSTRAP_METADATA_NEW original bytes source and context cannot be adopted across await',async()=>{
-          for(const boundary of ['pre-row','post-row','post-EOF','source-close','same-bytes-catalog']){
+          for(const boundary of ['before-read','after-EOF','source-close','same-bytes-catalog']){
             const archive=metadata([{name:registry,rows:[originalRaw]}]),original=sourceOf(archive),table=selectedMetadata(original),calls=[];
             const refusal=new Error('SYNTHETIC_BOOTSTRAP_CONTEXT_WITHDRAWN');let checks=0;
             await assert.rejects(()=>consume(archive,original,table,async()=>calls.push('unexpected'),async()=>{
               checks++;await new Promise(resolve=>setImmediate(resolve));
-              if(checks===({ 'pre-row':1,'post-row':2,'post-EOF':3 }[boundary]))throw refusal;
+              if(checks===({ 'before-read':1,'after-EOF':2 }[boundary]))throw refusal;
               if(checks===1&&boundary==='source-close')archive.cleanup();
               if(checks===1&&boundary==='same-bytes-catalog'){
                 const file=join(archive.directory,'inventory/table-catalog.json');renameSync(file,file+'.original');writeFileSync(file,readFileSync(file+'.original'));
               }
-            }),error=>['pre-row','post-row','post-EOF'].includes(boundary)?error===refusal:sourceFailure(error));
+            }),error=>['before-read','after-EOF'].includes(boundary)?error===refusal:(error instanceof AggregateError&&error.message==='Mixed original source cleanup failed'&&error.cause===error.errors[0]&&error.errors.length>=2&&error.errors.every(sourceFailure)));
             assert.deepEqual(calls,[]);assert.ok(readers.at(-1).stream.closed);
           }
           const archive=metadata([{name:registry,rows:[originalRaw]}]),original=sourceOf(archive),table=selectedMetadata(original),calls=[];
@@ -2217,9 +2242,9 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           resources:{SQL_connections:0,listeners:0,JVMs:0}}));
       }else if(selfReferenceOnly){
         const empty=Buffer.alloc(0),emptyPrivate={...privateRow,data:empty};
-        const name='employee_native_push_generations',stageSql='select custodial_dr.stage_immutable_ordinary_row($1::text,$2::text,$3::text)',
-          finishSql='select custodial_dr.insert_staged_immutable_ordinary_table($1::text,$2::text)',
-          ordinarySql='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)';
+        const name='employee_native_push_generations',stageSql='select custodial_dr.stage_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context',
+          finishSql='select custodial_dr.insert_staged_immutable_ordinary_table($1::text,$2::text,$3::jsonb) as context',
+          ordinarySql='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context';
         // Structural source DATA, not complete provider SQL-valid records or
         // a live restore target. Preserve lexical numeric/JSON/row multiplicity.
         const historyColumns=[['generation_id','uuid'],['prior_generation_id','uuid'],['assignment_epoch','bigint'],['native_app','json']]
@@ -2236,8 +2261,14 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           relation_oid:String(index+100),relation_kind:'r',persistence:'p',is_partition:false,foreign_keys:[]}));
         const edge=(rows,child,parent,id='900')=>{const p=rows.find(row=>row.table_name===parent);
           rows.find(row=>row.table_name===child).foreign_keys.push({constraint_oid:id,parent_schema_name:p.schema_name,parent_table_name:p.table_name,
-            parent_relation_oid:p.relation_oid,validated:true,deferrable:false,initially_deferred:false});};
-        const readCatalog=(original,rows)=>async(text,args)=>{assert.ok(text.includes("k.contype='f'"));
+            parent_relation_oid:p.relation_oid,validated:true,deferrable:false,initially_deferred:false,match_type:'s',
+            columns:[{name:child===name?(parent===name?'prior_generation_id':'assignment_epoch'):'id',
+              data_type:child===name&&parent===name?'uuid':'bigint',generated:'',identity:'',
+              parent_name:parent===name?'generation_id':'id',parent_data_type:parent===name?'uuid':'bigint',parent_generated:'',parent_identity:''}]});};
+        const readCatalog=(original,rows)=>async(text,args)=>{
+          if(text.startsWith('with original_rows as materialized('))return {rowCount:args.length-1,
+            rows:args.slice(1).map(constraint_oid=>({constraint_oid,row_count:String(args[0].length),active_rows:String(args[0].length),partial_rows:'0'}))};
+          assert.ok(text.includes("k.contype='f'"));
           assert.deepEqual(args,[JSON.stringify(original.selection.databaseTables.map(({schema_name,table_name})=>({schema_name,table_name})))]);
           return {rowCount:rows.length,rows};};
         const route=async(archive,original,rows)=>{const ordered=await plan(archive,original,readCatalog(original,rows),async()=>{});
@@ -2279,7 +2310,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
             let checks=0;
             const sql=async(text,args)=>{calls.push({text,args});if(boundary==='source'&&text===stageSql){await Promise.resolve();archive.cleanup();}
               if(boundary==='ambiguous-set'&&text===finishSql)throw failure;};
-            await assert.rejects(()=>consume(archive,original,chosen,sql,async()=>{if(++checks===7&&boundary==='context')throw failure;}),
+            await assert.rejects(()=>consume(archive,original,chosen,sql,async()=>{if(++checks===1&&boundary==='context')throw failure;}),
               error=>boundary==='source'?sourceFailure(error):error===failure);
             assert.equal(calls.filter(call=>call.text===finishSql).length,boundary==='ambiguous-set'?1:0);
             const before=calls.length;
@@ -2296,7 +2327,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
               if(variant==='missing-parent')fk.parent_table_name='missing';if(variant==='parent-oid')fk.parent_relation_oid='99999';
               if(variant==='unvalidated')fk.validated=false;if(variant==='unknown')fk.authority=true;
               if(variant==='duplicate-constraint')edge(rows,name,'z_parent',fk.constraint_oid);}
-            await assert.rejects(()=>route(archive,original,rows),sourceFailure);assert.equal(readers.length,before);
+            await assert.rejects(()=>route(archive,original,rows),sourceFailure);assert.equal(readers.length,before+(variant==='cycle'?2:0));
           }
         });
         await run('SELF_STAGE_NEW routing data cannot be copied moved or consumed twice',async()=>{
@@ -2319,7 +2350,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         const encodeRows=rows=>Buffer.from(rows.map(row=>JSON.stringify(row)+'\n').join(''));
         const makeCount=(declared,rows)=>make({data:encodeRows(rows),privateTables:[emptyPrivate],declaredRows:declared,
           changeCatalog:catalog=>{catalog.find(table=>table.schema_name==='public'&&table.table_name==='records').row_count=String(declared);}});
-        const fixedSql='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)';
+        const fixedSql='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context';
         await run('ROW_COUNT_BOUND_NEW declared zero stops first excess row before fixed INSERT',async()=>{
           const archive=makeCount(0,[raw]),original=sourceOf(archive),table=selected(original),calls=[];
           assert.equal(table.row_count,'0');
@@ -2334,7 +2365,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           assert.equal(table.row_count,'1');
           await assert.rejects(()=>consume(archive,original,table,async(text,args)=>calls.push({text,args}),async()=>{checks++;}),sourceFailure);
           assert.deepEqual(calls,[{text:fixedSql,args:['public','records',raw]}]);
-          assert.equal(checks,3);assert.ok(readers.at(-1).stream.closed);
+          assert.equal(checks,0);assert.ok(readers.at(-1).stream.closed);
         });
         await run('ROW_COUNT_BOUND_NEW honest zero and one retain exact EOF counts and calls',async()=>{
           for(const declared of [0,1]){
@@ -2342,7 +2373,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
               table=selected(original),before=JSON.stringify(original.selection),calls=[];let checks=0;
             assert.equal(await consume(archive,original,table,async(text,args)=>calls.push({text,args}),async()=>{checks++;}),declared);
             assert.deepEqual(calls,declared?[{text:fixedSql,args:['public','records',raw]}]:[]);
-            assert.equal(checks,declared?3:1);
+            assert.equal(checks,declared?1:0);
             const data=readers.at(-1),eof=await data.verified;
             assert.equal(eof.data_file,table.data_file);assert.equal(eof.bytes,encodeRows(rows).length);
             assert.equal(eof.sha256,hash(encodeRows(rows)));assert.ok(data.stream.closed);
@@ -2361,9 +2392,9 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           await assert.rejects(()=>consume(archive,changed,forged,async()=>calls.push('changed'),async()=>{}),sourceFailure);
           assert.equal(readers.length,before);assert.deepEqual(calls,[]);
           const refused=new Error('SYNTHETIC_ORIGINAL_ROW_CONTEXT_REFUSAL');
-          await assert.rejects(()=>consume(archive,original,table,async()=>calls.push('context'),
+          await assert.rejects(()=>consume(archive,original,table,async(text,args)=>calls.push({text,args}),
             async()=>{throw refused;}),error=>error===refused);
-          assert.deepEqual(calls,[]);assert.ok(readers.at(-1).stream.closed);
+          assert.deepEqual(calls,[{text:fixedSql,args:['public','records',raw]}]);assert.ok(readers.at(-1).stream.closed);
         });
         assert.ok(cases.length>0,'Unknown/empty row-count-bound case selector');
         console.log(JSON.stringify({selector:'--immutable-row-count-before-insert-source-only',count:cases.length,cases,
@@ -2380,12 +2411,14 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         const fk=(rows,child,parent,id='900')=>{
           const target=rows.find(row=>row.table_name===parent);
           rows.find(row=>row.table_name===child).foreign_keys.push({constraint_oid:id,parent_schema_name:target.schema_name,
-            parent_table_name:target.table_name,parent_relation_oid:target.relation_oid,validated:true,deferrable:false,initially_deferred:false});
+            parent_table_name:target.table_name,parent_relation_oid:target.relation_oid,validated:true,deferrable:false,initially_deferred:false,match_type:'s',columns:[{name:'id',data_type:'bigint',generated:'',identity:'',parent_name:'id',parent_data_type:'bigint',parent_generated:'',parent_identity:''}]});
         };
         const makeGraph=()=>make({data:Buffer.alloc(0),ordinaryTables:['a_child','z_parent'].map(name=>({schema:'public',name,primaryKey:['id'],columns,data:wire})),
           changeCatalog:catalog=>catalog.sort((a,b)=>a.table_name==='a_child'?-1:b.table_name==='a_child'?1:0)});
         const observed=[];
         const readCatalog=(original,rows,after=async()=>{})=>async(text,args)=>{
+          if(text.startsWith('with original_rows as materialized('))return {rowCount:args.length-1,
+            rows:args.slice(1).map(constraint_oid=>({constraint_oid,row_count:String(args[0].length),active_rows:String(args[0].length),partial_rows:'0'}))};
           observed.push({text,args});assert.ok(text.includes('from pg_catalog.pg_constraint k'));
           assert.ok(text.includes("k.contype='f'"));assert.ok(text.includes('jsonb_to_recordset($1::jsonb)'));
           assert.deepEqual(args,[JSON.stringify(original.selection.databaseTables.map(({schema_name,table_name})=>({schema_name,table_name})))]);
@@ -2409,7 +2442,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
               if(table.row_count==='0'){assert.equal(eof.bytes,0);assert.equal(eof.sha256,hash(empty));}
             }
             assert.equal(JSON.stringify(original.selection),before);
-            assert.ok(calls.every(call=>call.text==='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)'));
+            assert.ok(calls.every(call=>call.text==='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context'));
             return calls;
           };
           await run('EMPTY_DEPENDENCY_NEW empty self FK retains exact zero-count SOURCE readback',async()=>{
@@ -2455,7 +2488,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
               assert.equal(selected(original,'public','a_child').row_count,'1');
               const before=readers.length;observed.length=0;
               await assert.rejects(()=>plan(archive,original,readCatalog(original,rows),async()=>{}),sourceFailure);
-              assert.equal(observed.length,1);assert.equal(readers.length,before);
+              assert.equal(observed.length,1);assert.equal(readers.length,before+2);
             }
           });
           await run('EMPTY_DEPENDENCY_NEW zero child still validates catalog parents constraints and owner context',async()=>{
@@ -2530,7 +2563,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           assert.deepEqual(new Set(ordered),new Set(original.selection.databaseTables.filter(table=>table.schema_name!=='custodial_release_identity')));
           for(const table of ordered)assert.equal(await consume(archive,original,table,async(text,args)=>{calls.push({text,args});},async()=>{}),Number(table.row_count));
           assert.deepEqual(calls.map(call=>call.args),[['public','z_parent',raw],['public','a_child',raw]]);
-          assert.ok(calls.every(call=>call.text==='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)'));
+          assert.ok(calls.every(call=>call.text==='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context'));
           assert.equal(JSON.stringify(original.selection),before);assert.ok(readers.every(data=>data.stream.closed));
         });
         await run('DEPENDENCY_ORDER_NEW closed or replaced original during catalog await refuses before ordinary INSERT',async()=>{
@@ -2580,7 +2613,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
             if(variant.startsWith('deferrable'))for(const row of rows)for(const edge of row.foreign_keys){edge.deferrable=true;edge.initially_deferred=true;}
             const readersBefore=readers.length;
             await assert.rejects(()=>plan(archive,original,readCatalog(original,rows),async()=>{}),sourceFailure);
-            assert.equal(observed.length,1);assert.equal(readers.length,readersBefore);
+            assert.equal(observed.length,1);assert.equal(readers.length,readersBefore+2);
           }
         });
         assert.ok(cases.length>0,'Unknown/empty dependency case selector');
@@ -2588,7 +2621,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           limits:'Actual signed unit archive/no-follow reader/internal planner and consumer; recording catalog/context ports do not prove PostgreSQL dependencies, locks, owner admission, freshness, INSERT, rollback or activation.',actual_SQL:'NOT_RUN',resources:{SQL_connections:0,listeners:0,JVMs:0}}));
         }
       }else if(fixedRowConsumerOnly){
-        const fixedSql='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)';
+        const fixedSql='select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context';
         const exactRaw='{ "id":9223372036854775807, "value":{"n":9007199254740993,"decimal":1.2300,"json":{"kept":1,"kept":2}} }';
         const exactWire=Buffer.from(JSON.stringify(exactRaw)+'\n');
         await run('FIXED_ROW_NEW exact literal and original large-number JSON TEXT with generated identity metadata',async()=>{
@@ -2597,14 +2630,14 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
             const original=sourceOf(archive),table=selected(original),calls=[];let checks=0;
             assert.equal(await consume(archive,original,table,async(text,args)=>{assert.equal(text,fixedSql);calls.push({text,args});},async()=>{checks++;}),1);
             assert.deepEqual(calls,[{text:fixedSql,args:[table.schema_name,table.table_name,exactRaw]}]);
-            assert.equal(checks,3);const eof=await readers.at(-1).verified;
+            assert.equal(checks,1);const eof=await readers.at(-1).verified;
             assert.equal(eof.sha256,hash(exactWire));assert.equal(eof.bytes,exactWire.length);assert.ok(readers.at(-1).stream.closed);
           }
         });
         await run('FIXED_ROW_NEW historical bootstrap verifies exact bytes with zero fixed calls',async()=>{
           const archive=make({ordinaryTables:[{schema:'public',name:'release_deployment_manifest',primaryKey:['id'],columns,data:exactWire}]}),original=sourceOf(archive);let calls=0,checks=0;
           assert.equal(await consume(archive,original,selected(original,'public','release_deployment_manifest'),async()=>{calls++;},async()=>{checks++;}),1);
-          assert.equal(calls,0);assert.equal(checks,3);assert.equal((await readers.at(-1).verified).sha256,hash(exactWire));
+          assert.equal(calls,0);assert.equal(checks,2);assert.equal((await readers.at(-1).verified).sha256,hash(exactWire));
         });
         await run('FIXED_ROW_NEW generated-only nonempty metadata still refuses before fixed call',async()=>{
           const archive=make({changeCatalog:catalog=>{for(const column of catalog[0].columns)column.generated='s';}}),original=sourceOf(archive);let calls=0;
@@ -2622,12 +2655,10 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
             const path=join(archive.directory,'inventory/table-catalog.json');renameSync(path,path+'.original');writeFileSync(path,readFileSync(path+'.original'));},async()=>{}),sourceFailure);
           assert.deepEqual(calls,[{text:fixedSql,args:['public','records',exactRaw]}]);assert.ok(readers.at(-1).stream.closed);
         });
-        await run('FIXED_ROW_NEW recording context loss before or after fixed await cannot finish or repeat',async()=>{
-          for(const boundary of ['before','after']){
-            const archive=make({data:exactWire}),original=sourceOf(archive),calls=[],refusal=new Error('SYNTHETIC_CONTEXT_REFUSAL_NOT_SQL_OWNER_PROOF');let checks=0;
-            await assert.rejects(()=>consume(archive,original,selected(original),async(text,args)=>{calls.push({text,args});await new Promise(resolve=>setImmediate(resolve));},async()=>{await Promise.resolve();if(++checks===(boundary==='before'?1:2))throw refusal;}),error=>error===refusal);
-            assert.deepEqual(calls,boundary==='before'?[]:[{text:fixedSql,args:['public','records',exactRaw]}]);assert.ok(readers.at(-1).stream.closed);
-          }
+        await run('FIXED_ROW_NEW recording EOF context loss after fixed await cannot finish or repeat',async()=>{
+          const archive=make({data:exactWire}),original=sourceOf(archive),calls=[],refusal=new Error('SYNTHETIC_CONTEXT_REFUSAL_NOT_SQL_OWNER_PROOF');let checks=0;
+          await assert.rejects(()=>consume(archive,original,selected(original),async(text,args)=>{calls.push({text,args});await new Promise(resolve=>setImmediate(resolve));},async()=>{await Promise.resolve();checks++;throw refusal;}),error=>error===refusal);
+          assert.equal(checks,1);assert.deepEqual(calls,[{text:fixedSql,args:['public','records',exactRaw]}]);assert.ok(readers.at(-1).stream.closed);
         });
         await run('FIXED_ROW_NEW actual error scrubber retains first private failure and no second fixed call',async()=>{
           const archive=make({data:exactWire}),original=sourceOf(archive),calls=[],failure=Object.assign(new Error('SYNTHETIC_PRIVATE_DETAIL'),{code:'42501',detail:'SYNTHETIC_PRIVATE_ROW'});let rejection;
@@ -2647,19 +2678,19 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           const count=await consume(archive,original,table,async(text,args)=>{recorded.push({text,args});},async()=>{});
           assert.equal(String(count),table.row_count);
         }
-        assert.equal(recorded.length,3);for(const entry of recorded){assert.equal(entry.args[2],raw);assert.equal(entry.text,'select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)');}
+        assert.equal(recorded.length,3);for(const entry of recorded){assert.equal(entry.args[2],raw);assert.equal(entry.text,'select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context');}
         assert.deepEqual(recorded.map(x=>x.args.slice(0,2)),[['public','records'],['auth','original_data'],['storage','original_data']]);
         assert.deepEqual(await bytes(reader(archive,'custodial_release_identity',privateRow.name)),wire);
       });
       await run('mixed original generated and identity projection matches shipping ordinary INSERT recipe',async()=>{
         const archive=make({changeCatalog:catalog=>{catalog[0].columns[0].identity='a';catalog[0].columns[1].generated='s';}}),original=sourceOf(archive),calls=[];
         await consume(archive,original,selected(original),async(text,args)=>calls.push({text,args}),async()=>{});
-        assert.deepEqual(calls,[{text:'select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text)',args:['public','records',raw]}]);
+        assert.deepEqual(calls,[{text:'select custodial_dr.insert_immutable_ordinary_row($1::text,$2::text,$3::text,$4::jsonb) as context',args:['public','records',raw]}]);
       });
       await run('mixed historical release bootstrap consumes authenticated EOF but never replaces target authority',async()=>{
         const archive=make({ordinaryTables:[{schema:'public',name:'release_deployment_manifest',primaryKey:['id'],columns,data:wire}]}),original=sourceOf(archive);let calls=0,checks=0;
         assert.equal(await consume(archive,original,selected(original,'public','release_deployment_manifest'),async()=>{calls++;},async()=>{checks++;}),1);
-        assert.equal(calls,0);assert.equal(checks,3);assert.ok(readers.at(-1).stream.closed);await readers.at(-1).verified;
+        assert.equal(calls,0);assert.equal(checks,2);assert.ok(readers.at(-1).stream.closed);await readers.at(-1).verified;
       });
       await run('mixed insertion failure preserves original failure and closes owned reader without finish or retry',async()=>{
         const archive=make(),original=sourceOf(archive),failure=new Error('SYNTHETIC_RECORDING_INSERT_REFUSAL');let calls=0;
@@ -2673,8 +2704,8 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       });
       await run('mixed changed recording context after INSERT prevents consumer completion',async()=>{
         const archive=make(),original=sourceOf(archive),failure=new Error('SYNTHETIC_CONTEXT_REFUSAL_NOT_SQL_AUTHORITY');let calls=0,checks=0;
-        await assert.rejects(()=>consume(archive,original,selected(original),async()=>{calls++;},async()=>{if(++checks===2)throw failure;}),error=>error===failure);
-        assert.equal(calls,1);assert.equal(checks,2);assert.ok(readers.at(-1).stream.closed);
+        await assert.rejects(()=>consume(archive,original,selected(original),async()=>{calls++;},async()=>{if(++checks===1)throw failure;}),error=>error===failure);
+        assert.equal(calls,1);assert.equal(checks,1);assert.ok(readers.at(-1).stream.closed);
       });
       await run('mixed partial original row count cannot finish after consumed EOF',async()=>{
         const archive=make({data:Buffer.alloc(0),privateTables:[{...privateRow,data:Buffer.alloc(0)}],declaredRows:1,changeCatalog:catalog=>{catalog[0].row_count='1';}}),original=sourceOf(archive);let calls=0;

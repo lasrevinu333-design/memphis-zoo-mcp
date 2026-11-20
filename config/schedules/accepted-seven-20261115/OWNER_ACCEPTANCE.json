@@ -1,0 +1,411 @@
+{
+  "schema": "custodial.accepted-static-week-retention.v1",
+  "status": "OWNER_ACCEPTED_RETAINED_NOT_ACTIVATED",
+  "acceptedBy": "Eric",
+  "acceptedAt": "2026-11-15T04:06:08.649124+00:00",
+  "recordedAt": "2026-11-15T04:08:30.502240+00:00",
+  "authorityMessageId": "Sentinel_67736ae6296c81918ce277aabb5e2d84",
+  "acceptanceQuote": "By the way, that steady schedule asks custodial seven person static. Uh, schedule is good. Hold on to that",
+  "scope": "Exact current reviewed seven-person static schedule retained for safekeeping, including the selected Monday Karen relief, latest Thursday ownership/lunch pattern and Saturday changes. No effective date or production publication is set.",
+  "pdf": {
+    "filename": "custodial-seven-person-static-current-review.pdf",
+    "pages": 20,
+    "sha256": "18c65ab5c5aa43b2a124ade7ec02c9c077c6ab9342e1e1478b4c6b7f5a8b6246",
+    "libraryFileId": "libfile_fde3_f-f72b3c1547908191a7d21c171f200ce0_4f2a1a1e02d8819185f3b52757b6ccde",
+    "fileId": "file_000000006e5881fdb49ee8caf79cbf0c",
+    "libraryVersion": "1",
+    "libraryPath": "/custodial-seven-person-static-current-review.pdf",
+    "libraryIdentityVerifiedReadOnly": true,
+    "remoteRawByteHashClaim": false
+  },
+  "candidateDataSha256": "22d067bd595e2450bb32cd36903df94628eb6df055a44f992b3aba9f242bbee7",
+  "files": [
+    {
+      "filename": "custodial-seven-person-static-current-review.pdf",
+      "originalPath": "/home/eric/Documents/Codex/2026-11-14/task-2/output/pdf/custodial-seven-person-static-current-review.pdf",
+      "sha256": "18c65ab5c5aa43b2a124ade7ec02c9c077c6ab9342e1e1478b4c6b7f5a8b6246",
+      "bytes": 48653
+    },
+    {
+      "filename": "seven-person-static-candidate-current-review.json",
+      "originalPath": "/home/eric/Documents/Codex/2026-11-14/task-2/output/seven-person-static-candidate-current-review.json",
+      "sha256": "22d067bd595e2450bb32cd36903df94628eb6df055a44f992b3aba9f242bbee7",
+      "bytes": 109183
+    },
+    {
+      "filename": "current-schedule-review-evidence.zip",
+      "originalPath": "/home/eric/Documents/Codex/2026-11-14/task-2/output/current-schedule-review-evidence.zip",
+      "sha256": "81be7ba3849caa81e8c404a0693bdc3ebafb48b6ff992d563ecfe9d2679d98ca",
+      "bytes": 117157
+    },
+    {
+      "filename": "CURRENT_REVIEW_VALIDATION.json",
+      "originalPath": "/home/eric/Documents/Codex/2026-11-14/task-2/evidence/CURRENT_REVIEW_VALIDATION.json",
+      "sha256": "87e7476af4415cbd02bcf98f127f250778fae0ae9442d9aa8e0ed258e5594856",
+      "bytes": 5613
+    },
+    {
+      "filename": "CURRENT_PDF_RECEIPT.json",
+      "originalPath": "/home/eric/Documents/Codex/2026-11-14/task-2/evidence/CURRENT_PDF_RECEIPT.json",
+      "sha256": "ba20a5035280144a56e852c1cb5bac43a4ca51e933b5514dd7c1b536195b062e",
+      "bytes": 467
+    },
+    {
+      "filename": "CURRENT_DELIVERY_MANIFEST.json",
+      "originalPath": "/home/eric/Documents/Codex/2026-11-14/task-2/evidence/CURRENT_DELIVERY_MANIFEST.json",
+      "sha256": "b4b49fc2ebea261612bc4c1de7f71b89e8d878a0257105182552873153fee229",
+      "bytes": 2482
+    }
+  ],
+  "remainingLimitation": {
+    "code": "PREARRIVAL_TEMPORARY_OWNERSHIP_UNRESOLVED",
+    "description": "Acceptance retains the existing early-morning ownership limitation. Temporary full-site owners before later staff arrive remain unspecified; no full-site continuity from the first shift is claimed. Acceptance does not resolve or waive this limitation.",
+    "checkedFullSiteWindows": {
+      "monday": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "friday": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "saturday": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "sunday": {
+        "start": "08:00",
+        "end": "17:00"
+      }
+    },
+    "exactEarlyWindowsAndGroups": {
+      "monday": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Tropical Birds",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        }
+      ],
+      "tuesday": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        }
+      ],
+      "wednesday": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "08:00",
+          "groups": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        }
+      ],
+      "thursday": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Breezeway restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "West Admin and restrooms",
+            "Zambezi and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Breezeway restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "Zambezi and restrooms"
+          ]
+        }
+      ],
+      "friday": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Primate Canyon",
+            "Tropical Birds",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Tropical Birds"
+          ]
+        }
+      ],
+      "saturday": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "East End restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Northwest Passage",
+            "Primate Canyon",
+            "Teton and restrooms",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "East End restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ]
+        }
+      ],
+      "sunday": [
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "East End restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Northwest Passage",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Aquarium",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ]
+        }
+      ]
+    }
+  },
+  "validation": {
+    "fullHourLunches": 35,
+    "locationMinuteOwnershipChecks": 86940,
+    "priorVisualReview": "PASS:20 pages",
+    "sourcePacketAndPreviousArtifactsPreserved": true,
+    "archivedCopiesByteIdentical": true
+  },
+  "liveScheduleActivated": false,
+  "liveScheduleOverwritten": false,
+  "databaseChanged": false,
+  "appChanged": false,
+  "buildAndInstallContacted": false
+}

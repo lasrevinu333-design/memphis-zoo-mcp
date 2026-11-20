@@ -44,7 +44,8 @@ import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-pro
 import {captureApprovedManualPeriodWorkerInput} from './approved-manual-period-worker.js';
 import {createApprovedManualCoverAllManagement,readApprovedManualCoverAllChoiceSummary} from './approved-manual-coverall-management.js';
 import {materializeApprovedManualRecurringOnCurrentTransaction,isApprovedManualPublication,approvedManualMaterializationFrame} from './approved-manual-recurring-transport.js';
-import {readApprovedManualWeek} from './approved-manual-week.js';
+import {readApprovedManualWeekForSource} from './accepted-manual-week-selection.js';
+import {ACCEPTED_SEVEN_DATA_DIGEST,ACCEPTED_SEVEN_SHA256} from './accepted-seven-manual-week.js';
 import {staffingWindowFromOwnerFrames,approvedManualStaffingWorkerInput,approvedManualPendingStaffingTransport,approvedManualInitialEmploymentWorkerInput,approvedManualInitialEmploymentTransport} from './approved-manual-staffing-transport.js';
 import {prepareApprovedManualCoverAllInitialOnCurrentTransaction,approvedManualCoverAllWorkerInput} from './approved-manual-coverall-workflow.js';
 import {
@@ -1805,9 +1806,14 @@ export function createStaticWeeklyControlPlane({
           return{...legacy,schema:'custodial.approved-manual-activation-preview.v2',status:'CURRENT_TYPED_EMPLOYMENT_PACKET_REQUIRED',
             originalPacketPreserved:true,published:false,activationEligible:false};
         }
+        const update=basis.operationKind==='ACCEPTED_SEVEN_UPDATE_REUSE_EXISTING_CAPACITY',
+          anyUpdateMarker=['operationKind','manualDataDigest','acceptedArtifactSha256'].some(key=>Object.hasOwn(basis,key)),
+          validPositions=update?basis.manualDataDigest===ACCEPTED_SEVEN_DATA_DIGEST&&basis.acceptedArtifactSha256===ACCEPTED_SEVEN_SHA256
+            &&basis.currentPositions===30&&basis.additionalCapacityPositions===0
+            :!anyUpdateMarker&&basis.currentPositions===22&&basis.additionalCapacityPositions===8;
         if(basis.schema!=='custodial.approved-manual-coverall-activation-preview-basis.v2'||basis.managerId!==actor.managerId
           ||basis.packetId!==id||basis.expectedRevision!==revision||!/^[a-f0-9]{64}$/.test(basis.previewDigest||'')
-          ||basis.employmentRevisionVector?.length!==14||basis.currentPositions!==22||basis.additionalCapacityPositions!==8
+          ||basis.employmentRevisionVector?.length!==14||!validPositions
           ||basis.prospectivePositions!==30||basis.newEmployees!==0)
           throw fail('static_manual_activation_basis_invalid');
         return{...basis,schema:'custodial.approved-manual-activation-preview.v2',status:'PREVIEW_ONLY',
@@ -2199,9 +2205,9 @@ export function createStaticWeeklyControlPlane({
               requirePrincipal(command);meter.checkpoint();
               if(canonicalJson(manualBasis.originalSource)!==originalSource)throw fail('staffing_approved_original_source_changed');
               manualWorkerInput=coverallBasis.choice&&semantic.commandKind!=='cancel_absence'
-                ?approvedManualCoverAllWorkerInput({basis:manualBasis,week:readApprovedManualWeek(),actor,operationId:operation,
+                ?approvedManualCoverAllWorkerInput({basis:manualBasis,week:readApprovedManualWeekForSource(manualBasis.normalSource),actor,operationId:operation,
                   expectedRevision,frameStart:weekStart,choice:coverallBasis.choice})
-                :approvedManualStaffingWorkerInput({basis:manualBasis,week:readApprovedManualWeek(),actor,
+                :approvedManualStaffingWorkerInput({basis:manualBasis,week:readApprovedManualWeekForSource(manualBasis.normalSource),actor,
                   operationId:operation,expectedRevision,frameStart:weekStart});
               if(coverallBasis.choice&&semantic.commandKind==='cancel_absence'){
                 await call(client,'static_weekly_coverall_bind_actor',[operation,actor.managerId,

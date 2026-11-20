@@ -34,6 +34,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
 
   async function finishMessagingIdentity(req, res, next) {
+    if (req.memphisDeviceAuth?.offline_recovery_only === true) {
+      res.status(403).json({ ok: false, code: "messenger_offline_recovery_forbidden", error: "Frozen offline work recovery does not grant Messenger access." });
+      return;
+    }
     if (req.memphisAuth) {
       try {
         if (isCohortSession(req.memphisAuth)) cohortRequestContexts.set(req.memphisAuth, {
@@ -929,7 +933,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         group by tp.thread_id
       ),
       user_visibility as (
-        select v.thread_id, max(v.hidden_before) as hidden_before, max(v.updated_at) as updated_at
+        select v.thread_id, max(v.hidden_before) as hidden_before, max(v.updated_at) as updated_at, bool_and(v.list_reopened) as list_reopened
         from public.msg_thread_visibility v
         where v.user_id = '${viewer}'::uuid
           and v.device_identifier is null
@@ -995,7 +999,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       left join user_visibility vis on vis.thread_id = t.id
       where t.is_active = true
         and ${visibilityClause}
-        and (vis.hidden_before is null or lm.last_message_id is not null)
+        and (vis.hidden_before is null or lm.last_message_id is not null or (t.thread_type = 'direct' and tp.viewer_is_participant and coalesce(vis.list_reopened,false)))
       order by
         case
           when t.system_key = 'ops_manager_shared_chat_v1' then 0
@@ -2045,6 +2049,20 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/thread/direct-intent", requireWritableDeviceOrOpsAuth, async (req, res) => {
+    try {
+      const viewer = await resolveViewerContext({ userId: String(req.body?.created_by_user_id || "").trim(), deviceId: String(req.body?.device_id || "").trim(), managerSession: req.memphisAuth || null, request:req });
+      const other = req.body?.other_user_id;
+      const requestId = req.body?.request_id;
+      const at = req.body?.request_at;
+      if (req.body?.open_protocol !== 2 || typeof other !== "string" || other.trim() !== other || !isUuid(other) || typeof requestId !== "string" || requestId.trim() !== requestId || !isUuid(requestId) || typeof at !== "string" || !Number.isFinite(Date.parse(at)) || new Date(at).toISOString() !== at) throw Object.assign(new Error("Invalid intent request."), {status:422});
+      const result = await runRpc("msg_issue_direct_open_intent", { p_user_a:viewer.effectiveUserId, p_user_b:other, p_request_id:requestId, p_request_at:at });
+      const intent = Array.isArray(result) && result.length === 1 ? result[0] : result;
+      if (!isUuid(intent?.intent_id)) throw Object.assign(new Error("Intent not confirmed."), {status:502});
+      res.status(200).json({ok:true,data:{intent_id:intent.intent_id,expires_at:intent.expires_at,request_id:intent.request_id},meta:{open_protocol:2}});
+    } catch (error) { fail(res,error,"Direct intent failed"); }
+  });
+
   router.post("/thread/direct", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
@@ -2053,7 +2071,20 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null,request:req });
       if (!otherUserId) throw new Error("other_user_id is required.");
       if (viewer.effectiveUserId === otherUserId) throw new Error("Pick someone else to message.");
-      const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId });
+      const hasField = (key) => Object.prototype.hasOwnProperty.call(req.body || {}, key);
+      if (hasField("open_operation_id")) throw Object.assign(new Error("Reload Messages to use the supported open-intent protocol."), { status: 409 });
+      const hasIntent = hasField("open_intent_id");
+      const hasProtocol = hasField("open_protocol");
+      const intentId = req.body?.open_intent_id;
+      if (hasIntent || hasProtocol) {
+        if (!hasIntent || !hasProtocol || typeof intentId !== "string" || !isUuid(intentId)
+            || intentId.trim() !== intentId || req.body.open_protocol !== 2) {
+          throw Object.assign(new Error("Invalid open intent protocol."), { status: 422 });
+        }
+      }
+      const data = hasIntent
+        ? await runRpc("msg_consume_direct_open_intent", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId, p_intent_id: intentId })
+        : await runRpc("msg_get_or_create_direct_thread", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId });
       const thread = Array.isArray(data) ? data[0] : data;
       const threadId = String(thread?.id || thread?.thread_id || "").trim();
       if (!isUuid(threadId)) throw Object.assign(new Error("Direct conversation could not be resolved."), { status: 502 });

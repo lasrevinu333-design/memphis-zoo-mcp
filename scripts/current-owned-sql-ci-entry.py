@@ -2,10 +2,14 @@ from pathlib import Path
 import json,hashlib,subprocess,shutil,os,sys
 import argparse
 parser=argparse.ArgumentParser(description='Explicit owned SQL CI fixture, never an app build, deployment, or production migration')
-parser.add_argument('--consumer',choices=['manager','owner','read-only','taxonomy'],required=True)
+parser.add_argument('--consumer',choices=['manager','owner','read-only','taxonomy','accepted-seven'],required=True)
 parser.add_argument('--runtime',required=True,help='new absolute owned directory on an existing secondary disk')
 parser.add_argument('--evidence',required=True,help='new absolute durable evidence directory')
+parser.add_argument('--recorded-history',help='exact retained history; required only for the isolated accepted-seven consumer')
+parser.add_argument('--current-week-regression',action='store_true',help='Existing retained-pattern current-week qualification; pending seven transition stays held')
 args=parser.parse_args()
+assert (args.recorded_history is not None)==(args.consumer=='accepted-seven')
+assert not args.current_week_regression or args.consumer=='accepted-seven'
 B=Path(__file__).resolve().parent.parent
 T=Path(args.runtime);E=Path(args.evidence)
 for p in [T,E]:
@@ -13,8 +17,8 @@ for p in [T,E]:
  assert p.parent.stat().st_uid==os.getuid(), 'Caller must provide its own parent directory'
 fs=subprocess.check_output(['stat','-f','-c','%T',str(T.parent)],text=True).strip()
 assert fs not in ['tmpfs','ramfs','overlayfs'] and T.parent.stat().st_dev!=Path('/').stat().st_dev,'Existing secondary disk required; no root/tmpfs fallback'
-count=310 if args.consumer=='taxonomy' else 308
-consumer={'manager':'manager-scheduler-database-tests.mjs','owner':'owner-actions-database-tests.mjs','read-only':'read-only-database-authority-tests.mjs','taxonomy':'completion-taxonomy-database-tests.mjs'}[args.consumer]
+count=310 if args.consumer in ['taxonomy','accepted-seven'] else 308
+consumer={'manager':'manager-scheduler-database-tests.mjs','owner':'owner-actions-database-tests.mjs','read-only':'read-only-database-authority-tests.mjs','taxonomy':'completion-taxonomy-database-tests.mjs','accepted-seven':'accepted-seven-update-database-tests.mjs'}[args.consumer]
 constructor='current-qualification-rebuild.py' if count==310 else 'current-candidate-rebuild.py'
 label=args.consumer
 S=T/'source';O=E.parent
@@ -30,7 +34,7 @@ assert sha(B/'certs/supabase-root-2021-ca.pem')=='700723581420dd1ac98fd7e9ac529f
 # Explicit source stage for the selected original admitted308/310 constructor. The current
 # source-only fixture helper and 317-file directory are not execution grants.
 T.mkdir(mode=0o700);S.mkdir(mode=0o700)
-for n in ['scripts','src','release','config','certs']:
+for n in ['scripts','src','release','config','certs']+(['proposals'] if args.consumer=='accepted-seven' else []):
  assert not any(p.is_symlink() for p in (B/n).rglob('*')), 'Source symlinks refused'
  shutil.copytree(B/n,S/n,symlinks=False)
 for n in ['package.json','package-lock.json']:shutil.copy2(B/n,S/n)
@@ -43,11 +47,31 @@ subprocess.run(['bwrap','--unshare-net','--die-with-parent','--ro-bind','/','/',
 (S/'supabase/migrations').mkdir(parents=True);(S/'supabase/canonical').mkdir()
 for row in rows:shutil.copy2(B/'supabase/migrations'/row['name'],S/'supabase/migrations'/row['name'])
 shutil.copy2(manifest,S/'supabase/canonical/migration-replay-order.json')
+consumer_args=[]
+if args.consumer=='accepted-seven':
+ history=Path(args.recorded_history);assert history.is_absolute() and history.resolve()==history and history.is_file() and not history.is_symlink()
+ assert sha(history)=='a760bc82ee4f15806e84b856a7b7d9920e86d737f89a56d72635da16972d6f65'
+ shutil.copy2(history,T/'recorded-history.json')
+ profile=B/'scripts/fixtures/accepted-seven-current-week-forward.json'
+ assert sha(profile)=='46077a4a1905a8249de45d3440011d0b16f294ead973ece82dfdc14ddcd4b37e'
+ selected=json.loads(profile.read_text());assert selected['constructor_migrations']==310 and selected['production'] is False and selected['release_admission'] is False
+ actual=sorted(p.name for p in (B/'supabase/migrations').glob('*.sql'))
+ assert actual[310:]==[r['name'] for r in selected['forward']+selected['deferred']] and len(actual)==322
+ forward=T/'accepted-seven-forward';forward.mkdir(mode=0o700)
+ for row in selected['forward']+selected['deferred']:
+  original=B/'supabase/migrations'/row['name'];assert sha(original)==row['sha256'] and original.stat().st_size==row['bytes']
+  if row in selected['forward']:shutil.copy2(original,forward/row['name'])
+ for row in selected['prerequisites']:
+  original=B/row['path'];assert sha(original)==row['sha256'] and original.stat().st_size==row['bytes']
+  shutil.copy2(original,forward/row['name'])
+ (forward/'manifest.json').write_text(json.dumps({'schema':'custodial.accepted-seven-current319-forward.v1','rows':selected['forward'],'prerequisites':selected['prerequisites'],'deferred_not_applied':selected['deferred'],'production':False},indent=2)+'\n')
+ consumer_args=[str(T/'seven-result'),str(T/'recorded-history.json')]
+ if args.current_week_regression:consumer_args.append('--current-week-regression')
 source=B/'scripts/fixtures/custodial-pg-wire-relay.c';assert sha(source)=='5bd54bf0f8a7557fbb9f4867bfdf380feabbdfe73e8040d3f1f2540c8d42a732';relay=T/'custodial-pg-wire-relay'
 subprocess.run(['cc','-static','-O2','-Wall','-Wextra','-o',str(relay),str(source)],check=True)
 assert relay.read_bytes()[:4]==b'\x7fELF'
 for n in ['home','tmp']:(T/n).mkdir(mode=0o700)
-spec={'schema':f'custodial.current{count}-local-ci-consumer.v1','script':consumer,'args':[],'relay':str(relay),'relay_sha256':sha(relay),'runtime':str(T)}
+spec={'schema':f'custodial.current{count}-local-ci-consumer.v1','script':consumer,'args':consumer_args,'relay':str(relay),'relay_sha256':sha(relay),'runtime':str(T)}
 p=T/'consumer-spec.json';p.write_text(json.dumps(spec,indent=2)+'\n');p.chmod(0o600)
 source_rows=[{'path':str(p.relative_to(S)),'sha256':sha(p)}for p in sorted(S.rglob('*'))if p.is_file()]
 (O/(E.name+'-SOURCE.json')).write_text(json.dumps({'scope':f'Original current{count} constructor and current {consumer} assertions; isolated local CI qualification only','files':source_rows,'relay_source_sha256':sha(source),'production':False,'release_admission':False},indent=2)+'\n')

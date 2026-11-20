@@ -1,0 +1,3391 @@
+{
+  "schema": "custodial.seven-person-static-review.v1",
+  "preparedAt": "2026-11-15T03:02:38.223Z",
+  "timezone": "America/Chicago",
+  "status": "REVIEW_CANDIDATE_WITH_EXPLICIT_EARLY_OWNERSHIP_HOLD",
+  "effectiveStart": null,
+  "published": false,
+  "liveScheduleChanged": false,
+  "sourceRoot": "/mnt/ai_models/custodial-mod-name-fix-20261114",
+  "referenceWeekDigest": "85ad93db39597cffc033992ec74d5eea98612ce9a8388a9e93f5566f4e38bc4c",
+  "roster": [
+    {
+      "name": "Alijah Collins",
+      "employeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+      "slotId": "36829381-70d7-521b-9f14-bad0af16ba87"
+    },
+    {
+      "name": "Derrick Henderson",
+      "employeeId": "8067cca2-7487-4589-ba7c-aa442e135045",
+      "slotId": "e91b7a47-f20f-5777-a5d3-9c0ce8778df5"
+    },
+    {
+      "name": "Jada Rawlings",
+      "employeeId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204"
+    },
+    {
+      "name": "Karen Robinson",
+      "employeeId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+      "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f"
+    },
+    {
+      "name": "Kathy Phelps",
+      "employeeId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+      "slotId": "55e5939c-175c-5026-94fd-c4350d538922"
+    },
+    {
+      "name": "Tammy Miller",
+      "employeeId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+      "slotId": "4a5a83ca-d297-5a30-8344-db08d05b978c"
+    },
+    {
+      "name": "Xavier Green",
+      "employeeId": "1318b295-fd70-4e78-8828-62c29302f96f",
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f"
+    }
+  ],
+  "ratings": [
+    {
+      "group": "Teton and restrooms",
+      "score": 10
+    },
+    {
+      "group": "Zambezi and restrooms",
+      "score": 9
+    },
+    {
+      "group": "Expo and restrooms",
+      "score": 8
+    },
+    {
+      "group": "Courtyard restrooms",
+      "score": 7
+    },
+    {
+      "group": "Cat House Cafe restrooms",
+      "score": 7
+    },
+    {
+      "group": "Breezeway restrooms",
+      "score": 6
+    },
+    {
+      "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+      "score": 8
+    },
+    {
+      "group": "Nocturnal",
+      "score": 3
+    },
+    {
+      "group": "Primate Canyon",
+      "score": 1
+    },
+    {
+      "group": "Cat Country",
+      "score": 2
+    },
+    {
+      "group": "Primate Pavilion",
+      "score": 3
+    },
+    {
+      "group": "China and restrooms",
+      "score": 7
+    },
+    {
+      "group": "Event Center and restrooms",
+      "score": 5
+    },
+    {
+      "group": "Herpetarium",
+      "score": 5
+    },
+    {
+      "group": "Komodos",
+      "score": 4
+    },
+    {
+      "group": "Tropical Birds",
+      "score": 5
+    },
+    {
+      "group": "Aquarium",
+      "score": 5
+    },
+    {
+      "group": "MemMex restrooms",
+      "score": 7
+    },
+    {
+      "group": "Northwest Passage",
+      "score": 7
+    },
+    {
+      "group": "East End restrooms",
+      "score": 7
+    },
+    {
+      "group": "West Admin and restrooms",
+      "score": 7
+    },
+    {
+      "group": "East Admin and restrooms",
+      "score": 5
+    },
+    {
+      "group": "Bonobos restrooms",
+      "score": 8
+    }
+  ],
+  "days": [
+    {
+      "day": "monday",
+      "weekday": 1,
+      "employees": [
+        {
+          "name": "Tammy Miller",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "08:30",
+            "end": "09:30"
+          },
+          "baseGroups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ],
+          "basePoints": 24
+        },
+        {
+          "name": "Karen Robinson",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "09:30",
+            "end": "10:30"
+          },
+          "baseGroups": [
+            "Breezeway restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Primate Pavilion",
+            "Zambezi and restrooms"
+          ],
+          "basePoints": 26
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "11:30",
+            "end": "12:30"
+          },
+          "baseGroups": [
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "West Admin and restrooms"
+          ],
+          "basePoints": 19
+        },
+        {
+          "name": "Jada Rawlings",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "baseGroups": [
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Komodos",
+            "Tropical Birds"
+          ],
+          "basePoints": 23
+        },
+        {
+          "name": "Xavier Green",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "12:30",
+            "end": "13:30"
+          },
+          "baseGroups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms"
+          ],
+          "basePoints": 20
+        },
+        {
+          "name": "Derrick Henderson",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "basePoints": 24
+        }
+      ],
+      "phases": [
+        {
+          "start": "08:00",
+          "end": "14:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Karen Robinson",
+            "Cat Country": "Jada Rawlings",
+            "Cat House Cafe restrooms": "Jada Rawlings",
+            "China and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Alijah Collins",
+            "East Admin and restrooms": "Alijah Collins",
+            "East End restrooms": "Tammy Miller",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Karen Robinson",
+            "Event Center and restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Jada Rawlings",
+            "Komodos": "Jada Rawlings",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Derrick Henderson",
+            "Northwest Passage": "Tammy Miller",
+            "Primate Canyon": "Derrick Henderson",
+            "Primate Pavilion": "Karen Robinson",
+            "Teton and restrooms": "Tammy Miller",
+            "Tropical Birds": "Jada Rawlings",
+            "West Admin and restrooms": "Alijah Collins",
+            "Zambezi and restrooms": "Karen Robinson"
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Jada Rawlings",
+            "Cat Country": "Jada Rawlings",
+            "Cat House Cafe restrooms": "Jada Rawlings",
+            "China and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Alijah Collins",
+            "East Admin and restrooms": "Alijah Collins",
+            "East End restrooms": "Derrick Henderson",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Jada Rawlings",
+            "Event Center and restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Jada Rawlings",
+            "Komodos": "Jada Rawlings",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Derrick Henderson",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Teton and restrooms": "Xavier Green",
+            "Tropical Birds": "Jada Rawlings",
+            "West Admin and restrooms": "Alijah Collins",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Derrick Henderson",
+            "Cat Country": "Alijah Collins",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Alijah Collins",
+            "East Admin and restrooms": "Alijah Collins",
+            "East End restrooms": "Derrick Henderson",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Alijah Collins",
+            "Event Center and restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Derrick Henderson",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Teton and restrooms": "Xavier Green",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Alijah Collins",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Derrick Henderson",
+            "Cat Country": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Derrick Henderson",
+            "East Admin and restrooms": "Derrick Henderson",
+            "East End restrooms": "Derrick Henderson",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Event Center and restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Derrick Henderson",
+            "Northwest Passage": "Derrick Henderson",
+            "Primate Canyon": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Teton and restrooms": "Xavier Green",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Xavier Green"
+          }
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Tammy Miller",
+          "coverer": "Karen Robinson",
+          "start": "08:30",
+          "end": "09:30",
+          "groups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Karen Robinson",
+          "coverer": "Derrick Henderson",
+          "start": "09:30",
+          "end": "10:30",
+          "groups": [
+            "Breezeway restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Primate Pavilion",
+            "Zambezi and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Alijah Collins",
+          "coverer": "Xavier Green",
+          "start": "11:30",
+          "end": "12:30",
+          "groups": [
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "West Admin and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Jada Rawlings",
+          "coverer": "Alijah Collins",
+          "start": "10:00",
+          "end": "11:00",
+          "groups": [
+            "Cat House Cafe restrooms",
+            "Cat Country",
+            "Herpetarium",
+            "Komodos",
+            "Tropical Birds"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Xavier Green",
+          "coverer": "Jada Rawlings",
+          "start": "12:30",
+          "end": "13:30",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Derrick Henderson",
+          "coverer": "Karen Robinson",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "prearrivalPolicy": "UNRESOLVED",
+      "variant": "OWNER_SELECTED_KAREN_COVERS_TAMMY_0830_0930",
+      "sourcePlanDigest": null,
+      "priorSourcePlanDigest": "0a5c107dd90fcf52ab0c91a8cde1676047278ebba6d0e0c4a12ac78d1b5f0794",
+      "ownerDirectedLunchChange": {
+        "recipient": "Tammy Miller",
+        "fromHelper": "Xavier Green",
+        "toHelper": "Karen Robinson",
+        "start": "08:30",
+        "end": "09:30",
+        "groups": [
+          "East End restrooms",
+          "Northwest Passage",
+          "Teton and restrooms"
+        ],
+        "authority": "Eric selects the proposed Monday Karen alternative,2026-11-15T03:35:28Z, relayed by Sophia",
+        "optionAppliedToCandidate": true
+      }
+    },
+    {
+      "day": "tuesday",
+      "weekday": 2,
+      "sourcePath": "sources/custodial_manual_tuesday_working_draft.json",
+      "employees": [
+        {
+          "name": "Tammy Miller",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "08:30",
+            "end": "09:30"
+          },
+          "baseGroups": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ],
+          "basePoints": 24
+        },
+        {
+          "name": "Karen Robinson",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "09:30",
+            "end": "10:30"
+          },
+          "baseGroups": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds"
+          ],
+          "basePoints": 23
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "basePoints": 23
+        },
+        {
+          "name": "Jada Rawlings",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "baseGroups": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos"
+          ],
+          "basePoints": 23
+        },
+        {
+          "name": "Derrick Henderson",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ],
+          "basePoints": 23
+        },
+        {
+          "name": "Xavier Green",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "12:30",
+            "end": "13:30"
+          },
+          "baseGroups": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ],
+          "basePoints": 20
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Tammy Miller",
+          "coverer": "Karen Robinson",
+          "start": "08:30",
+          "end": "09:30",
+          "groups": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Karen Robinson",
+          "coverer": "Tammy Miller",
+          "start": "09:30",
+          "end": "10:30",
+          "groups": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Jada Rawlings",
+          "coverer": "Xavier Green",
+          "start": "10:00",
+          "end": "11:00",
+          "groups": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Kathy Phelps",
+          "coverer": "Tammy Miller",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Derrick Henderson",
+          "coverer": "Karen Robinson",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Xavier Green",
+          "coverer": "Jada Rawlings",
+          "start": "12:30",
+          "end": "13:30",
+          "groups": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "transfers": [
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Zambezi and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Primate Pavilion",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Breezeway restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Tropical Birds",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Tammy Miller",
+          "to": "Jada Rawlings",
+          "group": "Teton and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Tammy Miller",
+          "to": "Jada Rawlings",
+          "group": "Northwest Passage",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Tammy Miller",
+          "to": "Jada Rawlings",
+          "group": "East End restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "East Admin and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "West Admin and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Courtyard restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Nocturnal",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Primate Canyon",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Zambezi and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Primate Pavilion",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Breezeway restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Tropical Birds",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Cat House Cafe restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Herpetarium",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Event Center and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Cat Country",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Komodos",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Teton and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "Northwest Passage",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Jada Rawlings",
+          "to": "Xavier Green",
+          "group": "East End restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "China and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Bonobos restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "East Admin and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "West Admin and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Courtyard restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Nocturnal",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Primate Canyon",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Zambezi and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Primate Pavilion",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Breezeway restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "16:00",
+          "from": "Derrick Henderson",
+          "to": "Xavier Green",
+          "group": "Tropical Birds",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        }
+      ],
+      "phases": [
+        {
+          "start": "08:00",
+          "owners": {
+            "Teton and restrooms": "Tammy Miller",
+            "Northwest Passage": "Tammy Miller",
+            "East End restrooms": "Tammy Miller",
+            "Zambezi and restrooms": "Karen Robinson",
+            "Primate Pavilion": "Karen Robinson",
+            "Breezeway restrooms": "Karen Robinson",
+            "Tropical Birds": "Karen Robinson",
+            "East Admin and restrooms": "Kathy Phelps",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Courtyard restrooms": "Kathy Phelps",
+            "Nocturnal": "Kathy Phelps",
+            "Primate Canyon": "Kathy Phelps",
+            "Cat House Cafe restrooms": "Jada Rawlings",
+            "Herpetarium": "Jada Rawlings",
+            "Event Center and restrooms": "Jada Rawlings",
+            "Cat Country": "Jada Rawlings",
+            "Komodos": "Jada Rawlings",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green"
+          },
+          "end": "14:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "14:00",
+          "owners": {
+            "Teton and restrooms": "Jada Rawlings",
+            "Northwest Passage": "Jada Rawlings",
+            "East End restrooms": "Jada Rawlings",
+            "Zambezi and restrooms": "Kathy Phelps",
+            "Primate Pavilion": "Kathy Phelps",
+            "Breezeway restrooms": "Kathy Phelps",
+            "Tropical Birds": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Courtyard restrooms": "Kathy Phelps",
+            "Nocturnal": "Kathy Phelps",
+            "Primate Canyon": "Kathy Phelps",
+            "Cat House Cafe restrooms": "Jada Rawlings",
+            "Herpetarium": "Jada Rawlings",
+            "Event Center and restrooms": "Jada Rawlings",
+            "Cat Country": "Jada Rawlings",
+            "Komodos": "Jada Rawlings",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green"
+          },
+          "end": "15:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Jada Rawlings": 47,
+            "Kathy Phelps": 46,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "15:00",
+          "owners": {
+            "Teton and restrooms": "Xavier Green",
+            "Northwest Passage": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Breezeway restrooms": "Derrick Henderson",
+            "Tropical Birds": "Derrick Henderson",
+            "East Admin and restrooms": "Derrick Henderson",
+            "West Admin and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Derrick Henderson",
+            "Nocturnal": "Derrick Henderson",
+            "Primate Canyon": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Cat Country": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green"
+          },
+          "end": "16:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Xavier Green": 67,
+            "Derrick Henderson": 69
+          }
+        },
+        {
+          "start": "16:00",
+          "owners": {
+            "Teton and restrooms": "Xavier Green",
+            "Northwest Passage": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Xavier Green",
+            "Primate Pavilion": "Xavier Green",
+            "Breezeway restrooms": "Xavier Green",
+            "Tropical Birds": "Xavier Green",
+            "East Admin and restrooms": "Xavier Green",
+            "West Admin and restrooms": "Xavier Green",
+            "Courtyard restrooms": "Xavier Green",
+            "Nocturnal": "Xavier Green",
+            "Primate Canyon": "Xavier Green",
+            "Cat House Cafe restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Cat Country": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "China and restrooms": "Xavier Green",
+            "Bonobos restrooms": "Xavier Green",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green"
+          },
+          "end": "17:00",
+          "zooWideCoverage": true,
+          "points": {
+            "Xavier Green": 136
+          }
+        }
+      ],
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "prearrivalPolicy": "UNRESOLVED",
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "coveragePurpose": "INHERITED_AREAS_ARE_ALERT_AND_ISSUE_CUSTODY_NOT_EXTRA_MANDATORY_CLEANING"
+    },
+    {
+      "day": "wednesday",
+      "weekday": 3,
+      "sourcePath": "sources/custodial_manual_wednesday_working_draft.json",
+      "employees": [
+        {
+          "name": "Tammy Miller",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "08:30",
+            "end": "09:30"
+          },
+          "baseGroups": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ],
+          "basePoints": 24
+        },
+        {
+          "name": "Karen Robinson",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "09:30",
+            "end": "10:30"
+          },
+          "baseGroups": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "basePoints": 27
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country"
+          ],
+          "basePoints": 29
+        },
+        {
+          "name": "Derrick Henderson",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms"
+          ],
+          "basePoints": 27
+        },
+        {
+          "name": "Xavier Green",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "12:30",
+            "end": "13:30"
+          },
+          "baseGroups": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ],
+          "basePoints": 29
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Tammy Miller",
+          "coverer": "Karen Robinson",
+          "start": "08:30",
+          "end": "09:30",
+          "groups": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Karen Robinson",
+          "coverer": "Derrick Henderson",
+          "start": "09:30",
+          "end": "10:30",
+          "groups": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds",
+            "Nocturnal",
+            "Primate Canyon"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Kathy Phelps",
+          "coverer": "Karen Robinson",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Derrick Henderson",
+          "coverer": "Xavier Green",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Xavier Green",
+          "coverer": "Derrick Henderson",
+          "start": "12:30",
+          "end": "13:30",
+          "groups": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "transfers": [
+        {
+          "time": "14:00",
+          "from": "Tammy Miller",
+          "to": "Derrick Henderson",
+          "group": "Teton and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Derrick Henderson",
+          "group": "Zambezi and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Primate Pavilion",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Breezeway restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Nocturnal",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Primate Canyon",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Karen Robinson",
+          "to": "Kathy Phelps",
+          "group": "Tropical Birds",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Tammy Miller",
+          "to": "Xavier Green",
+          "group": "Northwest Passage",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "14:00",
+          "from": "Tammy Miller",
+          "to": "Xavier Green",
+          "group": "East End restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "East Admin and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Courtyard restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Primate Pavilion",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Breezeway restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Derrick Henderson",
+          "group": "Primate Canyon",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Xavier Green",
+          "group": "West Admin and restrooms",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Xavier Green",
+          "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Xavier Green",
+          "group": "Cat Country",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Xavier Green",
+          "group": "Nocturnal",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        },
+        {
+          "time": "15:00",
+          "from": "Kathy Phelps",
+          "to": "Xavier Green",
+          "group": "Tropical Birds",
+          "coverage": "INHERITED_ALERTS_AND_ISSUES_ONLY",
+          "createsMandatoryCleaningRoute": false
+        }
+      ],
+      "phases": [
+        {
+          "start": "08:00",
+          "owners": {
+            "Teton and restrooms": "Tammy Miller",
+            "Northwest Passage": "Tammy Miller",
+            "East End restrooms": "Tammy Miller",
+            "Zambezi and restrooms": "Karen Robinson",
+            "Primate Pavilion": "Karen Robinson",
+            "Breezeway restrooms": "Karen Robinson",
+            "Tropical Birds": "Karen Robinson",
+            "Nocturnal": "Karen Robinson",
+            "Primate Canyon": "Karen Robinson",
+            "East Admin and restrooms": "Kathy Phelps",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Courtyard restrooms": "Kathy Phelps",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Kathy Phelps",
+            "Cat Country": "Kathy Phelps",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Komodos": "Xavier Green"
+          },
+          "end": "14:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 27,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "14:00",
+          "owners": {
+            "Teton and restrooms": "Derrick Henderson",
+            "Northwest Passage": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Derrick Henderson",
+            "Primate Pavilion": "Kathy Phelps",
+            "Breezeway restrooms": "Kathy Phelps",
+            "Tropical Birds": "Kathy Phelps",
+            "Nocturnal": "Kathy Phelps",
+            "Primate Canyon": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Courtyard restrooms": "Kathy Phelps",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Kathy Phelps",
+            "Cat Country": "Kathy Phelps",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Komodos": "Xavier Green"
+          },
+          "end": "15:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Derrick Henderson": 46,
+            "Xavier Green": 43,
+            "Kathy Phelps": 47
+          }
+        },
+        {
+          "start": "15:00",
+          "owners": {
+            "Teton and restrooms": "Derrick Henderson",
+            "Northwest Passage": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Breezeway restrooms": "Derrick Henderson",
+            "Tropical Birds": "Xavier Green",
+            "Nocturnal": "Xavier Green",
+            "Primate Canyon": "Derrick Henderson",
+            "East Admin and restrooms": "Derrick Henderson",
+            "West Admin and restrooms": "Xavier Green",
+            "Courtyard restrooms": "Derrick Henderson",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Cat Country": "Xavier Green",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Komodos": "Xavier Green"
+          },
+          "end": "16:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Derrick Henderson": 68,
+            "Xavier Green": 68
+          }
+        },
+        {
+          "start": "16:00",
+          "owners": {
+            "Teton and restrooms": "Derrick Henderson",
+            "Northwest Passage": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Breezeway restrooms": "Derrick Henderson",
+            "Tropical Birds": "Xavier Green",
+            "Nocturnal": "Xavier Green",
+            "Primate Canyon": "Derrick Henderson",
+            "East Admin and restrooms": "Derrick Henderson",
+            "West Admin and restrooms": "Xavier Green",
+            "Courtyard restrooms": "Derrick Henderson",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Cat Country": "Xavier Green",
+            "China and restrooms": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "Expo and restrooms": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Aquarium": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Komodos": "Xavier Green"
+          },
+          "end": "17:00",
+          "zooWideCoverage": false,
+          "points": {
+            "Derrick Henderson": 68,
+            "Xavier Green": 68
+          }
+        }
+      ],
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "prearrivalPolicy": "UNRESOLVED",
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "coveragePurpose": "INHERITED_AREAS_ARE_ALERT_AND_ISSUE_CUSTODY_NOT_EXTRA_MANDATORY_CLEANING"
+    },
+    {
+      "day": "thursday",
+      "weekday": 4,
+      "employees": [
+        {
+          "name": "Tammy Miller",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "08:30",
+            "end": "09:30"
+          },
+          "baseGroups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "China and restrooms"
+          ],
+          "basePoints": 31
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "baseGroups": [
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)"
+          ],
+          "basePoints": 36
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "12:00",
+            "end": "13:00"
+          },
+          "baseGroups": [
+            "Breezeway restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "Zambezi and restrooms",
+            "Event Center and restrooms"
+          ],
+          "basePoints": 32
+        },
+        {
+          "name": "Derrick Henderson",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "11:00",
+            "end": "12:00"
+          },
+          "baseGroups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ],
+          "basePoints": 37
+        }
+      ],
+      "phases": [
+        {
+          "start": "07:00",
+          "end": "14:00",
+          "owners": {
+            "Aquarium": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Alijah Collins",
+            "Cat Country": "Kathy Phelps",
+            "Cat House Cafe restrooms": "Kathy Phelps",
+            "China and restrooms": "Tammy Miller",
+            "Courtyard restrooms": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "East End restrooms": "Tammy Miller",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Kathy Phelps",
+            "Event Center and restrooms": "Alijah Collins",
+            "Expo and restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Komodos": "Derrick Henderson",
+            "MemMex restrooms": "Derrick Henderson",
+            "Nocturnal": "Alijah Collins",
+            "Northwest Passage": "Tammy Miller",
+            "Primate Canyon": "Alijah Collins",
+            "Primate Pavilion": "Alijah Collins",
+            "Teton and restrooms": "Tammy Miller",
+            "Tropical Birds": "Alijah Collins",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "owners": {
+            "Aquarium": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Alijah Collins",
+            "Cat Country": "Kathy Phelps",
+            "Cat House Cafe restrooms": "Kathy Phelps",
+            "China and restrooms": "Alijah Collins",
+            "Courtyard restrooms": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "East End restrooms": "Kathy Phelps",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Kathy Phelps",
+            "Event Center and restrooms": "Alijah Collins",
+            "Expo and restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Komodos": "Derrick Henderson",
+            "MemMex restrooms": "Derrick Henderson",
+            "Nocturnal": "Alijah Collins",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Alijah Collins",
+            "Primate Pavilion": "Alijah Collins",
+            "Teton and restrooms": "Kathy Phelps",
+            "Tropical Birds": "Alijah Collins",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "owners": {
+            "Aquarium": "Derrick Henderson",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Alijah Collins",
+            "Cat Country": "Alijah Collins",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "China and restrooms": "Alijah Collins",
+            "Courtyard restrooms": "Derrick Henderson",
+            "East Admin and restrooms": "Derrick Henderson",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Alijah Collins",
+            "Event Center and restrooms": "Alijah Collins",
+            "Expo and restrooms": "Derrick Henderson",
+            "Herpetarium": "Derrick Henderson",
+            "Komodos": "Derrick Henderson",
+            "MemMex restrooms": "Derrick Henderson",
+            "Nocturnal": "Alijah Collins",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Alijah Collins",
+            "Primate Pavilion": "Alijah Collins",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Alijah Collins",
+            "West Admin and restrooms": "Derrick Henderson",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Tammy Miller",
+          "coverer": "Kathy Phelps",
+          "start": "08:30",
+          "end": "09:30",
+          "groups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "China and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Kathy Phelps",
+          "coverer": "Derrick Henderson",
+          "start": "10:00",
+          "end": "11:00",
+          "groups": [
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Alijah Collins",
+          "coverer": "Kathy Phelps",
+          "start": "12:00",
+          "end": "13:00",
+          "groups": [
+            "Breezeway restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "Zambezi and restrooms",
+            "Event Center and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Derrick Henderson",
+          "coverer": "Kathy Phelps",
+          "start": "11:00",
+          "end": "12:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "checkedWindow": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "prearrivalPolicy": "UNRESOLVED",
+      "variant": "OWNER_DIRECTED_THURSDAY_CHINA_TO_TAMMY_EDUCATION_TO_KATHY",
+      "priorSourcePlanDigest": "65b02d102f6a85ea5ff35fb569b6443886e98f43065067b09ad37ab4b0e94f4e",
+      "ownerDirectedChanges": [
+        {
+          "group": "China and restrooms",
+          "points": 7,
+          "from": "Alijah Collins",
+          "to": "Tammy Miller"
+        },
+        {
+          "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "points": 8,
+          "from": "Alijah Collins",
+          "to": "Kathy Phelps"
+        },
+        {
+          "group": "Event Center and restrooms",
+          "points": 5,
+          "from": "Derrick Henderson",
+          "to": "Alijah Collins",
+          "recipientEmployeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+          "recipientSlotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+          "canonicalRosterName": "Alijah Collins",
+          "normalLoads": {
+            "Tammy Miller": 31,
+            "Kathy Phelps": 36,
+            "Alijah Collins": 32,
+            "Derrick Henderson": 37
+          },
+          "shiftsUnchanged": true,
+          "lunchTimesAndHelpersUnchanged": true,
+          "retainedQualificationAndRestrictionCheck": "PASS"
+        }
+      ],
+      "sourcePlanDigest": null
+    },
+    {
+      "day": "friday",
+      "weekday": 5,
+      "employees": [
+        {
+          "name": "Tammy Miller",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "08:30",
+            "end": "09:30"
+          },
+          "baseGroups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ],
+          "basePoints": 24
+        },
+        {
+          "name": "Karen Robinson",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "09:30",
+            "end": "10:30"
+          },
+          "baseGroups": [
+            "Breezeway restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Pavilion",
+            "Zambezi and restrooms"
+          ],
+          "basePoints": 29
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Primate Canyon",
+            "West Admin and restrooms"
+          ],
+          "basePoints": 27
+        },
+        {
+          "name": "Jada Rawlings",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "baseGroups": [
+            "Bonobos restrooms",
+            "Cat Country",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "Komodos"
+          ],
+          "basePoints": 31
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "11:30",
+            "end": "12:30"
+          },
+          "baseGroups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Tropical Birds"
+          ],
+          "basePoints": 25
+        }
+      ],
+      "phases": [
+        {
+          "start": "07:00",
+          "end": "14:00",
+          "owners": {
+            "Aquarium": "Alijah Collins",
+            "Bonobos restrooms": "Jada Rawlings",
+            "Breezeway restrooms": "Karen Robinson",
+            "Cat Country": "Jada Rawlings",
+            "Cat House Cafe restrooms": "Kathy Phelps",
+            "China and restrooms": "Jada Rawlings",
+            "Courtyard restrooms": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "East End restrooms": "Tammy Miller",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Karen Robinson",
+            "Event Center and restrooms": "Jada Rawlings",
+            "Expo and restrooms": "Alijah Collins",
+            "Herpetarium": "Jada Rawlings",
+            "Komodos": "Jada Rawlings",
+            "MemMex restrooms": "Alijah Collins",
+            "Nocturnal": "Karen Robinson",
+            "Northwest Passage": "Tammy Miller",
+            "Primate Canyon": "Kathy Phelps",
+            "Primate Pavilion": "Karen Robinson",
+            "Teton and restrooms": "Tammy Miller",
+            "Tropical Birds": "Alijah Collins",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Zambezi and restrooms": "Karen Robinson"
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "owners": {
+            "Aquarium": "Alijah Collins",
+            "Bonobos restrooms": "Jada Rawlings",
+            "Breezeway restrooms": "Jada Rawlings",
+            "Cat Country": "Jada Rawlings",
+            "Cat House Cafe restrooms": "Kathy Phelps",
+            "China and restrooms": "Jada Rawlings",
+            "Courtyard restrooms": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "East End restrooms": "Kathy Phelps",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Jada Rawlings",
+            "Event Center and restrooms": "Jada Rawlings",
+            "Expo and restrooms": "Alijah Collins",
+            "Herpetarium": "Jada Rawlings",
+            "Komodos": "Jada Rawlings",
+            "MemMex restrooms": "Alijah Collins",
+            "Nocturnal": "Kathy Phelps",
+            "Northwest Passage": "Kathy Phelps",
+            "Primate Canyon": "Kathy Phelps",
+            "Primate Pavilion": "Kathy Phelps",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Alijah Collins",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "owners": {
+            "Aquarium": "Alijah Collins",
+            "Bonobos restrooms": "Alijah Collins",
+            "Breezeway restrooms": "Alijah Collins",
+            "Cat Country": "Alijah Collins",
+            "Cat House Cafe restrooms": "Alijah Collins",
+            "China and restrooms": "Alijah Collins",
+            "Courtyard restrooms": "Alijah Collins",
+            "East Admin and restrooms": "Alijah Collins",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Alijah Collins",
+            "Event Center and restrooms": "Alijah Collins",
+            "Expo and restrooms": "Alijah Collins",
+            "Herpetarium": "Alijah Collins",
+            "Komodos": "Alijah Collins",
+            "MemMex restrooms": "Alijah Collins",
+            "Nocturnal": "Alijah Collins",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Alijah Collins",
+            "Primate Pavilion": "Alijah Collins",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Alijah Collins",
+            "West Admin and restrooms": "Alijah Collins",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Tammy Miller",
+          "coverer": "Kathy Phelps",
+          "start": "08:30",
+          "end": "09:30",
+          "groups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Karen Robinson",
+          "coverer": "Kathy Phelps",
+          "start": "09:30",
+          "end": "10:30",
+          "groups": [
+            "Breezeway restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Pavilion",
+            "Zambezi and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Kathy Phelps",
+          "coverer": "Karen Robinson",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Primate Canyon",
+            "West Admin and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Jada Rawlings",
+          "coverer": "Alijah Collins",
+          "start": "10:00",
+          "end": "11:00",
+          "groups": [
+            "Bonobos restrooms",
+            "Cat Country",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "Komodos"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Alijah Collins",
+          "coverer": "Jada Rawlings",
+          "start": "11:30",
+          "end": "12:30",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Tropical Birds"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "checkedWindow": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "prearrivalPolicy": "UNRESOLVED",
+      "variant": "STRICT_NORMAL_GEOGRAPHY_WITH_ORIGINAL_FULL_HOUR_LUNCHES",
+      "sourcePlanDigest": "c95eb56a80469945e783a2f5bb555eb6070b7dfd0e30bada7f7788c68e3b5a35"
+    },
+    {
+      "day": "saturday",
+      "weekday": 6,
+      "employees": [
+        {
+          "name": "Alijah Collins",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "11:30",
+            "end": "12:30"
+          },
+          "baseGroups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ],
+          "basePoints": 24
+        },
+        {
+          "name": "Karen Robinson",
+          "shift": {
+            "start": "05:00",
+            "end": "14:00"
+          },
+          "lunch": {
+            "start": "09:30",
+            "end": "10:30"
+          },
+          "baseGroups": [
+            "Breezeway restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "Zambezi and restrooms"
+          ],
+          "basePoints": 31
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "West Admin and restrooms"
+          ],
+          "basePoints": 32
+        },
+        {
+          "name": "Jada Rawlings",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "baseGroups": [
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Event Center and restrooms"
+          ],
+          "basePoints": 20
+        },
+        {
+          "name": "Xavier Green",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "12:30",
+            "end": "13:30"
+          },
+          "baseGroups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Komodos",
+            "Herpetarium"
+          ],
+          "basePoints": 29
+        }
+      ],
+      "phases": [
+        {
+          "start": "08:00",
+          "end": "14:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Jada Rawlings",
+            "Breezeway restrooms": "Karen Robinson",
+            "Cat Country": "Kathy Phelps",
+            "Cat House Cafe restrooms": "Kathy Phelps",
+            "China and restrooms": "Jada Rawlings",
+            "Courtyard restrooms": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Karen Robinson",
+            "Event Center and restrooms": "Jada Rawlings",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Kathy Phelps",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Kathy Phelps",
+            "Primate Pavilion": "Karen Robinson",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Karen Robinson",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Zambezi and restrooms": "Karen Robinson"
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Jada Rawlings",
+            "Breezeway restrooms": "Jada Rawlings",
+            "Cat Country": "Kathy Phelps",
+            "Cat House Cafe restrooms": "Kathy Phelps",
+            "China and restrooms": "Jada Rawlings",
+            "Courtyard restrooms": "Kathy Phelps",
+            "East Admin and restrooms": "Kathy Phelps",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Event Center and restrooms": "Jada Rawlings",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Kathy Phelps",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Kathy Phelps",
+            "Primate Pavilion": "Kathy Phelps",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Kathy Phelps",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Xavier Green",
+            "Breezeway restrooms": "Alijah Collins",
+            "Cat Country": "Xavier Green",
+            "Cat House Cafe restrooms": "Xavier Green",
+            "China and restrooms": "Alijah Collins",
+            "Courtyard restrooms": "Alijah Collins",
+            "East Admin and restrooms": "Alijah Collins",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Xavier Green",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Xavier Green",
+            "Primate Pavilion": "Alijah Collins",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Alijah Collins",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Xavier Green",
+            "Breezeway restrooms": "Xavier Green",
+            "Cat Country": "Xavier Green",
+            "Cat House Cafe restrooms": "Xavier Green",
+            "China and restrooms": "Xavier Green",
+            "Courtyard restrooms": "Xavier Green",
+            "East Admin and restrooms": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Xavier Green",
+            "Northwest Passage": "Xavier Green",
+            "Primate Canyon": "Xavier Green",
+            "Primate Pavilion": "Xavier Green",
+            "Teton and restrooms": "Xavier Green",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Xavier Green"
+          }
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Alijah Collins",
+          "coverer": "Jada Rawlings",
+          "start": "11:30",
+          "end": "12:30",
+          "groups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Karen Robinson",
+          "coverer": "Xavier Green",
+          "start": "09:30",
+          "end": "10:30",
+          "groups": [
+            "Breezeway restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "Zambezi and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Kathy Phelps",
+          "coverer": "Xavier Green",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "West Admin and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Jada Rawlings",
+          "coverer": "Alijah Collins",
+          "start": "10:00",
+          "end": "11:00",
+          "groups": [
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Event Center and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Xavier Green",
+          "coverer": "Alijah Collins",
+          "start": "12:30",
+          "end": "13:30",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Komodos",
+            "Herpetarium"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "prearrivalPolicy": "UNRESOLVED",
+      "variant": "OWNER_DIRECTED_SATURDAY_KOMODOS_HERPETARIUM_TO_XAVIER",
+      "priorSourcePlanDigest": "15f5da232509789bcfe515938cdc9152491dbe1d9f65b2cd4859669618a832d3",
+      "sourcePlanDigest": null,
+      "ownerDirectedChanges": [
+        {
+          "group": "Komodos",
+          "points": 4,
+          "from": "Jada Rawlings",
+          "to": "Xavier Green"
+        },
+        {
+          "group": "Herpetarium",
+          "points": 5,
+          "from": "Jada Rawlings",
+          "to": "Xavier Green"
+        }
+      ]
+    },
+    {
+      "day": "sunday",
+      "weekday": 0,
+      "employees": [
+        {
+          "name": "Alijah Collins",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "11:30",
+            "end": "12:30"
+          },
+          "baseGroups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "basePoints": 33
+        },
+        {
+          "name": "Jada Rawlings",
+          "shift": {
+            "start": "06:00",
+            "end": "15:00"
+          },
+          "lunch": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "baseGroups": [
+            "Breezeway restrooms",
+            "Cat Country",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Nocturnal",
+            "Tropical Birds",
+            "West Admin and restrooms"
+          ],
+          "basePoints": 35
+        },
+        {
+          "name": "Derrick Henderson",
+          "shift": {
+            "start": "07:00",
+            "end": "16:00"
+          },
+          "lunch": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "baseGroups": [
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Primate Canyon",
+            "Primate Pavilion"
+          ],
+          "basePoints": 34
+        },
+        {
+          "name": "Xavier Green",
+          "shift": {
+            "start": "08:00",
+            "end": "17:00"
+          },
+          "lunch": {
+            "start": "12:30",
+            "end": "13:30"
+          },
+          "baseGroups": [
+            "Aquarium",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ],
+          "basePoints": 34
+        }
+      ],
+      "phases": [
+        {
+          "start": "08:00",
+          "end": "15:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Jada Rawlings",
+            "Cat Country": "Jada Rawlings",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Jada Rawlings",
+            "East Admin and restrooms": "Jada Rawlings",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Derrick Henderson",
+            "Event Center and restrooms": "Xavier Green",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Jada Rawlings",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Jada Rawlings",
+            "West Admin and restrooms": "Jada Rawlings",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Derrick Henderson",
+            "Breezeway restrooms": "Xavier Green",
+            "Cat Country": "Derrick Henderson",
+            "Cat House Cafe restrooms": "Derrick Henderson",
+            "China and restrooms": "Derrick Henderson",
+            "Courtyard restrooms": "Derrick Henderson",
+            "East Admin and restrooms": "Alijah Collins",
+            "East End restrooms": "Alijah Collins",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Derrick Henderson",
+            "Event Center and restrooms": "Xavier Green",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Derrick Henderson",
+            "Northwest Passage": "Alijah Collins",
+            "Primate Canyon": "Derrick Henderson",
+            "Primate Pavilion": "Derrick Henderson",
+            "Teton and restrooms": "Alijah Collins",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Alijah Collins",
+            "Zambezi and restrooms": "Alijah Collins"
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "owners": {
+            "Aquarium": "Xavier Green",
+            "Bonobos restrooms": "Xavier Green",
+            "Breezeway restrooms": "Xavier Green",
+            "Cat Country": "Xavier Green",
+            "Cat House Cafe restrooms": "Xavier Green",
+            "China and restrooms": "Xavier Green",
+            "Courtyard restrooms": "Xavier Green",
+            "East Admin and restrooms": "Xavier Green",
+            "East End restrooms": "Xavier Green",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)": "Xavier Green",
+            "Event Center and restrooms": "Xavier Green",
+            "Expo and restrooms": "Xavier Green",
+            "Herpetarium": "Xavier Green",
+            "Komodos": "Xavier Green",
+            "MemMex restrooms": "Xavier Green",
+            "Nocturnal": "Xavier Green",
+            "Northwest Passage": "Xavier Green",
+            "Primate Canyon": "Xavier Green",
+            "Primate Pavilion": "Xavier Green",
+            "Teton and restrooms": "Xavier Green",
+            "Tropical Birds": "Xavier Green",
+            "West Admin and restrooms": "Xavier Green",
+            "Zambezi and restrooms": "Xavier Green"
+          }
+        }
+      ],
+      "lunches": [
+        {
+          "recipient": "Alijah Collins",
+          "coverer": "Derrick Henderson",
+          "start": "11:30",
+          "end": "12:30",
+          "groups": [
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Jada Rawlings",
+          "coverer": "Xavier Green",
+          "start": "10:00",
+          "end": "11:00",
+          "groups": [
+            "Breezeway restrooms",
+            "Cat Country",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Nocturnal",
+            "Tropical Birds",
+            "West Admin and restrooms"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Derrick Henderson",
+          "coverer": "Alijah Collins",
+          "start": "10:30",
+          "end": "11:30",
+          "groups": [
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Primate Canyon",
+            "Primate Pavilion"
+          ],
+          "retainsOwnBase": true
+        },
+        {
+          "recipient": "Xavier Green",
+          "coverer": "Alijah Collins",
+          "start": "12:30",
+          "end": "13:30",
+          "groups": [
+            "Aquarium",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ],
+          "retainsOwnBase": true
+        }
+      ],
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "policy0945": "OWNER_APPROVED_NO_CHANGEOVER",
+      "prearrivalPolicy": "UNRESOLVED",
+      "variant": "STRICT_NORMAL_GEOGRAPHY_WITH_ORIGINAL_FULL_HOUR_LUNCHES",
+      "sourcePlanDigest": "d9f0102a1598bc53c48a66ffa81da5c0f5967b5416c0147fecaa5f9ee016a51d"
+    }
+  ],
+  "audits": [
+    {
+      "day": "monday",
+      "staff": 6,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 6,
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Tropical Birds",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    },
+    {
+      "day": "tuesday",
+      "staff": 6,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 6,
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    },
+    {
+      "day": "wednesday",
+      "staff": 5,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 5,
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "08:00",
+          "groups": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    },
+    {
+      "day": "thursday",
+      "staff": 4,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 4,
+      "checkedWindow": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Breezeway restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "West Admin and restrooms",
+            "Zambezi and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Breezeway restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Tropical Birds",
+            "Zambezi and restrooms"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    },
+    {
+      "day": "friday",
+      "staff": 5,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 5,
+      "checkedWindow": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Primate Canyon",
+            "Tropical Birds",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Tropical Birds"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    },
+    {
+      "day": "saturday",
+      "staff": 5,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 5,
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "05:00",
+          "end": "06:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat Country",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "Courtyard restrooms",
+            "East Admin and restrooms",
+            "East End restrooms",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Nocturnal",
+            "Northwest Passage",
+            "Primate Canyon",
+            "Teton and restrooms",
+            "West Admin and restrooms"
+          ]
+        },
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "East End restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Northwest Passage",
+            "Teton and restrooms"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Aquarium",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    },
+    {
+      "day": "sunday",
+      "staff": 4,
+      "ownershipMinuteChecks": 12420,
+      "fullHourLunches": 4,
+      "checkedWindow": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "earlyOwnershipUnresolved": [
+        {
+          "start": "06:00",
+          "end": "07:00",
+          "groups": [
+            "Aquarium",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "China and restrooms",
+            "East End restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms",
+            "Northwest Passage",
+            "Primate Canyon",
+            "Primate Pavilion",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ]
+        },
+        {
+          "start": "07:00",
+          "end": "08:00",
+          "groups": [
+            "Aquarium",
+            "Event Center and restrooms",
+            "Expo and restrooms",
+            "Herpetarium",
+            "Komodos",
+            "MemMex restrooms"
+          ]
+        }
+      ],
+      "emptyNormalAssignments": [],
+      "normalRestrictions": "PASS",
+      "mandatoryAreas": "PASS",
+      "handoffsAtActualDepartures": "PASS",
+      "no0945Changeover": true
+    }
+  ],
+  "rules": {
+    "normalGeography": "Preserved full original Karen/Kathy normal-family restrictions; creator dated-absence relaxation not silently promoted to static baseline",
+    "no0945Changeover": true,
+    "alijahHerpetariumNormalMondayOnly": true,
+    "shiftChanges": false,
+    "lunchDurationMinutes": 60,
+    "coverageEndsAtFinalActualDeparture": true,
+    "contractorsAssumed": false
+  },
+  "reviewItems": [
+    {
+      "code": "EARLY_OWNERSHIP_UNRESOLVED",
+      "detail": "Original temporary early ownership remains unresolved. Thursday now has19 missing groups05:00-06:00 and13 missing06:00-07:00 after owner-directed China/Education changes. Do not claim full-site ownership from first shift."
+    },
+    {
+      "code": "THURSDAY_LUNCH_VARIANT",
+      "detail": "Retain proposed Thursday full-hour lunches: Kathy10-11; Derrick11-12; Alijah12-13; Tammy08:30-09:30. User-directed China/Education changes do not require further lunch or shift changes. Standing pattern remains review copy."
+    },
+    {
+      "code": "SPEECH_LABELS",
+      "detail": "Current transcript MBZ/Cassie corresponds in stored rules to Karen Robinson - Zambezi, Kathy Phelps - East/West Admin. No distinct MBZ location or Cassie employee exists in the approved seven-person reference; verify if a different meaning was intended."
+    }
+  ],
+  "extraChoreNote": "Retained external note: Kathy, Elephant Trunk employee restrooms once weekly after opening on Tuesday. Tuesday was the prior coordinating chat choice, not Eric's explicit weekday selection. Excluded from all 23 groups, 136 points and engine calculations.",
+  "evidenceScope": "Local pure-data creator calls and independent minute checks only. Existing build/install work was not messaged or changed. No app/database/phone change, staff contact or publication.",
+  "revision": "MONDAY_KAREN_SELECTED_THURSDAY_EVENT_CENTER_TO_ALIJAH_20261115",
+  "ownerUpdate": {
+    "authority": "Eric voice instruction2026-11-15T03:13:39.048070Z, relayed by Sophia",
+    "changes": [
+      {
+        "group": "China and restrooms",
+        "points": 7,
+        "from": "Alijah Collins",
+        "to": "Tammy Miller"
+      },
+      {
+        "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "points": 8,
+        "from": "Alijah Collins",
+        "to": "Kathy Phelps"
+      }
+    ],
+    "scope": "Selected Monday Karen relief and owner-directed Thursday Event Center transfer to Alijah. Prior Thursday China/Education and Saturday Komodos/Herpetarium changes retained. No other base, shift, lunch time/helper or departure transfer changed.",
+    "normalLoads": {
+      "Tammy Miller": 31,
+      "Kathy Phelps": 36,
+      "Alijah Collins": 27,
+      "Derrick Henderson": 42
+    },
+    "earlierTammyExtrasPreferenceSupersededForThursdayChina": true,
+    "standingLunchPatternStillReviewCopy": true,
+    "saturday": {
+      "authority": "Eric directs Komodos and Herpetarium to Xavier, then stop and show Jada's remainder",
+      "changes": [
+        {
+          "group": "Komodos",
+          "points": 4,
+          "from": "Jada Rawlings",
+          "to": "Xavier Green"
+        },
+        {
+          "group": "Herpetarium",
+          "points": 5,
+          "from": "Jada Rawlings",
+          "to": "Xavier Green"
+        }
+      ],
+      "normalLoads": {
+        "Alijah Collins": 24,
+        "Karen Robinson": 31,
+        "Kathy Phelps": 32,
+        "Jada Rawlings": 20,
+        "Xavier Green": 29
+      },
+      "jadaRemainingGroups": [
+        "Bonobos restrooms",
+        "China and restrooms",
+        "Event Center and restrooms"
+      ],
+      "spokenKathy31VersusVerifiedSource32": "The original candidate has Kathy32; keep32, not31. Karen31 is retained."
+    },
+    "monday": {
+      "recipient": "Tammy Miller",
+      "fromHelper": "Xavier Green",
+      "toHelper": "Karen Robinson",
+      "start": "08:30",
+      "end": "09:30",
+      "groups": [
+        "East End restrooms",
+        "Northwest Passage",
+        "Teton and restrooms"
+      ],
+      "authority": "Eric selects the proposed Monday Karen alternative,2026-11-15T03:35:28Z, relayed by Sophia",
+      "optionAppliedToCandidate": true
+    },
+    "thursdayEventCenter": {
+      "group": "Event Center and restrooms",
+      "points": 5,
+      "from": "Derrick Henderson",
+      "to": "Alijah Collins",
+      "recipientEmployeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+      "recipientSlotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+      "canonicalRosterName": "Alijah Collins",
+      "normalLoads": {
+        "Tammy Miller": 31,
+        "Kathy Phelps": 36,
+        "Alijah Collins": 32,
+        "Derrick Henderson": 37
+      },
+      "shiftsUnchanged": true,
+      "lunchTimesAndHelpersUnchanged": true,
+      "retainedQualificationAndRestrictionCheck": "PASS"
+    }
+  },
+  "priorCreatorRuns": [
+    {
+      "day": "monday",
+      "exactCreatorStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "strictOriginalLunchStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "candidateStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "changes": [],
+      "validation": {
+        "areaOwnershipChecks": 276,
+        "fullHourLunches": 6,
+        "tammyChinaExtraMinutes": 0,
+        "tammyReliefAppointments": 0,
+        "preferredCoreMovedMinutes": 0,
+        "formulaApproved": true,
+        "publicationEligible": false,
+        "normalizedScore": 0.08184401176591777,
+        "scoreBreakdown": {
+          "proximityPenalty": 7.333195759057737,
+          "workloadPenalty": 10.738017429193897,
+          "combinedPenalty": 8.184401176591777,
+          "scale": {
+            "minimum": 0,
+            "maximum": 100,
+            "lowerIsBetter": true
+          },
+          "priorityWeight": 0
+        }
+      }
+    },
+    {
+      "day": "tuesday",
+      "engine": "UNCHANGED_APPROVED_DAY",
+      "solverInvoked": false
+    },
+    {
+      "day": "wednesday",
+      "engine": "UNCHANGED_APPROVED_DAY",
+      "solverInvoked": false
+    },
+    {
+      "day": "thursday",
+      "exactCreatorStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "strictOriginalLunchStatus": "COVERAGE_CONSTRAINTS_UNRESOLVED",
+      "candidateStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "changes": [
+        {
+          "employee": "Kathy Phelps",
+          "before": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "after": {
+            "start": "10:00",
+            "end": "11:00"
+          },
+          "deltaMinutes": -30
+        },
+        {
+          "employee": "Alijah Collins",
+          "before": {
+            "start": "11:30",
+            "end": "12:30"
+          },
+          "after": {
+            "start": "12:00",
+            "end": "13:00"
+          },
+          "deltaMinutes": 30
+        },
+        {
+          "employee": "Derrick Henderson",
+          "before": {
+            "start": "10:30",
+            "end": "11:30"
+          },
+          "after": {
+            "start": "11:00",
+            "end": "12:00"
+          },
+          "deltaMinutes": 30
+        }
+      ],
+      "validation": {
+        "areaOwnershipChecks": 207,
+        "fullHourLunches": 4,
+        "tammyChinaExtraMinutes": 0,
+        "tammyReliefAppointments": 0,
+        "preferredCoreMovedMinutes": 0,
+        "formulaApproved": true,
+        "publicationEligible": false,
+        "normalizedScore": 0.07211817425627513,
+        "scoreBreakdown": {
+          "proximityPenalty": 4.427848070771326,
+          "workloadPenalty": 15.563725490196076,
+          "combinedPenalty": 7.211817425627514,
+          "scale": {
+            "minimum": 0,
+            "maximum": 100,
+            "lowerIsBetter": true
+          },
+          "priorityWeight": 0
+        }
+      }
+    },
+    {
+      "day": "friday",
+      "exactCreatorStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "strictOriginalLunchStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "candidateStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "changes": [],
+      "validation": {
+        "areaOwnershipChecks": 230,
+        "fullHourLunches": 5,
+        "tammyChinaExtraMinutes": 0,
+        "tammyReliefAppointments": 0,
+        "preferredCoreMovedMinutes": 0,
+        "formulaApproved": true,
+        "publicationEligible": false,
+        "normalizedScore": 0.08743432616467223,
+        "scoreBreakdown": {
+          "proximityPenalty": 7.931512188695587,
+          "workloadPenalty": 11.179193899782133,
+          "combinedPenalty": 8.743432616467222,
+          "scale": {
+            "minimum": 0,
+            "maximum": 100,
+            "lowerIsBetter": true
+          },
+          "priorityWeight": 0
+        }
+      }
+    },
+    {
+      "day": "saturday",
+      "exactCreatorStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "strictOriginalLunchStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "candidateStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "changes": [],
+      "validation": {
+        "areaOwnershipChecks": 253,
+        "fullHourLunches": 5,
+        "tammyChinaExtraMinutes": 0,
+        "tammyReliefAppointments": 0,
+        "preferredCoreMovedMinutes": 0,
+        "formulaApproved": true,
+        "publicationEligible": false,
+        "normalizedScore": 0.11361045057461851,
+        "scoreBreakdown": {
+          "proximityPenalty": 12.113837128177167,
+          "workloadPenalty": 9.102668845315904,
+          "combinedPenalty": 11.361045057461851,
+          "scale": {
+            "minimum": 0,
+            "maximum": 100,
+            "lowerIsBetter": true
+          },
+          "priorityWeight": 0
+        }
+      }
+    },
+    {
+      "day": "sunday",
+      "exactCreatorStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "strictOriginalLunchStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "candidateStatus": "COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT",
+      "changes": [],
+      "validation": {
+        "areaOwnershipChecks": 207,
+        "fullHourLunches": 4,
+        "tammyChinaExtraMinutes": 0,
+        "tammyReliefAppointments": 0,
+        "preferredCoreMovedMinutes": 0,
+        "formulaApproved": true,
+        "publicationEligible": false,
+        "normalizedScore": 0.09335560881550638,
+        "scoreBreakdown": {
+          "proximityPenalty": 9.569781974238904,
+          "workloadPenalty": 8.632897603485839,
+          "combinedPenalty": 9.335560881550638,
+          "scale": {
+            "minimum": 0,
+            "maximum": 100,
+            "lowerIsBetter": true
+          },
+          "priorityWeight": 0
+        }
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import { canonicalJson, normalizeWindow } from './static-weekly-schedule-model.j
 import { generateStaticWeeklySchedulingProgram, STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE,
   weekdayDate,postgresJsonbContentDigest } from './static-weekly-schedule-program.js';
 import {validateFullHourLunchPolicy,FULL_HOUR_LUNCH_POLICY_SCHEMA} from './static-weekly-lunch-policy.js';
+import {validateAcceptedSevenOnCallLunch,isAcceptedSevenOnCallLunch} from './accepted-seven-on-call-lunch.js';
 
 export const LUNCH_COVERAGE_SCHEMA = 'memphis-zoo.static-weekly-lunch-candidate.v1';
 const POLICY = 'owner-20260921-two-nearby-full-hour-v1';
@@ -117,10 +118,12 @@ function availableForLunch(context, lunch) {
   return !(availability.blockedWindows||[]).some(window=>overlap(windowOf(window),lunch));
 }
 
-function costForArea(area, slotId, context, anchors, edges) {
+function costForArea(area, slotId, context, anchors, edges, onCallScope) {
   const qualified=new Set(context.availability.qualifications),restricted=new Set(context.availability.restrictions);
+  const onCall=isAcceptedSevenOnCallLunch({...onCallScope,covererSlotId:slotId,
+    covererPersonId:context.person?.personId,entries:area.entries});
   for(const entry of area.entries) {
-    if ((entry.work.restrictedSlotIds||[]).includes(slotId)
+    if (((entry.work.restrictedSlotIds||[]).includes(slotId)&&!onCall)
       || entry.locations.some(location=>restricted.has(location))
       || entry.work.requiredQualifications.some(value=>!qualified.has(value))) return null;
   }
@@ -172,6 +175,8 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
     || !Array.isArray(weeklyAssignments)) fail('lunch_verified_problem_required');
   const byWork=new Map(problem.work.map(work=>[work.key,work]));
   const fullHourLoans=validateFullHourLunchPolicy(problem.version?.lunchCoveragePolicy,postgresJsonbContentDigest);
+  const onCallAuthority=validateAcceptedSevenOnCallLunch(problem.version);
+  if(onCallAuthority&&!fullHourLoans)fail('on_call_lunch_requires_exact_source_named_full_hour_policy');
   const currentOwners=new Set();
   if(fullHourLoans)for(const [day,state]of problem.states)for(const [slot,availability]of state.availability){
     const owner=problem.incumbencyByDaySlot.get(`${day}\0${slot}`);
@@ -223,9 +228,11 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
           && context.availability.acceptedRouteProvenance.trim())
           anchors=[context.availability.acceptedRouteAnchorLocationId];
         if(!anchors.length)continue;
-        contexts.set(slot.id,{...context,person});
+        const helperContext={...context,person};contexts.set(slot.id,helperContext);
         for(let i=0;i<areas.length;i++) {
-          const proximity=costForArea(areas[i],slot.id,context,anchors,problem.edges);
+          const proximity=costForArea(areas[i],slot.id,helperContext,anchors,problem.edges,
+            {authority:onCallAuthority,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,window:{start:lunch.start,end:lunch.end},
+              sourceNamedCovererSlotId:fullHourRosterCurrent?fullHourLoans?.get(`${day}\0${ownerSlotId}`)?.areas.get('HERPETARIUM'):null});
           if(proximity){costRows[i].costs[slot.id]=proximity.cost;evidence.set(`${areas[i].areaId}\0${slot.id}`,proximity.evidence);}
         }
       }

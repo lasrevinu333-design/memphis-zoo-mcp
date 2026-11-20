@@ -4,7 +4,7 @@ import {validateApprovedManualCoverAllFacts,applyApprovedManualTypedCoverAllChan
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
-import {readApprovedManualWeek} from './approved-manual-week.js';
+import {readApprovedManualWeekForSource} from './accepted-manual-week-selection.js';
 import {approvedManualRecurringFrame,prepareApprovedManualRecurringPeriod} from './approved-manual-recurring-period.js';
 import {approvedManualPeriodStaffingFacts,approvedManualNativeTransport} from './approved-manual-staffing-transport.js';
 import {approvedManualEmploymentPeriod,approvedManualEmploymentChanges} from './approved-manual-employment-integration.js';
@@ -27,7 +27,7 @@ export function approvedManualRecurringWorkerInput({basis,actor,operationId}){
  uuid(operationId);assert.equal(basis.schema,'custodial.approved-manual-period-basis.v1');assert.equal(basis.originalCommand,null);
  assert.equal(basis.managerId,actor.managerId);assert.equal(basis.actor.manager_name,actor.managerName);
  const {basisDigest,...body}=basis;assert.equal(basisDigest,digest(body));assert.equal(basis.normalSourceDigest,digest(basis.normalSource));
- const week=readApprovedManualWeek(),employment=approvedManualEmploymentPeriod({frameStart:basis.frameStart,expectedRevision:basis.authorityRevision,employmentByDate:basis.employmentByDate});
+ const week=readApprovedManualWeekForSource(basis.normalSource),employment=approvedManualEmploymentPeriod({frameStart:basis.frameStart,expectedRevision:basis.authorityRevision,employmentByDate:basis.employmentByDate});
  assert.equal(digest(employment.revisionVector),digest(basis.employmentRevisionVector));
  // The capacity supplement remains an actual accepted fact. Union canonical
  // absence, PRE_START and actual roster unavailability BEFORE the third-owner rule.

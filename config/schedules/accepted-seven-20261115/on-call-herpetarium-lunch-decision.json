@@ -1,0 +1,39 @@
+{
+  "schema": "custodial.owner-on-call-lunch-decision.v1",
+  "owner": "Eric",
+  "sourceThreadId": "6af912c3-a6a4-8191-8c0e-4cdd08ce303a",
+  "receivedDateChicago": "2026-11-15",
+  "source": "Explicit owner quote delivered to the existing Custodial executor",
+  "quote": "we'll just leave it as is. He's not supposed to, but it's just on call and we never get called to the Herpetarium. And if, if we were to get a call and he was covering for lunch, it's no big deal.",
+  "acceptedCandidateSha256": "22d067bd595e2450bb32cd36903df94628eb6df055a44f992b3aba9f242bbee7",
+  "helperEmployeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+  "helperSlotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+  "locationCode": "HERPETARIUM",
+  "locationId": "7a6ef424-142e-4d0b-9202-8007c3283ae7",
+  "coverage": "ON_CALL_LUNCH_RELIEF_ONLY",
+  "windows": [
+    {
+      "dayOfWeek": 5,
+      "normalOwnerSlotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "start": "10:00",
+      "end": "11:00"
+    },
+    {
+      "dayOfWeek": 6,
+      "normalOwnerSlotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "start": "12:30",
+      "end": "13:30"
+    },
+    {
+      "dayOfWeek": 0,
+      "normalOwnerSlotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "start": "12:30",
+      "end": "13:30"
+    }
+  ],
+  "normalAssignmentEligibilityChanged": false,
+  "broaderRestrictionPreserved": true,
+  "newMandatoryCleaningRoute": false,
+  "phoneNFCPermissionChanged": false,
+  "acceptedScheduleAssignmentsChanged": false
+}

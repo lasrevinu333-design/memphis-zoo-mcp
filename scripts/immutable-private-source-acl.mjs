@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { types } from "node:util";
 import pg from "pg";
-import { assertVerifiedImmutableBootstrapSource, readVerifiedImmutableBootstrapAcls } from "./immutable-private-source-bootstrap.mjs";
+import { assertVerifiedImmutableBootstrapSource, readVerifiedImmutableBootstrapAcls, readVerifiedImmutableBootstrapOwnerProfile } from "./immutable-private-source-bootstrap.mjs";
 import { readVerifiedImmutableBootstrapInventory, readVerifiedPrivateImportSource } from "./disaster-recovery-archive.mjs";
 
 const Client=pg.Client, query=Client.prototype.query;
@@ -80,7 +80,7 @@ const contextSql=`
     'actor',current_user,'session_actor',session_user,
     'database_owner',(select pg_catalog.pg_get_userbyid(datdba) from pg_catalog.pg_database where datname=current_database()),
     'namespace_owners_ok',(select count(*)=2 and bool_and(pg_catalog.pg_get_userbyid(nspowner)=
-      case nspname when 'custodial_dr' then 'postgres' when 'custodial_release_identity' then 'supabase_admin' end)
+      case nspname when 'custodial_dr' then 'postgres' when 'custodial_release_identity' then $1::text end)
       from pg_catalog.pg_namespace where nspname in('custodial_dr','custodial_release_identity')),
     'relation_owners_ok',(select count(*)=5 from expected_owners e join pg_catalog.pg_class c on c.oid=pg_catalog.to_regclass(e.relation)
       where c.relkind='r' and pg_catalog.pg_get_userbyid(c.relowner)=current_user),
@@ -112,14 +112,15 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
       &&!Object.hasOwn(db,"query")&&Client.prototype.query===query,"Actual native pg.Client required");
   };
   native();assertVerifiedImmutableBootstrapSource(source,archive);
+  const ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(source,archive);
   // Read only WeakMap-/archive-branded original bytes, never plan.rawRows or
   // a public plan.inventory/survivor JSON field as authority.
   const originalAcls=copyOriginalAcls(readVerifiedImmutableBootstrapAcls(source,archive));
-  // The signed schema Source owns custodial_dr as postgres but the original
-  // release-identity namespace as supabase_admin. Never ALTER OWNER or accept
+  // The authenticated profile fixes the original release-identity owner;
+  // custodial_dr remains postgres. Never ALTER OWNER or accept
   // an arbitrary current target owner to satisfy this prerequisite.
   const releaseNamespace=originalAcls.namespaces_columns.filter(row=>row.kind==='SCHEMA'&&row.schema_name==='custodial_release_identity');
-  assert.equal(releaseNamespace.length,1);assert.equal(releaseNamespace[0].owner_name,'supabase_admin');
+  assert.equal(releaseNamespace.length,1);assert.equal(releaseNamespace[0].owner_name,ownerProfile.actor);
   const original=readVerifiedPrivateImportSource(archive),observed=readVerifiedImmutableBootstrapInventory(archive);
   const inventory=fields(observed,["sourceBinding","inventory"]);
   assert.equal(inventory.sourceBinding,original.sourceBinding);
@@ -130,7 +131,8 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
   const metadata=rows=>rows.map(row=>[row.schema_name,row.table_name,row.owner_name,row.relation_kind,
     row.is_partition,row.relrowsecurity,row.relforcerowsecurity]).sort((a,b)=>Buffer.compare(Buffer.from(JSON.stringify(a.slice(0,2))),Buffer.from(JSON.stringify(b.slice(0,2)))));
   const expectedRelations=metadata(originalRelations);
-  const current=()=>{native();assertVerifiedImmutableBootstrapSource(source,archive);};
+  const current=()=>{native();assertVerifiedImmutableBootstrapSource(source,archive);
+    assert.deepEqual(readVerifiedImmutableBootstrapOwnerProfile(source,archive),ownerProfile);};
   const raw=async(sql,args=[])=>{
     current();let result,failed=false,failure;
     try{result=await Reflect.apply(query,db,[sql,args]);}catch(error){failed=true;failure=error;}
@@ -139,12 +141,12 @@ export async function reconcileVerifiedImmutableBootstrapAcls(db,source,archive)
   };
   let originalContext;
   const context=async()=>{
-    const result=await raw(contextSql);
+    const result=await raw(contextSql,[ownerProfile.actor]);
     assert.equal(result.rowCount,1);assert.equal(result.rows.length,1);
     const row=fields(result.rows[0],["context"]).context;
     const value=fields(row,["database_oid","pid","xid","counter_parallel_safety","actor","session_actor","database_owner","namespace_owners_ok",
       "relation_owners_ok","read_only","row_security","replication_role","search_path","fences_held","lease_count","control_count","control","tables"]);
-    assert.equal(value.actor,"supabase_admin");assert.equal(value.session_actor,value.actor);
+    assert.equal(value.actor,ownerProfile.actor);assert.equal(value.session_actor,value.actor);
     assert.equal(value.database_owner,"postgres");assert.equal(value.namespace_owners_ok,true);assert.equal(value.relation_owners_ok,true);
     assert.equal(value.read_only,"off");assert.equal(value.row_security,"off");assert.equal(value.replication_role,"origin");assert.equal(value.search_path,"pg_catalog");
     assert.equal(value.fences_held,true);assert.equal(value.lease_count,"0");assert.equal(value.control_count,1);

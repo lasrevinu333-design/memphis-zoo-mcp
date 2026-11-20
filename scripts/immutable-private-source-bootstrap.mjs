@@ -7,6 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {types} from 'node:util';
 import {readVerifiedPrivateImportSource,readVerifiedImmutableBootstrapInventory,
  collectVerifiedRestoreBootstrapRows,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
+import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 
@@ -87,10 +89,10 @@ function readAuthoritySources(){
   }finally{closeSync(fd);}
  });
 }
-function baseRecipes(originalGuards){
+function baseRecipes(originalGuards,owner){
  assert.ok(Array.isArray(originalGuards));assert.equal(originalGuards.length,2);
  for(let i=0;i<2;i++){
-  const g=originalGuards[i];closed(g,['definition','owner','prosrc']);assert.equal(g.owner,'supabase_admin');
+  const g=originalGuards[i];closed(g,['definition','owner','prosrc']);assert.equal(g.owner,owner);
   assert.equal(typeof g.prosrc,'string');assert.equal(sha(g.prosrc),guardBodySha[i]);
   assert.equal(typeof g.definition,'string');assert.ok(g.definition.startsWith('CREATE OR REPLACE FUNCTION '+guardIds[i]+'\n'));
   assert.ok(g.definition.endsWith('AS $function$'+g.prosrc+'$function$\n'));
@@ -125,6 +127,36 @@ function requireArchive(archive,original){
  assert.equal(current.sourceBinding,original.sourceBinding);
  assert.deepEqual(current.selection,original.selection);assert.deepEqual(current.privateDataMembers,original.privateDataMembers);
 }
+// Metadata selection only. Preserve every original raw row; exactly one
+// deployed row binds the runtime identity, independently of historical rows.
+// This helper creates no source token, target or import authority.
+export function selectOriginalDeployedReleaseRow({releaseRows,releaseTable,signedRelease}){
+ assert.ok(Array.isArray(releaseRows)&&releaseRows.length>0);
+ assert.equal(String(releaseRows.length),releaseTable.row_count);
+ assert.equal(signedRelease.status,'deployed');
+ assert.ok([postgresTextColumnsLineEncoding,postgresJsonTextLineEncoding].includes(releaseTable.data_encoding));
+ const names=releaseTable.columns.map(column=>column.name);
+ assert.ok(names.includes('status')&&names.includes('release_id'));
+ const deployed=[],identities=new Set();
+ for(const raw of releaseRows){
+  assert.equal(typeof raw,'string');const row=JSON.parse(raw);closed(row,names);
+  assert.equal(typeof row.release_id,'string');assert.ok(row.release_id.length>0&&!identities.has(row.release_id));
+  identities.add(row.release_id);
+  assert.equal(typeof row.status,'string');
+  if(releaseTable.data_encoding===postgresTextColumnsLineEncoding)
+   for(const name of names)assert.ok(row[name]===null||typeof row[name]==='string');
+  if(row.status==='deployed')deployed.push({raw,row});
+ }
+ assert.equal(deployed.length,1,'Exactly one original deployed release required');
+ const {raw,row}=deployed[0];closed(row,Object.keys(signedRelease));
+ if(releaseTable.data_encoding===postgresTextColumnsLineEncoding){
+  // Full native decoded comparison remains mandatory inside PostgreSQL before
+  // bootstrap DATA insertion. Do not normalize timestamps/JSON/numerics in JS.
+  for(const column of releaseTable.columns)
+   if(column.data_type==='text')assert.equal(row[column.name],signedRelease[column.name]);
+ }else assert.deepEqual(row,signedRelease);
+ return raw;
+}
 // Caller objects, archived SQL and these strings cannot authorize target
 // writes. The later fixed installer must obtain this Source itself and retain
 // actual original owner/fresh-target/fence/currentness checks across every IO.
@@ -150,29 +182,23 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const ledger=parse('migration-ledger.json');assert.ok(Array.isArray(ledger)&&ledger.length>0);
  assert.equal(ledger.length,identity.migration_ledger_count);assert.equal(ledger.at(-1).version,identity.migration_head);
  sourcePhase='ORIGINAL_RELEASE';
- assert.equal(raw.releaseRows.length,1);assert.ok(raw.registryRows.length>0);
+ assert.ok(raw.releaseRows.length>0);assert.ok(raw.registryRows.length>0);
  const releaseTable=catalog.filter(table=>table.schema_name==='public'&&table.table_name==='release_deployment_manifest');
  assert.equal(releaseTable.length,1);
- if(releaseTable[0].data_encoding===postgresTextColumnsLineEncoding){
-  // This is Source preparation ONLY. Native text is not ordinary JSON DATA:
-  // do not coerce boolean/time/JSON fields in JS to manufacture equality.
-  // The initializer must compare the COMPLETE actual decoded native record
-  // to signed release metadata before its first bootstrap DATA insertion.
-  const textRow=JSON.parse(raw.releaseRows[0]);closed(textRow,Object.keys(identity.release));
-  for(const column of releaseTable[0].columns){
-   assert.ok(textRow[column.name]===null||typeof textRow[column.name]==='string');
-   if(column.data_type==='text')assert.equal(textRow[column.name],identity.release[column.name]);
-  }
- }else{
-  assert.equal(releaseTable[0].data_encoding,postgresJsonTextLineEncoding);
-  assert.deepEqual(JSON.parse(raw.releaseRows[0]),identity.release);
- }
+ const deployedReleaseRow=selectOriginalDeployedReleaseRow({releaseRows:raw.releaseRows,
+  releaseTable:releaseTable[0],signedRelease:identity.release});
  sourcePhase='SOURCE_RECIPES';
- const allRecipes=[...baseRecipes(parse('original-guards.json')),...domain.recipes,...messages.recipes];
- assert.equal(allRecipes.length,25);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,25);
+ const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+ const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
+ const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
+ const recipeCount=postgresProgram?51:25;
+ assert.equal(allRecipes.length,recipeCount);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,recipeCount);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
-  assert.match(recipe.identity,/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/);
+  assert.ok(/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/.test(recipe.identity)
+   ||postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
+    'custodial_coverall.reconcile_manual_delivery_after_lunch()',
+    'custodial_leadership_private.bind_registration_generation()'].includes(recipe.identity));
   for(const key of ['before','after'])assert.equal(typeof recipe[key],'string');
   for(const key of ['beforeHash','afterHash','beforeBodyHash','afterBodyHash'])assert.match(recipe[key],/^[a-f0-9]{64}$/);
   assert.equal(sha(recipe.before),recipe.beforeHash);assert.equal(sha(recipe.after),recipe.afterHash);
@@ -186,14 +212,18 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   const aliases=recipe.registry_identity===recipe.identity&&recipe.identity.startsWith('public.')
    ?[recipe.identity,recipe.identity.slice(7)]:[recipe.registry_identity];
   const found=originalRows.filter(row=>row.object_kind==='function'&&aliases.includes(row.object_identity));
+  if(postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
+   'custodial_coverall.reconcile_manual_delivery_after_lunch()','public.sync_migration_log_summary()'].includes(recipe.identity)){
+   assert.equal(found.length,0,'Fixed current unregistered callback must not rewrite original registry DATA');continue;
+  }
   if(recipe.identity==='custodial_dr.guard_application_mutation()'){assert.equal(found.length,0);continue;}
   assert.equal(found.length,1);assert.equal(found[0].definition_sql,recipe.before);assert.equal(found[0].definition_sha256,recipe.beforeHash);
   assert.ok(!Object.hasOwn(registrySource,found[0].object_identity));
   registrySource[found[0].object_identity]=Object.freeze({definition_sql:recipe.after,definition_sha256:recipe.afterHash});
  }
- assert.equal(Object.keys(registrySource).length,24);
+ assert.equal(Object.keys(registrySource).length,postgresProgram?47:24);
  sourcePhase='SOURCE_STATEMENTS';
- const statements=[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
+ const statements=postgresProgram?postgresProgram.statements.map(({sourcePath,sourceSha256,sql})=>({sourcePath,sourceSha256,sql})):[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
   ...authority.map(({sourcePath,sourceSha256,sql})=>Object.freeze({sourcePath,sourceSha256,sql}))];
  assert.equal(statements.length,sourceOrder.length);assert.equal(new Set(statements.map(s=>s.sourcePath)).size,sourceOrder.length);
  const ordered=sourceOrder.map(sourcePath=>{
@@ -202,10 +232,10 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   return Object.freeze({...statement});
  });
  const result=Object.freeze({schema:'custodial.immutable-private-source-bootstrap.v1',sourceBinding:original.sourceBinding,
-  inventory:observed.inventory,releaseRows:raw.releaseRows,registryRows:raw.registryRows,memberProofs:raw.memberProofs,
+  ownerProfile,inventory:observed.inventory,releaseRows:raw.releaseRows,deployedReleaseRow,registryRows:raw.registryRows,memberProofs:raw.memberProofs,
   recipes:Object.freeze(recipes),registrySource:Object.freeze(registrySource),statements:Object.freeze(ordered),
   target_authority:false,transaction_authority:false,import_authority:false,resume_allowed:false});
- plans.set(result,{archive:verifiedArchive,original,inventory:observed.inventory,baseIdentity:base.identity,domain,messages,
+ plans.set(result,{archive:verifiedArchive,original,ownerProfile,postgresProgram,inventory:observed.inventory,baseIdentity:base.identity,domain,messages,
   authorityIdentities:authority.map(row=>row.identity)});
  sourcePhase='FINAL_CURRENTNESS';
  assertVerifiedImmutableBootstrapSource(result,verifiedArchive);return result;
@@ -221,6 +251,8 @@ export function assertVerifiedImmutableBootstrapSource(source,verifiedArchive){
  sourcePhase='PROGRAM_CURRENTNESS';
  assert.deepEqual(readBaseSource().identity,record.baseIdentity);record.domain.assertCurrent();record.messages.assertCurrent();
  assert.deepEqual(readAuthoritySources().map(row=>row.identity),record.authorityIdentities);
+ if(record.postgresProgram)record.postgresProgram.assertCurrent();
+ assert.deepEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),record.ownerProfile);
  sourcePhase='INVENTORY_CURRENTNESS';
  const observed=readVerifiedImmutableBootstrapInventory(verifiedArchive);
  assert.equal(observed.sourceBinding,record.original.sourceBinding);assert.deepEqual(observed.inventory,record.inventory);
@@ -260,7 +292,7 @@ export function readVerifiedImmutableBootstrapSourceRows(source,verifiedArchive)
   assert.equal(matches.length,1);
   const relation=matches[0];closed(relation,['schema_name','table_name','relation_kind','is_partition','owner_name','relrowsecurity','relforcerowsecurity']);
   assert.equal(relation.relation_kind,'r');assert.equal(relation.is_partition,false);
-  assert.equal(relation.owner_name,'supabase_admin');
+  assert.equal(relation.owner_name,readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive).actor);
   assert.equal(typeof relation.relrowsecurity,'boolean');assert.equal(typeof relation.relforcerowsecurity,'boolean');
   assert.ok(Object.isFrozen(originalRows)&&originalRows.length>0&&originalRows.every(row=>typeof row==='string'));
   assert.ok(Object.isFrozen(replacements));
@@ -269,4 +301,36 @@ export function readVerifiedImmutableBootstrapSourceRows(source,verifiedArchive)
  const expected=Object.freeze({sourceBinding:record.original.sourceBinding,tables:Object.freeze(tables),metadata_only:true});
  assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
  sourceRowExpectations.set(source,expected);return expected;
+}
+
+// Closed profile DATA and exact executable statement from the branded Source.
+export function readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive){
+ assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
+ return plans.get(source).ownerProfile;
+}
+export function readVerifiedImmutableBootstrapStatement(source,verifiedArchive,statement){
+ assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
+ assert.ok(source.statements.includes(statement),'Foreign statement is not a branded Source member');
+ const record=plans.get(source);let wrapper;
+ if(record.postgresProgram){
+  const pinned=record.postgresProgram.statements.filter(s=>s.sourcePath===statement.sourcePath);
+  assert.equal(pinned.length,1);assert.equal(pinned[0].sourceSha256,statement.sourceSha256);assert.equal(pinned[0].sql,statement.sql);
+  wrapper=pinned[0].wrapper;
+ }else{
+  if(statement.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql')
+   assert.equal(statement.sourceSha256,'2b8c5dad21a56d6132688a998ab3ae3df78584686c8b2f4fdd7baf7bbafd527d');
+  if(statement.sourcePath==='proposals/immutable-original-manager-push-restore.sql')
+   assert.equal(statement.sourceSha256,'2a9dd3a1050d0f7e7714abdd8feeb4259eea54287c68ffacd787b9072a9f7f9d');
+  wrapper=['proposals/immutable-private-owner-context.sql','proposals/immutable-original-employee-restore.sql',
+   'proposals/immutable-original-device-boundary-restore.sql','proposals/immutable-original-authority-reconciliation.sql',
+   'proposals/immutable-original-manager-push-restore.sql'].includes(statement.sourcePath)?'OUTER_TRANSACTION':'NONE';
+ }
+ assert.equal(sha(statement.sql),statement.sourceSha256);
+ let sql=statement.sql;
+ if(wrapper==='OUTER_TRANSACTION'){
+  const begin=statement.sourcePath==='proposals/immutable-private-owner-context.sql'?'\nBEGIN;':'\nBEGIN;\n';
+  assert.equal(sql.split(begin).length,2);assert.match(sql,/\nCOMMIT;\s*$/);
+  sql=sql.replace(begin,'\n').replace(/\nCOMMIT;\s*$/,'\n');
+ }else assert.ok(wrapper==='NONE'||wrapper==='DO_ONLY');
+ assertVerifiedImmutableBootstrapSource(source,verifiedArchive);return sql;
 }

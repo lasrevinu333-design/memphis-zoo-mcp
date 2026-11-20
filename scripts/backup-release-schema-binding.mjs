@@ -1,3 +1,4 @@
+import {bindBackupLedgerV2,verifyArchivedLedgerV2} from './backup-ledger-binding-v2.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {fingerprintSchemaCatalog} from './schema-fingerprint-catalog.mjs';
@@ -16,6 +17,7 @@ function extensionSourceLocation(extension) {
 // finite and source-bound: unknown migration, changed bytes or schema drift is
 // still a refusal. It grants no production mutation or restore authority.
 export function bindBackupSchemaExtension({projectRef,releaseIdentity,migrationLedger,catalog,declaration,readSource}) {
+ if(declaration?.schema==='custodial.backup-schema-extension-declaration.v2')return bindBackupLedgerV2({projectRef,releaseIdentity,migrationLedger,catalog,declaration,readSource});
  assert.equal(declaration?.schema,'custodial.backup-schema-extension-declaration.v1');
  assert.equal(declaration.production_mutation_authorized,false);
  assert.equal(declaration.project_ref,projectRef);
@@ -47,6 +49,7 @@ export function bindBackupSchemaExtension({projectRef,releaseIdentity,migrationL
 }
 
 export function verifyArchivedSchemaExtension({summary,binding,catalog,ledger}) {
+ if(binding?.schema==='custodial.backup-schema-extension.v2')return verifyArchivedLedgerV2({summary,binding,catalog,ledger});
  assert.equal(binding?.schema,'custodial.backup-schema-extension.v1');assert.equal(binding.mode,'exact_schema_ahead_of_deployed_app');
  assert.equal(binding.application_upgrade_claimed,false);assert.equal(binding.production_mutation_authorized,false);
  assert.equal(binding.project_ref,summary.project_ref);

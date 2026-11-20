@@ -1,0 +1,24 @@
+{
+  "schema": "custodial.backup-installed-source-addition.v1",
+  "replay_authorized": false,
+  "prior_ledger_count": 425,
+  "current_ledger_count": 426,
+  "deployed_release_identity_unchanged": true,
+  "prior_source_bindings_sha256": "1b2e54986b803d3efb90847af65186597472dee7aabed1831996994cd19fcd2c",
+  "source_bindings_sha256": "95ecb5913c85bbc8b7ccaf082ae8517d04d943d3002f1e1d85184533ec8d21d3",
+  "statement_source_bindings": [
+    {
+      "ledger_version": "20261114045933",
+      "ledger_name": "custodial_basecamp_birthday_work_qualified",
+      "statement_index": 0,
+      "source_location": "retained_installed",
+      "source_file": "20261114045933_custodial_basecamp_birthday_work_qualified.sql",
+      "sql_sha256": "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383",
+      "source_filename": "basecamp-birthday-work.r26.proposed.sql",
+      "source_raw_sha256": "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383",
+      "installed_sha256": "e34fee0d8f422585e2ced31e4ed472e531f13e0ca8eff72c115986568ecf3383",
+      "transformation": "none",
+      "retained_path": "release/installed-source/20261114045933_custodial_basecamp_birthday_work_qualified.sql"
+    }
+  ]
+}
