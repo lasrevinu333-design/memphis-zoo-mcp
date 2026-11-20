@@ -48,6 +48,7 @@ function fixture(options = {}) {
   };
   const guards = Array.from({ length: 51 }, (_, i) => ({
     identity: 'public.fixture' + i + '()', owner: 'postgres', definition: 'after ' + i, body: 'body ' + i,
+    attributes: { oid: 10000 + i, proacl: null, prosecdef: false },
   }));
   const bootstrapSource = {
     recipes: guards.map(g => ({ identity: g.identity, afterHash: digest(g.definition), afterBodyHash: digest(g.body) })),

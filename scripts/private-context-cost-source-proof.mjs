@@ -6,7 +6,7 @@ const sha=v=>createHash('sha256').update(v).digest('hex');
 export function removePrivateContextCostObservation(name,source){
  assert.equal(arguments.length,2);assert.equal(typeof name,'string');assert.equal(typeof source,'string');
  const raw=readFileSync(new URL('../release/installed-source/20261120_private_context_cost_source_inverse.json',import.meta.url),'utf8');
- assert.equal(sha(raw),'0d8382e8e0eed9912449673758351763ec9795e1c99ac44aa45e27505708d4c6');const data=JSON.parse(raw);assert.equal(data.format,'custodial.private-context-cost-observer-source-inverse.v1');
+ assert.equal(sha(raw),'08ef7a34b072b4e076a3ba4878a28a9d1a6e2cc162bd8cfa6c1a55da4f7ab4c8');const data=JSON.parse(raw);assert.equal(data.format,'custodial.private-context-cost-observer-source-inverse.v1');
  assert.deepEqual(Object.keys(data.files).sort(),['.github/workflows/production-backup-migration-rehearsal.yml','scripts/immutable-private-data-import.mjs','scripts/run-private-backup-only-rehearsal.mjs']);
  const file=data.files[name];assert.ok(file,'Only fixed observation sources may be normalized');
  if(sha(source)===file.previousSha256)return source;

@@ -25,6 +25,7 @@ import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateCon
 import {CURRENT428_ARCHIVE_DIGEST} from './current428-forward-qualification-source.mjs';
 import {readCurrent428PreservedRows,readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';
 import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';
+import {captureCurrent428RollbackTarget,current428CaptureRefusal} from './current428-rollback-target.mjs';
 
 const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -35,6 +36,16 @@ const label='custodial.private-backup-rehearsal';
 const sourcePhases=new Set(['ARCHIVE_ADMISSION','ORIGINAL_INVENTORY','PROGRAM_SOURCE','ORIGINAL_ROWS',
   'ORIGINAL_RELEASE','SOURCE_RECIPES','ORIGINAL_REGISTRY','SOURCE_STATEMENTS','FINAL_CURRENTNESS',
   'SOURCE_HANDLE','ARCHIVE_CURRENTNESS','PROGRAM_CURRENTNESS','INVENTORY_CURRENTNESS']);
+function current428CaptureRequested(){
+  const flag=process.env.PRIVATE_CURRENT428_FORWARD_CAPTURE;
+  assert.ok(flag===undefined||flag==='false'||flag==='true');
+  if(flag==='true'){
+    assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
+    assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
+    assert.notEqual(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,'true');
+  }
+  return flag==='true';
+}
 export function safeSourcePreparationFailure(error){
   if(!error||typeof error!=='object')return null;
   const code=Object.getOwnPropertyDescriptor(error,'code'),phase=Object.getOwnPropertyDescriptor(error,'source_phase');
@@ -230,6 +241,7 @@ function authenticate(){
 export async function runPrivate(){
   assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
   const contextDiagnosticOnly=selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER);
+  const current428Capture=current428CaptureRequested();
   assert.match(process.env.GITHUB_RUN_ID||'',/^[1-9][0-9]*$/);
   assert.match(process.env.BACKUP_RUN_ID||'',/^[1-9][0-9]*$/);
   const tmp=realpathSync(process.env.RUNNER_TEMP),owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));
@@ -238,6 +250,7 @@ export async function runPrivate(){
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
   let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null,current428Baseline=null;
+  let isolatedReconciliation=null,current428Target=null;
   let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null,catalogPrivileges=null,contextCost=null,contextCostFailure=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -291,6 +304,7 @@ export async function runPrivate(){
   let restoreTimeoutMs=privateRestoreWorkTimeoutMs;
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
+    if(current428Capture)assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);
     sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
     ownerMetadata=originalOwnerMetadataDiagnostics(readVerifiedImmutableBootstrapInventory(archive).inventory);
     // Fail on absent source/ACL/guard recipes before resources are created.
@@ -440,6 +454,50 @@ export async function runPrivate(){
       }finally{await reader.end();}
       await verifyTarget();
     }
+    if(current428Capture){
+      phase='current428_signed_isolated_reconciliation';
+      assert.ok(current428Baseline);
+      assert.equal(result.resume_eligible,true);
+      assert.deepEqual(current428Baseline.open_discrepancies,[]);
+      const candidateCommit=await run('git',['rev-parse','HEAD']);
+      const candidateTree=await run('git',['rev-parse','HEAD^{tree}']);
+      assert.match(candidateCommit,/^[a-f0-9]{40}$/);
+      assert.equal(candidateCommit,process.env.GITHUB_SHA);
+      assert.match(candidateTree,/^[a-f0-9]{40}$/);
+      await verifyTarget();
+      const reconciliationKey=randomBytes(32).toString('hex');
+      const reconciliationKeyId='private-qualification-'+process.env.GITHUB_RUN_ID;
+      const reconcileEnv={...baseEnv,SUPABASE_DB_URL:secretEnv.SUPABASE_DB_URL,
+        SUPABASE_PROJECT_REF:source.sourceBinding.project_ref};
+      const signed=JSON.parse(await run(process.execPath,['scripts/create-production-restore-reconciliation.mjs'],{
+        env:{...reconcileEnv,RESTORE_RECONCILIATION_NAMED_ACTOR:'Root isolated current428 qualification',
+          RESTORE_RECONCILIATION_RESOLUTIONS_JSON:'[]',RESTORE_RECONCILIATION_SIGNING_KEY:reconciliationKey,
+          RESTORE_RECONCILIATION_SIGNING_KEY_ID:reconciliationKeyId},
+      }));
+      assert.equal(signed.intent.restore_id,current428Baseline.restore_id);
+      assert.equal(signed.intent.authority_generation,current428Baseline.authority_generation);
+      assert.equal(signed.intent.archive_digest,current428Baseline.archive_digest);
+      assert.equal(signed.intent.final_manifest_sha256,current428Baseline.final_manifest_sha256);
+      assert.equal(signed.intent.discrepancy_snapshot_sha256,current428Baseline.discrepancy_snapshot_sha256);
+      assert.deepEqual(signed.intent.resolutions,[]);
+      await verifyTarget();
+      isolatedReconciliation=JSON.parse(await run(process.execPath,['scripts/apply-production-restore-reconciliation.mjs'],{
+        env:{...reconcileEnv,RESTORE_RECONCILIATION_APPLY:'true',
+          RESTORE_RECONCILIATION_CONFIRM_PROJECT_REF:source.sourceBinding.project_ref,
+          RESTORE_RECONCILIATION_VERIFY_KEY:reconciliationKey,RESTORE_RECONCILIATION_VERIFY_KEY_ID:reconciliationKeyId,
+          RESTORE_RECONCILIATION_JSON:JSON.stringify(signed)},
+      }));
+      phase='current428_rollback_target';
+      await verifyTarget();
+      const ownerClient=new pg.Client({connectionString:secretEnv.SUPABASE_DB_URL,
+        connectionTimeoutMillis:10000,application_name:'custodial-current428-rollback-qualification'});
+      try{
+        await ownerClient.connect();
+        const captured=await captureCurrent428RollbackTarget({client:ownerClient,archive,bootstrapSource,
+          paused:current428Baseline,reconciliation:isolatedReconciliation,verifyTarget});
+        current428Target={...captured,candidate_commit:candidateCommit,candidate_tree:candidateTree};
+      }finally{await ownerClient.end();}
+    }
     phase='verified_waiting_cleanup';
   }catch(e){failure=e;
     if(e&&typeof e==='object'&&!isProxy(e))vendorPrivileges=projectIsolatedVendorPrivilegeStatus(Object.getOwnPropertyDescriptor(e,'vendor_privileges')?.value)??vendorPrivileges;
@@ -478,7 +536,10 @@ export async function runPrivate(){
       mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent,
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
-      current428_baseline:!failure&&!stopping?current428Baseline:null,
+      current428_baseline:current428Baseline,
+      current428_target_capture:!failure&&!stopping?current428Target:null,
+      current428_target_refusal:current428CaptureRefusal(failure),
+      isolated_reconciliation_observed:isolatedReconciliation?.ok===true&&isolatedReconciliation.resumed===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
       postgres_process:finalPostgresProcess,
@@ -508,7 +569,14 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
     }else if(mode==='--profile'||mode==='--dispatch'){
       assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
       const archive=authenticate();let profile;
-      try{profile=selectPrivateProfile(readVerifiedPrivateImportSource(archive));}finally{archive.cleanup();}
+      try{
+        const source=readVerifiedPrivateImportSource(archive);
+        profile=selectPrivateProfile(source);
+        if(current428CaptureRequested()){
+          assert.equal(profile,'private');
+          assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);
+        }
+      }finally{archive.cleanup();}
       if(selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER))assert.equal(profile,'private');
       if(mode==='--profile')console.log(profile);
       else if(profile==='native')process.exitCode=3; // The only legacy-path continuation status.

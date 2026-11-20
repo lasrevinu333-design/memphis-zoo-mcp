@@ -13,8 +13,40 @@
     },
     "scripts/run-private-backup-only-rehearsal.mjs": {
       "previousSha256": "bca81f466de6733d5968fc23742ce11e765809cb272164dd264e7ff03a37f4b1",
-      "currentSha256": "442de97edd42f44092d189fcdfc293c26208b0bf4da56dbfa70f1199952ee37b",
+      "currentSha256": "48c1487c5e30bceea80669cd60294eae2ca5c493d0c48f4faac5c8cee9c31d21",
       "hunks": [
+        {
+          "after": "import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';\nimport {captureCurrent428RollbackTarget,current428CaptureRefusal} from './current428-rollback-target.mjs';\n",
+          "before": "import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';\n"
+        },
+        {
+          "after": "  'SOURCE_HANDLE','ARCHIVE_CURRENTNESS','PROGRAM_CURRENTNESS','INVENTORY_CURRENTNESS']);\nfunction current428CaptureRequested(){\n  const flag=process.env.PRIVATE_CURRENT428_FORWARD_CAPTURE;\n  assert.ok(flag===undefined||flag==='false'||flag==='true');\n  if(flag==='true'){\n    assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');\n    assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');\n    assert.notEqual(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,'true');\n  }\n  return flag==='true';\n}\n",
+          "before": "  'SOURCE_HANDLE','ARCHIVE_CURRENTNESS','PROGRAM_CURRENTNESS','INVENTORY_CURRENTNESS']);\n"
+        },
+        {
+          "after": "  const contextDiagnosticOnly=selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER);\n  const current428Capture=current428CaptureRequested();\n",
+          "before": "  const contextDiagnosticOnly=selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER);\n"
+        },
+        {
+          "after": "  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null,current428Baseline=null;\n  let isolatedReconciliation=null,current428Target=null;\n",
+          "before": "  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null,current428Baseline=null;\n"
+        },
+        {
+          "after": "    archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');\n    if(current428Capture)assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);\n",
+          "before": "    archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');\n"
+        },
+        {
+          "after": "    }\n    if(current428Capture){\n      phase='current428_signed_isolated_reconciliation';\n      assert.ok(current428Baseline);\n      assert.equal(result.resume_eligible,true);\n      assert.deepEqual(current428Baseline.open_discrepancies,[]);\n      const candidateCommit=await run('git',['rev-parse','HEAD']);\n      const candidateTree=await run('git',['rev-parse','HEAD^{tree}']);\n      assert.match(candidateCommit,/^[a-f0-9]{40}$/);\n      assert.equal(candidateCommit,process.env.GITHUB_SHA);\n      assert.match(candidateTree,/^[a-f0-9]{40}$/);\n      await verifyTarget();\n      const reconciliationKey=randomBytes(32).toString('hex');\n      const reconciliationKeyId='private-qualification-'+process.env.GITHUB_RUN_ID;\n      const reconcileEnv={...baseEnv,SUPABASE_DB_URL:secretEnv.SUPABASE_DB_URL,\n        SUPABASE_PROJECT_REF:source.sourceBinding.project_ref};\n      const signed=JSON.parse(await run(process.execPath,['scripts/create-production-restore-reconciliation.mjs'],{\n        env:{...reconcileEnv,RESTORE_RECONCILIATION_NAMED_ACTOR:'Root isolated current428 qualification',\n          RESTORE_RECONCILIATION_RESOLUTIONS_JSON:'[]',RESTORE_RECONCILIATION_SIGNING_KEY:reconciliationKey,\n          RESTORE_RECONCILIATION_SIGNING_KEY_ID:reconciliationKeyId},\n      }));\n      assert.equal(signed.intent.restore_id,current428Baseline.restore_id);\n      assert.equal(signed.intent.authority_generation,current428Baseline.authority_generation);\n      assert.equal(signed.intent.archive_digest,current428Baseline.archive_digest);\n      assert.equal(signed.intent.final_manifest_sha256,current428Baseline.final_manifest_sha256);\n      assert.equal(signed.intent.discrepancy_snapshot_sha256,current428Baseline.discrepancy_snapshot_sha256);\n      assert.deepEqual(signed.intent.resolutions,[]);\n      await verifyTarget();\n      isolatedReconciliation=JSON.parse(await run(process.execPath,['scripts/apply-production-restore-reconciliation.mjs'],{\n        env:{...reconcileEnv,RESTORE_RECONCILIATION_APPLY:'true',\n          RESTORE_RECONCILIATION_CONFIRM_PROJECT_REF:source.sourceBinding.project_ref,\n          RESTORE_RECONCILIATION_VERIFY_KEY:reconciliationKey,RESTORE_RECONCILIATION_VERIFY_KEY_ID:reconciliationKeyId,\n          RESTORE_RECONCILIATION_JSON:JSON.stringify(signed)},\n      }));\n      phase='current428_rollback_target';\n      await verifyTarget();\n      const ownerClient=new pg.Client({connectionString:secretEnv.SUPABASE_DB_URL,\n        connectionTimeoutMillis:10000,application_name:'custodial-current428-rollback-qualification'});\n      try{\n        await ownerClient.connect();\n        const captured=await captureCurrent428RollbackTarget({client:ownerClient,archive,bootstrapSource,\n          paused:current428Baseline,reconciliation:isolatedReconciliation,verifyTarget});\n        current428Target={...captured,candidate_commit:candidateCommit,candidate_tree:candidateTree};\n      }finally{await ownerClient.end();}\n    }\n",
+          "before": "    }\n"
+        },
+        {
+          "after": "      current428_baseline:current428Baseline,\n      current428_target_capture:!failure&&!stopping?current428Target:null,\n      current428_target_refusal:current428CaptureRefusal(failure),\n      isolated_reconciliation_observed:isolatedReconciliation?.ok===true&&isolatedReconciliation.resumed===true,\n",
+          "before": "      current428_baseline:!failure&&!stopping?current428Baseline:null,\n"
+        },
+        {
+          "after": "      try{\n        const source=readVerifiedPrivateImportSource(archive);\n        profile=selectPrivateProfile(source);\n        if(current428CaptureRequested()){\n          assert.equal(profile,'private');\n          assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);\n        }\n      }finally{archive.cleanup();}\n",
+          "before": "      try{profile=selectPrivateProfile(readVerifiedPrivateImportSource(archive));}finally{archive.cleanup();}\n"
+        },
         {
           "after": "import {readCurrent428PreservedRows,readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';\nimport {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';\n",
           "before": "import {readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';\n"
@@ -123,8 +155,24 @@
     },
     ".github/workflows/production-backup-migration-rehearsal.yml": {
       "previousSha256": "e3352172fac50e799262819801d1c4f6396ae45e8664fee92272d445bbf5bcfa",
-      "currentSha256": "c26f98b0fce489b2397a76d366228a2b3fed96c4cb7b36e070b432fd07656d75",
+      "currentSha256": "e2dc592364589f81036271681a3729c0a6758018ad9c0cb7f20e917438b42cd3",
       "hunks": [
+        {
+          "after": "        default: \"\"\n      private_current428_forward_capture:\n        description: Capture the current signed three-forward target with verified rollback\n        required: false\n        type: boolean\n        default: false\n",
+          "before": "        default: \"\"\n"
+        },
+        {
+          "after": "          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs scripts/current428-forward-readback-tests.mjs scripts/current428-rollback-target-tests.mjs\n",
+          "before": "          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs scripts/current428-forward-readback-tests.mjs\n"
+        },
+        {
+          "after": "          PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY: ${{ inputs.private_context_cost_diagnostic_only }}\n          PRIVATE_CURRENT428_FORWARD_CAPTURE: ${{ inputs.private_current428_forward_capture }}\n",
+          "before": "          PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY: ${{ inputs.private_context_cost_diagnostic_only }}\n"
+        },
+        {
+          "after": "          if test \"$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY\" = true; then test \"$REHEARSAL_SCOPE\" = backup_only; test \"$OFFICIAL_LOCAL_STORAGE_PROVIDER\" = true; fi\n          if test \"$PRIVATE_CURRENT428_FORWARD_CAPTURE\" = true; then\n            test \"$REHEARSAL_SCOPE\" = backup_only\n            test \"$OFFICIAL_LOCAL_STORAGE_PROVIDER\" = true\n            test \"$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY\" = false\n          fi\n",
+          "before": "          if test \"$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY\" = true; then test \"$REHEARSAL_SCOPE\" = backup_only; test \"$OFFICIAL_LOCAL_STORAGE_PROVIDER\" = true; fi\n"
+        },
         {
           "after": "          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs scripts/current428-forward-readback-tests.mjs\n",
           "before": "          node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs\n"

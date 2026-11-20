@@ -43,7 +43,8 @@ const manifestSql = `select c.state, c.mutations_paused, c.restore_id::text,
  where c.singleton`;
 
 const recipeSql = `select r.identity, p.proowner::regrole::text owner,
- pg_get_functiondef(p.oid) definition, p.prosrc body
+ pg_get_functiondef(p.oid) definition, p.prosrc body,
+ to_jsonb(p)-'prosrc'-'prosqlbody' attributes
  from unnest($1::text[]) with ordinality r(identity,position)
  left join pg_proc p on p.oid=to_regprocedure(r.identity)
  order by r.position`;
@@ -120,6 +121,37 @@ function originalReadbackPort(client) {
   return { databaseName, query };
 }
 
+export async function readCurrent428RecoveryDefinitions({client, archive, bootstrapSource, state}) {
+  assertVerifiedImmutableBootstrapSource(bootstrapSource, archive);
+  assert.ok(state === 'restored' || state === 'original');
+  const { query } = originalReadbackPort(client);
+  const recipes = bootstrapSource.recipes;
+  assert.equal(recipes.length, 51);
+  const restored = state === 'restored';
+  const guards = await query(recipeSql, [recipes.map(recipe => recipe.identity)]);
+  assert.equal(guards.rowCount, recipes.length);
+  for (const [index, recipe] of recipes.entries()) {
+    const row = guards.rows[index];
+    assert.equal(row.identity, recipe.identity);
+    assert.equal(row.owner, 'postgres');
+    assert.equal(digest(row.definition), restored ? recipe.afterHash : recipe.beforeHash);
+    assert.equal(digest(row.body), restored ? recipe.afterBodyHash : recipe.beforeBodyHash);
+  }
+  const registry = one(await query(registrySql, [
+    '[' + bootstrapSource.registryRows.join(',') + ']',
+    JSON.stringify(restored ? bootstrapSource.registrySource : {}),
+  ]), 'one registry comparison');
+  const registryRows = String(bootstrapSource.registryRows.length);
+  assert.deepEqual(registry, {
+    expected_rows: registryRows, actual_rows: registryRows, different_rows: '0', always_guard_count: '1',
+  }, 'Recovery inventory differs from the exact expected recipe state');
+  assertVerifiedImmutableBootstrapSource(bootstrapSource, archive);
+  return Object.freeze({
+    recipes: guards.rowCount, registryRows: Number(registryRows),
+    attributesSha256: digest(stableJson(guards.rows.map(row => row.attributes))),
+  });
+}
+
 export async function readCurrent428RestoredBaseline({ client, archive, bootstrapSource, restore }) {
   const forward = readVerifiedCurrent428ForwardQualificationSource(archive);
   const sourceCurrent = () => {
@@ -167,29 +199,7 @@ export async function readCurrent428RestoredBaseline({ client, archive, bootstra
   assert.equal(ledger.rows.at(-1)?.version, forward.source_ledger_head);
   assert.equal(stableJsonFileSha256(ledger.rows), forward.source_ledger_file_sha256);
 
-  const recipes = bootstrapSource.recipes;
-  assert.equal(recipes.length, 51);
-  const guards = await query(recipeSql, [recipes.map(recipe => recipe.identity)]);
-  assert.equal(guards.rowCount, recipes.length);
-  for (const [index, recipe] of recipes.entries()) {
-    const row = guards.rows[index];
-    assert.equal(row.identity, recipe.identity);
-    assert.equal(row.owner, 'postgres');
-    assert.equal(digest(row.definition), recipe.afterHash, 'Installed restore recipe definition changed');
-    assert.equal(digest(row.body), recipe.afterBodyHash, 'Installed restore recipe body changed');
-  }
-
-  const registry = one(await query(registrySql, [
-    '[' + bootstrapSource.registryRows.join(',') + ']',
-    JSON.stringify(bootstrapSource.registrySource),
-  ]), 'one registry comparison');
-  const registryRows = String(bootstrapSource.registryRows.length);
-  assert.deepEqual(registry, {
-    expected_rows: registryRows,
-    actual_rows: registryRows,
-    different_rows: '0',
-    always_guard_count: '1',
-  }, 'Recovery inventory must match the archived rows plus the installed restore recipes');
+  const recovery = await readCurrent428RecoveryDefinitions({client, archive, bootstrapSource, state: 'restored'});
 
   const open = await query(`select category,status,authority_generation::text,before_sha256,restored_sha256,
     before_count::text,restored_count::text,details_json
@@ -227,8 +237,9 @@ export async function readCurrent428RestoredBaseline({ client, archive, bootstra
     final_manifest_sha256: restore.final_manifest_sha256,
     restore_id: restore.restore_id,
     authority_generation: restore.authority_generation,
-    registry_rows: Number(registryRows),
-    restored_recipes: recipes.length,
+    registry_rows: recovery.registryRows,
+    restored_recipes: recovery.recipes,
+    recovery_routine_attributes_sha256: recovery.attributesSha256,
     ledger_count: forward.source_ledger_count,
     ledger_head: forward.source_ledger_head,
     source_inventory: forward.source_inventory,
