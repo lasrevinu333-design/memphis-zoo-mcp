@@ -1,9 +1,10 @@
+import {restoreUnifiedBackupWorkflow} from './fixtures/unified-backup-ci-source-successor.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {retainedFoundationWorkflow,priorFoundationWorkflowSha,splitFoundationWorkflow,restoreSplitFoundationWorkflow} from './foundation-ci-split-layout.mjs';
-const prior=retainedFoundationWorkflow(),actual=readFileSync(new URL('../.github/workflows/foundation-security-gate.yml',import.meta.url),'utf8');
+const prior=retainedFoundationWorkflow(),actual=restoreUnifiedBackupWorkflow(readFileSync(new URL('../.github/workflows/foundation-security-gate.yml',import.meta.url),'utf8'),'foundation-security-gate.yml');
 function jobs(source){
  const body=source.slice(source.indexOf('jobs:\n')+'jobs:\n'.length),heads=[...body.matchAll(/^  ([a-z_]+):\n/gm)];
  return Object.fromEntries(heads.map((m,i)=>[m[1],body.slice(m.index,heads[i+1]?.index??body.length)]));

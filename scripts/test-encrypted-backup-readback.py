@@ -151,7 +151,7 @@ class ReadbackTests(unittest.TestCase):
         self.assertLess(workflow.index('run: npm run test:backup-source-contracts'), workflow.index('run: npm run test:ci-workflows'))
         self.assertLess(workflow.index('run: npm run test:ci-workflows'), workflow.index('Require configured recovery secrets'))
         self.assertLess(workflow.index('run: npm run test:ci-workflows'), workflow.index('run: npm run backup:production'))
-        self.assertIn("node-version: '22.23.1'", workflow)
+        self.assertIn("node-version: '22.23.4'", workflow)
         self.assertIn('run-id: ${{ github.run_id }}', workflow)
         self.assertIn('if: ${{ success() }}', workflow)
         self.assertEqual(workflow.count('retention-days: 14'), 2)

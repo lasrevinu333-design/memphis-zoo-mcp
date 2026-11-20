@@ -2026,8 +2026,8 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const privateFailureRecords=new WeakMap();
       const consume=compileRecordedImporterSource('types','isDeepStrictEqual','privateFailures','readVerifiedPrivateImportSource',
         'openVerifiedRestoreTableData','createRestoreRowUtf8Guard','pipeline','createInterface','decodeRestoreTableRowLine',
-        consumer.slice(failStart,planStart)+'\nreturn async function(verifiedArchive,original,query){const db={};\n'+
-        consumer.slice(sqlStart,sqlEnd)+consumer.slice(loopStart,loopEnd)+'\nreturn total;};')(
+        consumer.slice(failStart,planStart)+'\nreturn async function(verifiedArchive,original,query){const db={};let importOperation="STAGE_PRIVATE_ORIGINALS";\n'+
+        consumer.slice(sqlStart,sqlEnd)+'\nconst mutate=sql; // Recording mutation port only; full witness closure has its own owning tests.\n'+consumer.slice(loopStart,loopEnd)+'\nreturn total;};')(
         types,isDeepStrictEqual,privateFailureRecords,sourceOf,(...args)=>{const data=open(...args);readers.push(data);return data;},
         createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine);
       const columns=[{name:'id',data_type:'bigint',generated:'',identity:''},{name:'value',data_type:'json',generated:'',identity:''}];
@@ -2039,7 +2039,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         {name:'employee_message_original_outcomes',primaryKey:['id'],columns,data:Buffer.alloc(0)},
         {name,primaryKey:['id'],columns,data:encodeRows(rows)}],
         changeCatalog:catalog=>{catalog.find(table=>table.schema_name===schema&&table.table_name===name).row_count=String(declared);}}));
-      const fixedSql='select custodial_dr.stage_immutable_private_row($1::text,$2::text,$3::text)';
+      const fixedSql='select custodial_dr.stage_immutable_private_row($1::text,$2::text,$3::text,$4::jsonb) as context';
       const sourceFailure=error=>error.code==='PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'&&error.outcome==='UNKNOWN'&&error.retry_safe===false;
       const privateTable=original=>original.selection.privateTables.find(table=>table.table_name===name);
       await run('PRIVATE_STAGE_BOUND_NEW declared zero refuses before first fixed staging callback',async()=>{

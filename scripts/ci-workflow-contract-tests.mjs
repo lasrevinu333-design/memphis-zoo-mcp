@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {restoreUnifiedBackupWorkflow,verifyUnifiedBackupCiInputs,currentUnifiedPackageRegressionView} from './fixtures/unified-backup-ci-source-successor.mjs';
 import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
 import {verifyCurrentFoundationSource,currentFoundationReviewedRegressionView,restoreCurrentRepairWorkflowProof,restoreCurrentBuild52WorkflowProof} from './fixtures/current-foundation-source-successor.mjs';
 import {verifyFreshCurrentOwningWiring} from './current-system-fresh-owning-wiring.mjs';
@@ -22,6 +23,8 @@ import { verifyFixedRankLinkWiring } from './static-weekly-fixed-rank-link-ci-wi
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const workflowDirectory = resolve(root, ".github", "workflows");
+const integratedCiChecks=spawnSync(process.execPath,['--test','scripts/unified-backup-ci-source-successor-tests.mjs'],{cwd:root,encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
+assert.equal(integratedCiChecks.error,undefined);assert.equal(integratedCiChecks.signal,null);assert.equal(integratedCiChecks.status,0,integratedCiChecks.stdout+integratedCiChecks.stderr);
 const releaseMigrationState = JSON.parse(readFileSync(resolve(root, "release", "production-migration-state.json"), "utf8"));
 const expectedProductionSource = releaseMigrationState.observed_production;
 const expectedProductionTarget = releaseMigrationState.target;
@@ -251,7 +254,7 @@ for (const name of workflowNames) {
   }
 }
 
-const schedulerGate = currentFoundationReviewedRegressionView(readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8"));
+const schedulerGate = currentUnifiedPackageRegressionView(currentFoundationReviewedRegressionView(readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8")));
 assert.match(schedulerGate, /if: failure\(\)[\s\S]*name: ci-fresh-only-failure-evidence-\$\{\{ github\.run_id \}\}[\s\S]*path: \$\{\{ runner\.temp \}\}\/ci-fresh-only-failure-evidence\/[\s\S]*if-no-files-found: warn/,
   "failed fresh fixtures must export only their fixed bounded evidence path without changing required provenance upload");
 for (const selectedFreshWorkflow of [schedulerGate, readFileSync(mixedFreshRepairWorkflowPath, "utf8")]) {
@@ -1077,14 +1080,16 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 // This length reader is admitted only for these exact reviewed input bodies,
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
+verifyUnifiedBackupCiInputs(new URL('../',import.meta.url));
+const reviewedBackupRehearsal=restoreUnifiedBackupWorkflow(productionBackupRehearsal,'production-backup-migration-rehearsal.yml');
 const cohortTestArgument = " scripts/immutable-current-restore-guard-cohort-tests.mjs";
 assert.equal(productionBackupRehearsal.split(cohortTestArgument).length, 2,
   "exactly one connection-free cohort regression belongs in the existing source contract step");
-assert.equal(createHash("sha256").update(productionBackupRehearsal.replace(cohortTestArgument, ""), "utf8").digest("hex"),
+assert.equal(createHash("sha256").update(reviewedBackupRehearsal.replace(cohortTestArgument, ""), "utf8").digest("hex"),
   "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
   "the complete reviewed workflow predecessor must survive the one source-test addition");
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "fb21dbdd66438f74d8eb2fc7d53bf6c30a5da7feec0f99b3841f8ef8c892aba5",
+  "ae3d0bc4423433a7bd20504cee61ff35d363bd276d095b07a2bea8ff9c2e5079",
   "rehearsal length measurement requires the exact Main F08 caller candidate workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
