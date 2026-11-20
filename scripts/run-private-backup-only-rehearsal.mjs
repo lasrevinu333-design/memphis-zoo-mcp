@@ -18,6 +18,7 @@ import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOw
 import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
+import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
 
 const privateRestoreWorkTimeoutMs=1900000; // Same existing child-process ceiling; no shorter quiet-socket cutoff.
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -228,7 +229,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let relaySocketTimeouts=0,finalPostgresProcess=null;
+  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null;
   let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null,cronSetup=null,vendorPrivileges=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -309,7 +310,7 @@ export async function runPrivate(){
       '--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size='+pgMemory,
       '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',PG_IMAGE,'postgres','-D','/etc/postgresql',
       '-c',"listen_addresses=*",'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
-      '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off']);
+      '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off',...privateFunctionStatsArguments(requireOwnerProfile())]);
     creationOperation='CHECK_CONTAINER_ID_SHAPE';
     assert.match(cid,/^[0-9a-f]{64}$/);
     const identity={id:cid,name,owner,networkId,networkName,ownerProfile};
@@ -404,6 +405,10 @@ export async function runPrivate(){
         try{memoryEvents=await docker(['exec',cid,'cat','/sys/fs/cgroup/memory.events'],{cleanup:true,timeout:5000});}catch{}
         try{logs=await docker(['logs','--tail','100',cid],{cleanup:true,timeout:5000});}catch{}
         finalPostgresProcess=privatePostgresProcessDiagnostic(value.State,memoryEvents,logs);
+        if(privateFunctionStatsArguments(ownerProfile).length&&value.State?.Running===true){
+          try{finalFunctionStats=readPrivateFunctionStats(await docker(['exec',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',
+            '-U','supabase_admin','-d',database,'-c',PRIVATE_FUNCTION_STATS_SQL],{cleanup:true,timeout:5000}));}catch{}
+        }
         await docker(['rm','-f',cid],{cleanup:true});assert.equal(await docker(['ps','-aq','--filter','id='+cid],{cleanup:true}),'');}
       pgAbsent=true;
       const networks=(await docker(['network','ls','--no-trunc','-q','--filter','label='+label+'='+owner],{cleanup:true})).split('\n').filter(Boolean);assert.ok(networks.length<=1);
@@ -425,6 +430,7 @@ export async function runPrivate(){
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
       postgres_process:finalPostgresProcess,
+      function_cost:finalFunctionStats,
       relay_transport:{socket_timeout_count:relaySocketTimeouts,socket_timeout_ms:privateRestoreWorkTimeoutMs},
       subprocess_failure:subprocessFailure,cron_schema_setup:cronSetup,vendor_privileges:vendorPrivileges,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});

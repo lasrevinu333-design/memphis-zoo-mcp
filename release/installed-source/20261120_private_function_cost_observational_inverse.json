@@ -1,0 +1,28 @@
+{
+  "format": "custodial.private-function-cost-observational-inverse.v1",
+  "path": "scripts/run-private-backup-only-rehearsal.mjs",
+  "previousSha256": "3c1f648dff14122bbcc33c1e5f4cbe5b88a9458408ce1a48f5b65e1323b16eac",
+  "currentSha256": "05902eaa885fa652590ac056658715691ed13df2265fcd10aee51bed0b69f586",
+  "hunks": [
+    {
+      "before": "",
+      "after": "import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';\n"
+    },
+    {
+      "before": "  let relaySocketTimeouts=0,finalPostgresProcess=null;\n",
+      "after": "  let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null;\n"
+    },
+    {
+      "before": "      '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off']);\n",
+      "after": "      '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off',...privateFunctionStatsArguments(requireOwnerProfile())]);\n"
+    },
+    {
+      "before": "",
+      "after": "        if(privateFunctionStatsArguments(ownerProfile).length&&value.State?.Running===true){\n          try{finalFunctionStats=readPrivateFunctionStats(await docker(['exec',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',\n            '-U','supabase_admin','-d',database,'-c',PRIVATE_FUNCTION_STATS_SQL],{cleanup:true,timeout:5000}));}catch{}\n        }\n"
+    },
+    {
+      "before": "",
+      "after": "      function_cost:finalFunctionStats,\n"
+    }
+  ]
+}
