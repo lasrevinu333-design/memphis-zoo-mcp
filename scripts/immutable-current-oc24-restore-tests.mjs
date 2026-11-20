@@ -1,3 +1,4 @@
+import {removeCurrentLegacyDailyFence as undoDailyFence,currentLegacyDailyFenceRecipe as dailyFenceRecipe} from './immutable-current-legacy-daily-fence-source.mjs';
 import {removeCurrentAbsenceRestoreSource as undoAbsence,currentAbsenceRestoreRecipe as absenceRecipe} from './immutable-current-absence-restore-source.mjs';
 import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import {removeCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
@@ -11,6 +12,7 @@ import {createHash} from 'node:crypto';
 import {currentOc24RestoreRecipe,oc24RestoreIdentity,extendCurrentOc24RestoreSource,removeCurrentOc24RestoreSource} from './immutable-current-oc24-restore-source.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex'),recipe=currentOc24RestoreRecipe();
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+{ assert.deepEqual(program.recipes.pop(),dailyFenceRecipe());const s=program.statements.find(x=>x.sourcePath==='proposals/immutable-private-owner-context.sql');s.sql=undoDailyFence(s.sql);s.sourceSha256=sha(s.sql); }
 { assert.deepEqual(program.recipes.pop(),absenceRecipe());const s=program.statements.find(x=>x.sourcePath==='proposals/immutable-private-owner-context.sql');s.sql=undoAbsence(s.sql);s.sourceSha256=sha(s.sql); }
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
 statement.sql=removeCurrentScanGuard(statement.sql);statement.sourceSha256=sha(statement.sql);

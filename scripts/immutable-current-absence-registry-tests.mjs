@@ -7,14 +7,14 @@ const source=readFileSync(new URL('./immutable-private-source-bootstrap.mjs',imp
 const a=source.indexOf(' const originalRows=raw.registryRows.map('),b=source.indexOf(" sourcePhase='SOURCE_STATEMENTS';",a);assert.ok(a>0&&b>a);
 const block=source.slice(a,b);const execute=new Function('raw','recipes','postgresProgram','assert','sha',block+'return registrySource;');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
-const r=currentAbsenceRestoreRecipe();assert.deepEqual(program.recipes.at(-1),r);
+const r=currentAbsenceRestoreRecipe();assert.deepEqual(program.recipes.at(-2),r);
 const rows=program.recipes.filter(x=>x.identity!=='custodial_coverall.bind_manual_delivery_after_acceptance()').map(x=>({object_kind:'function',object_identity:x.registry_identity,definition_sql:x.before,definition_sha256:x.beforeHash,unrelated:'PRESERVE'}));
 // One inert base registry row supplies the bootstrap recipe outside the current program.
 const base={identity:'public.unit_base()',registry_identity:'unit_base()',before:'UNIT_BASE',beforeHash:sha('UNIT_BASE'),after:'UNIT_BASE_AFTER',afterHash:sha('UNIT_BASE_AFTER')};
 const recipes=[base,...program.recipes];rows.unshift({object_kind:'function',object_identity:base.registry_identity,definition_sql:base.before,definition_sha256:base.beforeHash,unrelated:'PRESERVE'});
 const run=rs=>execute({registryRows:rs.map(x=>JSON.stringify(x))},recipes,true,assert,sha);
 test('shipping selector binds exact absence original and modifies only approved definition/hash projection',()=>{
- const before=structuredClone(rows),result=run(rows);assert.equal(Object.keys(result).length,29);
+ const before=structuredClone(rows),result=run(rows);assert.equal(Object.keys(result).length,30);
  assert.deepEqual(result[r.registry_identity],{definition_sql:r.after,definition_sha256:r.afterHash});assert.deepEqual(rows,before);
  for(const x of recipes.filter(x=>x.identity!=='custodial_coverall.bind_manual_delivery_after_acceptance()')) assert.deepEqual(result[x.registry_identity],{definition_sql:x.after,definition_sha256:x.afterHash});
 });

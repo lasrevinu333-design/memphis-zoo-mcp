@@ -1,3 +1,4 @@
+import {removeCurrentLegacyDailyFence as undoDailyFence,currentLegacyDailyFenceRecipe as dailyFenceRecipe} from './immutable-current-legacy-daily-fence-source.mjs';
 import {removeCurrentAbsenceRestoreSource,currentAbsenceRestoreRecipe} from './immutable-current-absence-restore-source.mjs';
 import {removeCurrentScanGuard} from './immutable-current-scan-guard-source.mjs';
 import {removeCurrentSeparationGuard} from './immutable-current-separation-guard-source.mjs';
@@ -15,6 +16,7 @@ import {removeCurrentLeadershipRestoreSource,leadershipRestoreIdentity} from './
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const bytes=readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'),program=JSON.parse(bytes);
 const statement=program.statements.find(s=>s.sourcePath==='proposals/immutable-private-owner-context.sql');
+assert.deepEqual(program.recipes.pop(),dailyFenceRecipe());statement.sql=undoDailyFence(statement.sql);statement.sourceSha256=sha(statement.sql);
 assert.deepEqual(program.recipes.pop(),currentAbsenceRestoreRecipe());statement.sql=removeCurrentAbsenceRestoreSource(statement.sql);statement.sourceSha256=sha(statement.sql);
 statement.sql=removeCurrentScanGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
 statement.sql=removeCurrentSeparationGuard(statement.sql);statement.sourceSha256=sha(statement.sql);
