@@ -102,14 +102,22 @@ export function assertPrivateNetworkMembers(value,identity,providerId=null){
 }
 export function pinnedPgMemory(profile){
   insist(['native-text-v4-fresh-supabase-admin','immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres'].includes(profile),'Closed PG resource profile required.');
+  // The launcher also uses this bound for the current owner's private PGDATA.
+  if(profile==='immutable-private-fresh-postgres')return '4g';
   return profile==='immutable-private-fresh-supabase-admin'?'1g':'2g';
 }
+export function pinnedPgRestoreMemory(profile){
+  // Leave process memory above the private volume limit, which now accommodates
+  // the native verification sorts for the current original's large relation.
+  return profile==='immutable-private-fresh-postgres'?'6g':pinnedPgMemory(profile);
+}
 export function assertPinnedPgResources(value,cid,name,profile){
-  const memory=Number(pinnedPgMemory(profile).slice(0,-1))*1024**3;
+  const memory=Number(pinnedPgRestoreMemory(profile).slice(0,-1))*1024**3;
   insist(value.Id===cid && value.Name==='/'+name && value.Config.Image===PG_IMAGE
     && value.HostConfig.Memory===memory && value.HostConfig.MemorySwap===memory
     && value.HostConfig.NanoCpus===1e9 && value.HostConfig.PidsLimit===256,'Provider-only PG resource pin refused.');
-  if(profile!=='immutable-private-fresh-supabase-admin')insist(value.HostConfig.Tmpfs?.['/var/lib/postgresql/data']==='rw,size=2g','Exact native PG tmpfs2GiB required.');
+  if(profile!=='immutable-private-fresh-supabase-admin')insist(
+    value.HostConfig.Tmpfs?.['/var/lib/postgresql/data']==='rw,size='+pinnedPgMemory(profile),'Exact profile-specific private PGDATA tmpfs required.');
   return true;
 }
 export function validatePinnedOfficialImage(value){
@@ -668,8 +676,8 @@ async function host(){
       privateNetwork=Object.freeze({networkId,networkName:network,owner:pg.Config.Labels['custodial.private-backup-rehearsal'],pgid,pgName,address:endpoint.IPAddress});
       assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
     }
-    mark('BOUND_OWNED_POSTGRES');const pgMemory=pinnedPgMemory(a.source_profile);
-    if(pgMemory==='2g')memoryFloor(4*1024**3);
+    mark('BOUND_OWNED_POSTGRES');const pgMemory=pinnedPgRestoreMemory(a.source_profile);
+    if(pgMemory!=='1g')memoryFloor((parseInt(pgMemory,10)+2)*1024**3);
     await run(['docker','update','--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',pgid]);
     const boundedPg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgid]));
     assertPinnedPgResources(boundedPg,pgid,pgName,a.source_profile);

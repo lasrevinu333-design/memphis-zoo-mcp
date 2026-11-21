@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {PG_IMAGE,privatePostgresProcessDiagnostic,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
-import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,assertPinnedPgResources,pinnedPgMemory,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,assertPinnedPgResources,pinnedPgMemory,pinnedPgRestoreMemory,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -865,17 +865,18 @@ test('private PostgreSQL process observation distinguishes backend death and cgr
 });
 
 
-test('current original-owner PostgreSQL copy uses existing pinned 2GiB resources while legacy stays at1GiB',()=>{
- const fixture=memory=>({Id:'a'.repeat(64),Name:'/unit_owned',Config:{Image:PG_IMAGE},HostConfig:{Memory:memory*1024**3,MemorySwap:memory*1024**3,NanoCpus:1e9,PidsLimit:256,Tmpfs:{'/var/lib/postgresql/data':'rw,size='+memory+'g'}}});
- for(const profile of ['native-text-v4-fresh-supabase-admin','immutable-private-fresh-postgres']){
-  assert.equal(assertPinnedPgResources(fixture(2),'a'.repeat(64),'unit_owned',profile),true);
-  for(const memory of [1,3])assert.throws(()=>assertPinnedPgResources(fixture(memory),'a'.repeat(64),'unit_owned',profile));
-  for(const mutate of [v=>v.HostConfig.MemorySwap=3*1024**3,v=>v.HostConfig.NanoCpus=2e9,v=>v.HostConfig.PidsLimit=512,v=>v.HostConfig.Tmpfs['/var/lib/postgresql/data']='rw,size=3g',v=>v.Id='b'.repeat(64),v=>v.Config.Image='unpinned']){const v=fixture(2);mutate(v);assert.throws(()=>assertPinnedPgResources(v,'a'.repeat(64),'unit_owned',profile));}
+test('the current original-owner PostgreSQL fixture has 6GiB restore memory and a 4GiB private data volume',()=>{
+ const fixture=(memory,tmpfs=2)=>({Id:'a'.repeat(64),Name:'/unit_owned',Config:{Image:PG_IMAGE},HostConfig:{Memory:memory*1024**3,MemorySwap:memory*1024**3,NanoCpus:1e9,PidsLimit:256,Tmpfs:{'/var/lib/postgresql/data':'rw,size='+tmpfs+'g'}}});
+ for(const [profile,expected,tmpfs] of [['native-text-v4-fresh-supabase-admin',2,2],['immutable-private-fresh-postgres',6,4]]){
+  assert.equal(assertPinnedPgResources(fixture(expected,tmpfs),'a'.repeat(64),'unit_owned',profile),true);
+  for(const memory of [1,2,3,4,6].filter(value=>value!==expected))assert.throws(()=>assertPinnedPgResources(fixture(memory,tmpfs),'a'.repeat(64),'unit_owned',profile));
+  for(const mutate of [v=>v.HostConfig.MemorySwap=3*1024**3,v=>v.HostConfig.NanoCpus=2e9,v=>v.HostConfig.PidsLimit=512,v=>v.HostConfig.Tmpfs['/var/lib/postgresql/data']='rw,size=3g',v=>v.Id='b'.repeat(64),v=>v.Config.Image='unpinned']){const v=fixture(expected,tmpfs);mutate(v);assert.throws(()=>assertPinnedPgResources(v,'a'.repeat(64),'unit_owned',profile));}
  }
- assert.equal(assertPinnedPgResources(fixture(1),'a'.repeat(64),'unit_owned','immutable-private-fresh-supabase-admin'),true);
+ assert.equal(assertPinnedPgResources(fixture(1,1),'a'.repeat(64),'unit_owned','immutable-private-fresh-supabase-admin'),true);
  assert.throws(()=>assertPinnedPgResources(fixture(2),'a'.repeat(64),'unit_owned','immutable-private-fresh-supabase-admin'));
  assert.throws(()=>assertPinnedPgResources(fixture(2),'a'.repeat(64),'unit_owned','caller-selected'));
  const runner=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+ assert.equal(pinnedPgMemory('immutable-private-fresh-postgres'),'4g');
  assert.ok(runner.includes("const pgMemory=pinnedPgMemory(ownerProfile.id==='immutable-private-current-postgres'?'immutable-private-fresh-postgres':'immutable-private-fresh-supabase-admin')"));
  assert.ok(runner.includes("'--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size='+pgMemory"));
  assert.ok(runner.indexOf('ownerProfile=readVerifiedImmutableBootstrapOwnerProfile')<runner.indexOf('const pgMemory='));
@@ -885,15 +886,16 @@ test('current original-owner PostgreSQL copy uses existing pinned 2GiB resources
 test('actual rehearsal host binds the same closed PostgreSQL memory allowance it verifies',async()=>{
  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
  const start=source.indexOf("    mark('BOUND_OWNED_POSTGRES');"),end=source.indexOf('    const pgPorts=',start);assert.ok(start>0&&end>start);
- const runBlock=new Function('ports',`const {mark,pinnedPgMemory,a,memoryFloor,run,pgid,pgName,inspectFormat,assertPinnedPgResources}=ports;return(async()=>{${source.slice(start,end)}})();`);
- for(const profile of ['native-text-v4-fresh-supabase-admin','immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres']){
-  const expected=pinnedPgMemory(profile),cid='a'.repeat(64),name='unit_owned',commands=[],floors=[];
-  const fixture={Id:cid,Name:'/'+name,Config:{Image:PG_IMAGE},HostConfig:{Memory:parseInt(expected)*1024**3,MemorySwap:parseInt(expected)*1024**3,NanoCpus:1e9,PidsLimit:256,Tmpfs:{'/var/lib/postgresql/data':'rw,size='+expected}}};
-  const ports={mark:x=>assert.equal(x,'BOUND_OWNED_POSTGRES'),pinnedPgMemory,a:{source_profile:profile},memoryFloor:x=>floors.push(x),run:async args=>{commands.push(args);return args[1]==='inspect'?JSON.stringify(fixture):'';},pgid:cid,pgName:name,inspectFormat:'UNIT',assertPinnedPgResources};
-  await runBlock(ports);assert.deepEqual(commands[0],['docker','update','--memory',expected,'--memory-swap',expected,'--cpus','1','--pids-limit','256',cid]);assert.deepEqual(floors,expected==='2g'?[4*1024**3]:[]);
+ const runBlock=new Function('ports',`const {mark,pinnedPgRestoreMemory,a,memoryFloor,run,pgid,pgName,inspectFormat,assertPinnedPgResources}=ports;return(async()=>{${source.slice(start,end)}})();`);
+ for(const [profile,expectedHostGiB] of [['native-text-v4-fresh-supabase-admin',4],['immutable-private-fresh-supabase-admin',0],['immutable-private-fresh-postgres',8]]){
+  const expected=pinnedPgRestoreMemory(profile),cid='a'.repeat(64),name='unit_owned',commands=[],floors=[];
+  const fixture={Id:cid,Name:'/'+name,Config:{Image:PG_IMAGE},HostConfig:{Memory:parseInt(expected)*1024**3,MemorySwap:parseInt(expected)*1024**3,NanoCpus:1e9,PidsLimit:256,Tmpfs:{'/var/lib/postgresql/data':'rw,size='+pinnedPgMemory(profile)}}};
+  const ports={mark:x=>assert.equal(x,'BOUND_OWNED_POSTGRES'),pinnedPgRestoreMemory,a:{source_profile:profile},memoryFloor:x=>floors.push(x),run:async args=>{commands.push(args);return args[1]==='inspect'?JSON.stringify(fixture):'';},pgid:cid,pgName:name,inspectFormat:'UNIT',assertPinnedPgResources};
+  await runBlock(ports);assert.deepEqual(commands[0],['docker','update','--memory',expected,'--memory-swap',expected,'--cpus','1','--pids-limit','256',cid]);assert.deepEqual(floors,expectedHostGiB?[expectedHostGiB*1024**3]:[]);
   fixture.HostConfig.Memory=3*1024**3;await assert.rejects(runBlock(ports));
  }
  assert.throws(()=>pinnedPgMemory('caller-selected'));
+ assert.throws(()=>pinnedPgRestoreMemory('caller-selected'));
 });
 
 test('bounded substage checkpoints survive both privacy layers without changing source execution or admitting work',async()=>{
