@@ -205,7 +205,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "21590e0ff951b9dc57d6ed9a576a43cc8bb28412"
+        "object_id": "35963f329978f923bc01a92db1768f6663bb243b"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -8425,7 +8425,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "aecec4283f559a86eeb76bb8c9b39d0fac19b5f7"
+        "object_id": "af6535cb3b2a427fd15ded579d257673a9e6521d"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8455,12 +8455,12 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "a6774d9d99fc8e0d60455368bc7a1b93a1df4529"
+        "object_id": "d760ac8c9af74cc059bcf277140f95d2ad3adcce"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
         "mode": "100644",
-        "object_id": "689a8c527abdebaaa705823838ac2197107d09b9"
+        "object_id": "710c50b7cded6629dd0776cc5198ce3c50b4ea3e"
       },
       {
         "path": "scripts/private-restore-function-diagnostic-tests.mjs",
@@ -9065,12 +9065,12 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "58dc626eebc270a863c896f50b5eeec8d886c641"
+        "object_id": "22ece730d7bc837f07cbe1cf34059adbdae8f6ec"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "bee66e5f2355b483e2e88e33d78c819aed0c9334"
+        "object_id": "565585f1e3f2f210adc6bb689947cd1a278aa807"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
