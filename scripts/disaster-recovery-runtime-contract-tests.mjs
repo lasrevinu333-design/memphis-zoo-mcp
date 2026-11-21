@@ -1641,6 +1641,7 @@ if(process.argv.includes("--immutable-fresh-database-evidence-only")){
   "import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';\n",
   "import {readVerifiedPrivateImportSource} from './disaster-recovery-archive.mjs';\n",
   "import {restoreCheckEvidence} from './restore-unvalidated-checks.mjs';\n",
+  "import {readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';\n",
  ];
  let body=code;
  for(const line of imports){assert.equal(body.split(line).length,2,"Exact shipping imports required");body=body.replace(line,"");}
@@ -1648,7 +1649,7 @@ if(process.argv.includes("--immutable-fresh-database-evidence-only")){
  assert.equal(body.split(exported).length,2);
  body=body.replace(exported,"function buildVerifiedImmutableFreshDatabaseEvidence(options)");
  const compile=new Function("types","isDeepStrictEqual","readVerifiedImmutableFreshRestoreIntent",
-  "readVerifiedPrivateImportSource","restoreCheckEvidence",body+"\nreturn buildVerifiedImmutableFreshDatabaseEvidence;");
+  "readVerifiedPrivateImportSource","restoreCheckEvidence","readLegacyCompletionCheckEvidence",body+"\nreturn buildVerifiedImmutableFreshDatabaseEvidence;");
  const id="12345678-1234-1234-1234-123456789abc",digest="a".repeat(64);
  let variants=0,getters=0,traps=0,coercions=0;
  const fixture=()=>{
@@ -1671,7 +1672,8 @@ if(process.argv.includes("--immutable-fresh-database-evidence-only")){
   },actualArchive=>{
    trace.push("source");state.sourceReads++;assert.equal(actualArchive,archive);
    return state.onSource?state.onSource():state.original;
-  },values=>{trace.push("checks");state.checks++;assert.deepEqual(values,[]);return restoreCheckEvidence(values);});
+  },values=>{trace.push("checks");state.checks++;assert.deepEqual(values,[]);return restoreCheckEvidence(values);},
+    (actualArchive,actualToken)=>{assert.equal(actualArchive,archive);assert.equal(actualToken,token);return state.legacyCheck;});
   return {archive,token,binding,intent,captured,original,selection,finished,trace,state,build,
    options:()=>({verifiedArchive:archive,freshIntent:token,finished})};
  };
@@ -1702,6 +1704,13 @@ if(process.argv.includes("--immutable-fresh-database-evidence-only")){
  f.finished.private_rows="changed";assert.equal(output.database.original_data_import.private_rows,"3");
  assert.throws(()=>{output.event.tables=0;},TypeError);
  assert.deepEqual(f.trace,["intent","source","checks","source","intent"]);
+ const legacy=fixture();
+ legacy.state.legacyCheck=Object.freeze({mode:'REINSTATED_BEFORE_COMMIT',count:1,sha256:'b'.repeat(64),constraints:Object.freeze([
+  Object.freeze({schema_name:'public',table_name:'completion_responses',constraint_name:'completion_responses_client_completion_id_uuid'}),
+ ])});
+ const restored=legacy.build(legacy.options());
+ assert.equal(restored.database.unvalidated_check_constraints,legacy.state.legacyCheck);
+ assert.equal(restored.event.unvalidated_check_constraints,legacy.state.legacyCheck);
  // Exact wire bounds and contradictory/unknown fields.
  for(const [key,value] of [
   ["database_oid",1],["database_oid","0"],["database_oid","01"],["database_oid","4294967296"],

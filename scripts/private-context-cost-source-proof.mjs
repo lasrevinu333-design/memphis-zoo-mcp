@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const sha=v=>createHash('sha256').update(v).digest('hex');
-// Reverse only the approved timeout revision before checking the historical byte proof.
-const timeoutRevision={
+// Reverse only the exact rehearsal revisions before checking the historical byte proof.
+const rehearsalRevisions={
  '.github/workflows/production-backup-migration-rehearsal.yml':{
   sha256:'7b6f3eddbe408789cabb108dfe3c0a361ac97a904722ced4add0c36518cba1a7',
   replacements:[['&& 330 || 45','&& 205 || 45']],
@@ -14,6 +14,16 @@ const timeoutRevision={
   replacements:[['lifetimeMs===6*60*60*1000','lifetimeMs===4*60*60*1000'],
    ['currentFullRestore?6*60*60*1000','currentFullRestore?4*60*60*1000']],
  },
+ 'scripts/immutable-private-data-import.mjs':{
+  sha256:'0c323f844288c1185f5e8132c80071336eafd92f0fede0e74dd3c595b1491c39',
+  replacements:[
+   ["import {stageLegacyCompletionCheck,reinstateLegacyCompletionCheck,readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';\n",''],
+   ['  await stageLegacyCompletionCheck(db,verifiedArchive,freshIntent);\n',''],
+   ['  await reinstateLegacyCompletionCheck(db,verifiedArchive,freshIntent,staged);\n  current();\n',''],
+   ['    const legacyCheck=readLegacyCompletionCheckEvidence(verifiedArchive,state.freshIntent);\n',''],
+   ['retry_allowed:false,rerun_import_allowed:false,resume_allowed:false,\n      ...(legacyCheck?{legacy_completion_check:legacyCheck}:{})','retry_allowed:false,rerun_import_allowed:false,resume_allowed:false'],
+  ],
+ },
 };
 export function removePrivateContextCostObservation(name,source){
  assert.equal(arguments.length,2);assert.equal(typeof name,'string');assert.equal(typeof source,'string');
@@ -21,16 +31,20 @@ export function removePrivateContextCostObservation(name,source){
  assert.equal(sha(raw),'08ef7a34b072b4e076a3ba4878a28a9d1a6e2cc162bd8cfa6c1a55da4f7ab4c8');const data=JSON.parse(raw);assert.equal(data.format,'custodial.private-context-cost-observer-source-inverse.v1');
  assert.deepEqual(Object.keys(data.files).sort(),['.github/workflows/production-backup-migration-rehearsal.yml','scripts/immutable-private-data-import.mjs','scripts/run-private-backup-only-rehearsal.mjs']);
  const file=data.files[name];assert.ok(file,'Only fixed observation sources may be normalized');
- const revision=timeoutRevision[name];
+ source=removeRehearsalRevisions(name,source);
+ if(sha(source)===file.previousSha256)return source;
+ assert.equal(sha(source),file.currentSha256);
+ for(const h of file.hunks){if(h.before===''){assert.ok(source.endsWith(h.after));source=source.slice(0,-h.after.length);}else{assert.equal(source.split(h.after).length,2);source=source.replace(h.after,()=>h.before);}}
+ assert.equal(sha(source),file.previousSha256);return source;
+}
+
+export function removeRehearsalRevisions(name,source){
+ const revision=rehearsalRevisions[name];
  if(revision && sha(source)===revision.sha256){
   for(const [current,previous] of revision.replacements){
    assert.equal(source.split(current).length,2);
    source=source.replace(current,()=>previous);
   }
-  assert.equal(sha(source),file.currentSha256);
  }
- if(sha(source)===file.previousSha256)return source;
- assert.equal(sha(source),file.currentSha256);
- for(const h of file.hunks){if(h.before===''){assert.ok(source.endsWith(h.after));source=source.slice(0,-h.after.length);}else{assert.equal(source.split(h.after).length,2);source=source.replace(h.after,()=>h.before);}}
- assert.equal(sha(source),file.previousSha256);return source;
+ return source;
 }

@@ -7,6 +7,7 @@ import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owne
 import {readVerifiedPrivateImportSource} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {buildVerifiedImmutableFreshDatabaseEvidence} from './immutable-private-fresh-restore-evidence.mjs';
+import {readLegacyCompletionCheckCatalog} from './immutable-fresh-legacy-completion-check.mjs';
 
 const Client=pg.Client,prototype=Client.prototype,nativeQuery=prototype.query;
 const witnessKeys=['database_oid','backend_pid','transaction_id','restore_id','authority_generation','archive_digest'];
@@ -83,6 +84,12 @@ const postDatabaseContextSql=`with fresh_target as materialized(select custodial
  .replace("'shape_matches',c.target_shape is not distinct from custodial_dr.immutable_import_target_shape(),",
   "'shape_matches',(c.target_shape-'recovery_inventory') is not distinct from ((select shape from fresh_target)-'recovery_inventory'),\n   'original_inventory',c.target_shape->'recovery_inventory','current_inventory',(select shape->'recovery_inventory' from fresh_target),")
  .replace('and c.transaction_id=pg_catalog.txid_current()', 'and c.transaction_id=$1::bigint');
+const legacyCompletionContextSql=contextSql.replace(
+ "'shape_matches',c.target_shape is not distinct from custodial_dr.immutable_import_target_shape(),",
+ "'shape_matches',c.target_shape=$1::jsonb and custodial_dr.immutable_import_target_shape()=$2::jsonb,");
+const legacyCompletionPostDatabaseSql=postDatabaseContextSql.replace(
+ "'shape_matches',(c.target_shape-'recovery_inventory') is not distinct from ((select shape from fresh_target)-'recovery_inventory'),",
+ "'shape_matches',c.target_shape=$2::jsonb and ((select shape from fresh_target)-'recovery_inventory')=($3::jsonb-'recovery_inventory'),");
 function decimal(value,positive,max=9223372036854775807n){
  assert.equal(typeof value,'string');assert.ok(value.length<=19);
  assert.match(value,positive?/^[1-9][0-9]*(?![\s\S])/:/^(0|[1-9][0-9]*)(?![\s\S])/);assert.ok(BigInt(value)<=max);
@@ -147,7 +154,13 @@ async function readContext(options,recorded,postDatabase=false,authorityPreparat
       for(const key of ['inserted','updated','deleted'])assert.equal(epoch[key],'0');
     }
     if(postDatabase)checkPhase='ORIGINAL_CONTEXT';
-    const row=closed(one(await raw(postDatabase?postDatabaseContextSql:contextSql,postDatabase?[prior.transaction_id]:undefined)),['actor','session_actor','control_owner','read_only','row_security','replication','search_path',
+    const legacyCompletion=readLegacyCompletionCheckCatalog(verifiedArchive,freshIntent);
+    const contextStatement=legacyCompletion
+      ? (postDatabase?legacyCompletionPostDatabaseSql:legacyCompletionContextSql)
+      : (postDatabase?postDatabaseContextSql:contextSql);
+    const contextArgs=postDatabase?[prior.transaction_id]:[];
+    if(legacyCompletion)contextArgs.push(legacyCompletion.importShape,legacyCompletion.originalShape);
+    const row=closed(one(await raw(contextStatement,contextArgs)),['actor','session_actor','control_owner','read_only','row_security','replication','search_path',
       'context_count','import_context','control_count','control','manifest_count','manifest','events',...(postDatabase?['isolation','first_schema']:[])]);
     assert.equal(row.actor,ownerProfile.actor);assert.equal(row.session_actor,row.actor);assert.equal(row.control_owner,row.actor);assert.equal(row.read_only,postDatabase&&!authorityPreparation?'on':'off');
     if(postDatabase)assert.equal(row.isolation,firstRead.isolation);

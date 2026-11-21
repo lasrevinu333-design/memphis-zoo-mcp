@@ -22,6 +22,7 @@ import {prepareVerifiedImmutableFreshRestoreControl} from './immutable-private-f
 import {recordVerifiedImmutableFreshDatabaseEvidence} from './immutable-private-fresh-restore-record.mjs';
 import {readVerifiedImmutableFreshCommitRecord,readVerifiedImmutableFreshAuthorityPreparation} from './immutable-private-fresh-restore-commit-context.mjs';
 import {capturePreRestoreState} from './disaster-recovery-state.mjs';
+import {stageLegacyCompletionCheck,reinstateLegacyCompletionCheck,readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';
 
 const Client=pg.Client,query=Client.prototype.query,attempted=new WeakSet(),privateFailures=new WeakMap();
 const identities=['employee_message_original_outcomes','group_original_creations'];
@@ -862,6 +863,7 @@ export async function stageVerifiedImmutableFreshData(options) {
   // private intent token supplies the same detached signed original envelope.
   freshStage='IMPORT_ORIGINAL_DATA';
   recordImmutableFreshProgress({fresh_stage:freshStage});
+  await stageLegacyCompletionCheck(db,verifiedArchive,freshIntent);
   const imported=await stageVerifiedImmutablePrivateData({db,verifiedArchive,
     originalIntentEnvelope:captured.envelope,intentVerifyKey,intentVerifyKeyId});
   current();
@@ -870,6 +872,8 @@ export async function stageVerifiedImmutableFreshData(options) {
   const staged=closed(imported,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);
   for(const key of witnessKeys)if(!isDeepStrictEqual(staged[key],expected[key]))fail();
   if(staged.private_rows!==expectedPrivateRows||staged.transaction_authority!==false||staged.admission_resumed!==false)fail();
+  await reinstateLegacyCompletionCheck(db,verifiedArchive,freshIntent,staged);
+  current();
   // Private live state comes ONLY from the actual successful original stage.
   // The returned DATA (or a JSON copy of it) never creates commit authority.
   const request=Object.freeze({restoreId:intent.restore_id,generation:String(intent.authority_generation),
@@ -922,9 +926,11 @@ export async function commitVerifiedImmutableFreshData(options){
       ||Reflect.ownKeys(properties.rows.value).length!==1||properties.rows.value.length!==0)fail();
     current(); // Source/intent withdrawal during the await remains UNKNOWN.
     state.phase='COMMIT_ACKNOWLEDGED';
+    const legacyCheck=readLegacyCompletionCheckEvidence(verifiedArchive,state.freshIntent);
     return Object.freeze({schema:'custodial.immutable-private-fresh-database-commit.v1',requested_original:request,
       commit_status:'ACKNOWLEDGED',database_phase_recorded:true,complete_restore:false,
-      retry_allowed:false,rerun_import_allowed:false,resume_allowed:false});
+      retry_allowed:false,rerun_import_allowed:false,resume_allowed:false,
+      ...(legacyCheck?{legacy_completion_check:legacyCheck}:{})});
   }catch{
     state.phase=commitAttempted?'COMMIT_OUTCOME_UNKNOWN':'COMMIT_NOT_ADMITTED';
     // A later ROLLBACK reply cannot undo or resolve an earlier lost COMMIT.

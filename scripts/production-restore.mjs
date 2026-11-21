@@ -1403,10 +1403,9 @@ try {
       requireOriginalArchiveSource();
       prepared = true;
       // Counts describe the complete signed original selection, not current
-      // target row counts or guessed imported/revoked totals. No CHECK was
-      // suspended or tested by this immutable path; do not manufacture a zero
-      // CHECK inventory or a restored legacy snapshot.
-      const unvalidatedCheckEvidence = {mode:"NOT_SUSPENDED"};
+      // target row counts or guessed imported/revoked totals. Any legacy CHECK
+      // observation comes from the same native import and catalog readback.
+      const unvalidatedCheckEvidence = committed.legacy_completion_check ?? {mode:"NOT_SUSPENDED"};
       const databaseEvidence = {
         tables: tableSelection.databaseTables.length,
         rows: tableSelection.databaseTables.reduce((total,table)=>total+BigInt(table.row_count),0n).toString(),

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';
-import {removePrivateContextCostObservation} from './private-context-cost-source-proof.mjs';
+import {removePrivateContextCostObservation,removeRehearsalRevisions} from './private-context-cost-source-proof.mjs';
 import {observePrivateContextCost} from './private-context-cost-diagnostic.mjs';
 const read=name=>readFileSync(new URL(name,import.meta.url),'utf8'),sha=s=>createHash('sha256').update(s).digest('hex');
 const fixture=()=>({schema:'custodial.private-current-context-cost.v1',scope:'SIGNED_CURRENT_SCHEMA_CONTEXT_ONLY_NOT_DATA_RESTORE',archive_digest:'a'.repeat(64),calls_per_probe:10,
@@ -27,7 +27,8 @@ test('only bounded closed measurement metadata with verified rollback and close 
 test('the finite observer is append-only and preserves every existing importer byte and authority path',()=>{
  const current=read('./immutable-private-data-import.mjs'),prior=removePrivateContextCostObservation('scripts/immutable-private-data-import.mjs',current);
  assert.equal(sha(prior),'b5c19b9120d232f8b48e3701e55b56837de6da0eca48b6211ac0ce0057ecd582');
- assert.ok(current.startsWith(prior));const observation=current.slice(prior.length);
+ const observedSource=removeRehearsalRevisions('scripts/immutable-private-data-import.mjs',current);
+ assert.ok(observedSource.startsWith(prior));const observation=observedSource.slice(prior.length);
  assert.ok(observation.includes('initializeVerifiedImmutableFreshSource({db,verifiedArchive})'));
  assert.ok(observation.includes('prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent})'));
  assert.ok(observation.includes('begin_immutable_private_import($1::uuid,$2::bigint,$3::text,$4::jsonb)'));

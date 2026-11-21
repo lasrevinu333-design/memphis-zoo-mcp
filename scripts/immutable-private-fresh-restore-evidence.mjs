@@ -4,6 +4,7 @@ import {types,isDeepStrictEqual} from 'node:util';
 import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {readVerifiedPrivateImportSource} from './disaster-recovery-archive.mjs';
 import {restoreCheckEvidence} from './restore-unvalidated-checks.mjs';
+import {readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';
 
 const finishedKeys=['database_oid','backend_pid','transaction_id','restore_id','authority_generation',
   'archive_digest','private_rows','transaction_authority','admission_resumed'];
@@ -97,7 +98,8 @@ export function buildVerifiedImmutableFreshDatabaseEvidence(options){
     const imported=catalog.filter(row=>!(row.schema==='public'&&row.table==='release_deployment_manifest'));
     const total=values=>values.reduce((sum,row)=>sum+row.count,0n).toString();
     const check=restoreCheckEvidence([]);
-    const checks=Object.freeze({...check,constraints:Object.freeze(check.constraints),mode:'NOT_SUSPENDED'});
+    const checks=readLegacyCompletionCheckEvidence(args.verifiedArchive,args.freshIntent)
+      ?? Object.freeze({...check,constraints:Object.freeze(check.constraints),mode:'NOT_SUSPENDED'});
     const common={tables:imported.length,unvalidated_check_constraints:checks,original_data_import:finished,
       consumed_source_tables:catalog.length,consumed_source_rows:total(catalog),preserved_current_release_bootstrap:true};
     const result=Object.freeze({database:Object.freeze({tables:common.tables,rows:total(imported),

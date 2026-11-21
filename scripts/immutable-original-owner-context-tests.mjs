@@ -321,7 +321,7 @@ test('initializer records exact pinned statement refusal without changing error 
 test('fresh composition labels original initializer/control/snapshot/import refusals and stops',async()=>{
  const source=text('./immutable-private-data-import.mjs'),start=source.indexOf('export async function stageVerifiedImmutableFreshData(options)'),end=source.indexOf('// One original fresh DATA transaction decision.',start);
  assert.ok(start>=0&&end>start);const body=source.slice(start,end).replace('export async function','async function');
- for(const profile of profiles)for(const [failed,phase] of [['initialize','INITIALIZE_SOURCE'],['receipt','INITIALIZE_SOURCE'],['stale_receipt','INITIALIZE_SOURCE'],['profile','INITIALIZE_SOURCE'],['control','PREPARE_RESTORE_CONTROL'],['snapshot','CAPTURE_PRE_RESTORE_STATE'],['import','IMPORT_ORIGINAL_DATA']]){
+ for(const profile of profiles)for(const [failed,phase] of [['initialize','INITIALIZE_SOURCE'],['receipt','INITIALIZE_SOURCE'],['stale_receipt','INITIALIZE_SOURCE'],['profile','INITIALIZE_SOURCE'],['control','PREPARE_RESTORE_CONTROL'],['snapshot','CAPTURE_PRE_RESTORE_STATE'],['legacy_check','IMPORT_ORIGINAL_DATA'],['import','IMPORT_ORIGINAL_DATA']]){
   const error=Object.assign(new Error('UNIT PRIVATE PAYLOAD'),{code:'55000'}),calls=[],archive={},dbClass=class{query(){}},db=new dbClass(),intent={restore_id:'UNIT',authority_generation:1,target_project_ref:'UNIT'},binding={archive_digest:'a'.repeat(64)};
   const original={selection:{privateTables:[{table_name:'employee_message_original_outcomes'},{table_name:'group_original_creations'}],databaseTables:[]},privateDataMembers:[{data_encoding:'TEXT',row_count:'0'},{data_encoding:'TEXT',row_count:'0'}],sourceBinding:binding};
   const captured={sourceBinding:binding,intent,envelope:{}},witness={database_oid:'5',backend_pid:411,transaction_id:'1285',restore_id:'UNIT',authority_generation:'1',archive_digest:binding.archive_digest};
@@ -332,7 +332,8 @@ test('fresh composition labels original initializer/control/snapshot/import refu
    readVerifiedPrivateImportSource:()=>original,captureVerifiedImmutableFreshRestoreIntent:()=>({}),readVerifiedImmutableFreshRestoreIntent:()=>captured,requireLegacyOriginalDataFidelity:async()=>{},
    readVerifiedImmutableArchiveOwnerProfile:()=>failed==='profile'?{id:profile.id,actor:'unknown'}:profile,
    initializeVerifiedImmutableFreshSource:async()=>{enter('initialize');return {schema:'custodial.immutable-private-source-initialized.v1',initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false,guard_recipes:failed==='receipt'?(count===51?25:51):failed==='stale_receipt'?30:count,source_statements:13,authority_scope_functions:6,...witness};},
-   prepareVerifiedImmutableFreshRestoreControl:async()=>{enter('control');return witness;},capturePreRestoreState:async()=>{enter('snapshot');},stageVerifiedImmutablePrivateData:async()=>{enter('import');}};
+   prepareVerifiedImmutableFreshRestoreControl:async()=>{enter('control');return witness;},capturePreRestoreState:async()=>{enter('snapshot');},
+   stageLegacyCompletionCheck:async()=>{enter('legacy_check');},stageVerifiedImmutablePrivateData:async()=>{enter('import');}};
   const fn=new Function(...Object.keys(deps),body+';return stageVerifiedImmutableFreshData;')(...Object.values(deps));
   await assert.rejects(fn({db,verifiedArchive:archive,originalIntentEnvelope:{},intentVerifyKey:'unit',intentVerifyKeyId:'unit'}),e=>e===error);
   assert.equal(calls.at(-1),['receipt','stale_receipt','profile'].includes(failed)?'initialize':failed);assert.deepEqual(readImmutableFreshFailure(error),{fresh_stage:phase});
