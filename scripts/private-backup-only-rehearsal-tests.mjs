@@ -157,7 +157,7 @@ test('Storage worker exact owner contracts reject relabeling and arbitrary role 
   assert.equal(storageWorkerActor('native-text-v4-fresh-supabase-admin'),'supabase_admin');
   assert.equal(storageWorkerActor('immutable-private-fresh-supabase-admin',legacy),'supabase_admin');
   assert.equal(storageWorkerActor('immutable-private-fresh-postgres',current),'postgres');
-  assert.equal(resourceProfile('immutable-private-fresh-postgres').work_ms,18000000);
+  assert.equal(resourceProfile('immutable-private-fresh-postgres').work_ms,19800000);
   assert.equal(resourceProfile('immutable-private-fresh-supabase-admin').work_ms,1800000);
   for(const [profile,owner] of [
     ['native-text-v4-fresh-supabase-admin',current],['immutable-private-fresh-supabase-admin',current],

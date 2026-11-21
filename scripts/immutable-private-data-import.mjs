@@ -22,7 +22,7 @@ import {prepareVerifiedImmutableFreshRestoreControl} from './immutable-private-f
 import {recordVerifiedImmutableFreshDatabaseEvidence} from './immutable-private-fresh-restore-record.mjs';
 import {readVerifiedImmutableFreshCommitRecord,readVerifiedImmutableFreshAuthorityPreparation} from './immutable-private-fresh-restore-commit-context.mjs';
 import {capturePreRestoreState} from './disaster-recovery-state.mjs';
-import {stageLegacyCompletionCheck,reinstateLegacyCompletionCheck,readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';
+import {prepareLegacyCompletionGuard,stageLegacyCompletionCheck,reinstateLegacyCompletionCheck,readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';
 
 const Client=pg.Client,query=Client.prototype.query,attempted=new WeakSet(),privateFailures=new WeakMap();
 const identities=['employee_message_original_outcomes','group_original_creations'];
@@ -846,6 +846,8 @@ export async function stageVerifiedImmutableFreshData(options) {
     ||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
   freshStage='PREPARE_RESTORE_CONTROL';
   recordImmutableFreshProgress({fresh_stage:freshStage});
+  await prepareLegacyCompletionGuard(db,verifiedArchive,freshIntent,initialized);
+  current();
   const prepared=await prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent});
   const captured=current(),intent=captured.intent;
   const expected=Object.freeze({database_oid:initialized.database_oid,backend_pid:initialized.backend_pid,

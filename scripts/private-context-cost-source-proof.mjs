@@ -6,8 +6,8 @@ const sha=v=>createHash('sha256').update(v).digest('hex');
 // Reverse only the exact rehearsal revisions before checking the historical byte proof.
 const rehearsalRevisions={
  '.github/workflows/production-backup-migration-rehearsal.yml':{
-  sha256:'7b6f3eddbe408789cabb108dfe3c0a361ac97a904722ced4add0c36518cba1a7',
-  replacements:[['&& 330 || 45','&& 205 || 45']],
+  sha256:'0b0555fb95b7c0ef01ae41dadcb59bb49495bca27785da9b2a72f25deaabaf78',
+  replacements:[['&& 350 || 45','&& 205 || 45']],
  },
  'scripts/run-private-backup-only-rehearsal.mjs':{
   sha256:'368ead62624f515daf0e545bf4aa4ebb059eb9b39658a8195fa3eceb50ea73ba',
@@ -15,9 +15,10 @@ const rehearsalRevisions={
    ['currentFullRestore?6*60*60*1000','currentFullRestore?4*60*60*1000']],
  },
  'scripts/immutable-private-data-import.mjs':{
-  sha256:'0c323f844288c1185f5e8132c80071336eafd92f0fede0e74dd3c595b1491c39',
+  sha256:'8e0d041aed3b88655aece12b101b515c56ee91ac41a83a8243a34f178f83a43c',
   replacements:[
-   ["import {stageLegacyCompletionCheck,reinstateLegacyCompletionCheck,readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';\n",''],
+   ["import {prepareLegacyCompletionGuard,stageLegacyCompletionCheck,reinstateLegacyCompletionCheck,readLegacyCompletionCheckEvidence} from './immutable-fresh-legacy-completion-check.mjs';\n",''],
+   ['  await prepareLegacyCompletionGuard(db,verifiedArchive,freshIntent,initialized);\n  current();\n',''],
    ['  await stageLegacyCompletionCheck(db,verifiedArchive,freshIntent);\n',''],
    ['  await reinstateLegacyCompletionCheck(db,verifiedArchive,freshIntent,staged);\n  current();\n',''],
    ['    const legacyCheck=readLegacyCompletionCheckEvidence(verifiedArchive,state.freshIntent);\n',''],
