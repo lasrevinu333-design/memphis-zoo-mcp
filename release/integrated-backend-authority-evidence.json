@@ -8425,7 +8425,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "887b316726d6f6895377e1e8c3971303d4f0ae3e"
+        "object_id": "aecec4283f559a86eeb76bb8c9b39d0fac19b5f7"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -9065,7 +9065,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "98ade617c4d214629f7d9ca53f75e5fdce796eb2"
+        "object_id": "58dc626eebc270a863c896f50b5eeec8d886c641"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
