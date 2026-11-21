@@ -4710,7 +4710,7 @@
       {
         "path": "scripts/disaster-recovery-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9c64043f19c64b17b9fe8e7889e55b23dc301841"
+        "object_id": "783b671095ddb4a3f90e385120c6236065f38cb9"
       },
       {
         "path": "scripts/disaster-recovery-runtime-contract.mjs",
@@ -6978,6 +6978,11 @@
         "object_id": "a707b931a62af16b56c7d5e6944ee67ffa8ddf2d"
       },
       {
+        "path": "scripts/immutable-fresh-legacy-completion-check.mjs",
+        "mode": "100644",
+        "object_id": "cc680c8d7c40f3ff862da7667b90d55ab615a680"
+      },
+      {
         "path": "scripts/immutable-ordinary-progress-source-proof.mjs",
         "mode": "100644",
         "object_id": "639194bd8eada62465b41a17ffb3a1f335c7a5e9"
@@ -6995,7 +7000,7 @@
       {
         "path": "scripts/immutable-original-owner-context-tests.mjs",
         "mode": "100644",
-        "object_id": "23f6804ebc3df6a9754a24a2d81456b277480702"
+        "object_id": "b39780cc7450853299d2f935f824c0c9c0dfba4b"
       },
       {
         "path": "scripts/immutable-postgres-acl-qualification-tests.mjs",
@@ -7005,7 +7010,7 @@
       {
         "path": "scripts/immutable-private-data-import.mjs",
         "mode": "100644",
-        "object_id": "4985f1e46738ba316db1e638daedce491ff946c6"
+        "object_id": "1cc81fb3526c8c4c9389ecf3fccdef32c8e5149c"
       },
       {
         "path": "scripts/immutable-private-domain-source.mjs",
@@ -7015,7 +7020,7 @@
       {
         "path": "scripts/immutable-private-fresh-restore-commit-context.mjs",
         "mode": "100644",
-        "object_id": "1ee7aa0becba1ee6234b91b58f3881b6ba4e2770"
+        "object_id": "d47d3b70d0f4c627773e1bc06af30151c6767fd5"
       },
       {
         "path": "scripts/immutable-private-fresh-restore-control.mjs",
@@ -7025,7 +7030,7 @@
       {
         "path": "scripts/immutable-private-fresh-restore-evidence.mjs",
         "mode": "100644",
-        "object_id": "04912d7a01fa2b9191417af6b4cb12d64878064d"
+        "object_id": "eef6b6e5f882c8a1fceac0e1e25cda5b7df807a5"
       },
       {
         "path": "scripts/immutable-private-fresh-restore-intent.mjs",
@@ -8455,12 +8460,12 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "d760ac8c9af74cc059bcf277140f95d2ad3adcce"
+        "object_id": "4a9d7b5197f1255c8bad960f8ae24f1892c9c182"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
         "mode": "100644",
-        "object_id": "710c50b7cded6629dd0776cc5198ce3c50b4ea3e"
+        "object_id": "61a9dde9e97edf42840dafd37cae1b60dd4cb34b"
       },
       {
         "path": "scripts/private-restore-function-diagnostic-tests.mjs",
@@ -8660,7 +8665,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "9a831173065fe0a92aa3934aa57f05ca51eef8d2"
+        "object_id": "05f7f18763c50375e1ec92e034b71b18c15f5022"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -14548,7 +14553,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2884,
+    "authority_path_count": 2885,
     "migration_path_count": 322,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
