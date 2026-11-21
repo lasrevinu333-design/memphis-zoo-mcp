@@ -205,7 +205,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "35963f329978f923bc01a92db1768f6663bb243b"
+        "object_id": "f49fee8dea1ff5789f5c84218cb492cede751ee7"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -6980,7 +6980,7 @@
       {
         "path": "scripts/immutable-fresh-legacy-completion-check.mjs",
         "mode": "100644",
-        "object_id": "cc680c8d7c40f3ff862da7667b90d55ab615a680"
+        "object_id": "951d7496e12061f9a7233dccaef8d499a5aed4df"
       },
       {
         "path": "scripts/immutable-ordinary-progress-source-proof.mjs",
@@ -7000,7 +7000,7 @@
       {
         "path": "scripts/immutable-original-owner-context-tests.mjs",
         "mode": "100644",
-        "object_id": "b39780cc7450853299d2f935f824c0c9c0dfba4b"
+        "object_id": "f621f5b2bc5e2589c9d084d8d627c9304a2207f9"
       },
       {
         "path": "scripts/immutable-postgres-acl-qualification-tests.mjs",
@@ -7010,7 +7010,7 @@
       {
         "path": "scripts/immutable-private-data-import.mjs",
         "mode": "100644",
-        "object_id": "1cc81fb3526c8c4c9389ecf3fccdef32c8e5149c"
+        "object_id": "a8f745e74fa4507c41c321d82a992cb89c0ab008"
       },
       {
         "path": "scripts/immutable-private-domain-source.mjs",
@@ -8430,7 +8430,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "af6535cb3b2a427fd15ded579d257673a9e6521d"
+        "object_id": "7acea774e2e1302645a46f78750ec2f09f140ad5"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8460,12 +8460,12 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "4a9d7b5197f1255c8bad960f8ae24f1892c9c182"
+        "object_id": "d994a4c756f23fb917bad37c89f111ea1a9284a0"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
         "mode": "100644",
-        "object_id": "61a9dde9e97edf42840dafd37cae1b60dd4cb34b"
+        "object_id": "5aed52a3b06edcc1117051289edaf907f2970863"
       },
       {
         "path": "scripts/private-restore-function-diagnostic-tests.mjs",
@@ -9070,7 +9070,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "22ece730d7bc837f07cbe1cf34059adbdae8f6ec"
+        "object_id": "2666b4327e399ddf56b84f632661bad14bf7ffd9"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
