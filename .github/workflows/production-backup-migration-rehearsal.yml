@@ -51,7 +51,7 @@ concurrency:
 jobs:
   rehearse:
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ inputs.rehearsal_scope == 'backup_only' && inputs.official_local_storage_provider && !inputs.private_context_cost_diagnostic_only && 205 || 45 }}
+    timeout-minutes: ${{ inputs.rehearsal_scope == 'backup_only' && inputs.official_local_storage_provider && !inputs.private_context_cost_diagnostic_only && 330 || 45 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

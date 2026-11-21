@@ -32,9 +32,9 @@ export function supportedOfficialStartupMigration(rows,profile){
 export function resourceProfile(profile){
   if(profile==='native-text-v4-fresh-supabase-admin')return Object.freeze({work_ms:900000,node_heap_mib:256,cpus:1,cleanup_ms:45000});
   if(profile==='immutable-private-fresh-supabase-admin')return Object.freeze({work_ms:1800000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
-  // Observed current-owner restores made progress through the 30-minute cutoff.
-  // Allow a single bounded run while retaining the existing memory/cleanup limits.
-  if(profile==='immutable-private-fresh-postgres')return Object.freeze({work_ms:10800000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
+  // The measured three-hour run reached original Messenger rows before the
+  // work deadline. Reserve up to five hours for this isolated restore profile.
+  if(profile==='immutable-private-fresh-postgres')return Object.freeze({work_ms:18000000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
   throw new Error('Only authenticated closed archive profiles select resource bounds.');
 }
 // Exact DATA contract only; host derives ownerProfile from the branded archive.

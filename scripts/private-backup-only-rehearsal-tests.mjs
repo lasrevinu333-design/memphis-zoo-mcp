@@ -29,6 +29,13 @@ test('fresh intent preserves separate runtime and schema identities; no retry or
   assert.equal(verified.target_migration_head,'20261111161430');assert.equal(verified.target_release_identity.migration_head,'20260920010000');
   assert.equal(verified.authority_generation,1);assert.equal(verified.retry_of_restore_id,null);assert.equal(verified.resume_after_verification,false);
   assert.notEqual(freshIntentEnvelope(binding,key,keyId).intent.restore_id,e.intent.restore_id);
+  const issued=new Date('2026-11-21T00:00:00.000Z');
+  const short=freshIntentEnvelope(binding,key,keyId,issued);
+  const long=freshIntentEnvelope(binding,key,keyId,issued,6*60*60*1000);
+  assert.equal(short.intent.expires_at,'2026-11-21T01:00:00.000Z');
+  assert.equal(long.intent.expires_at,'2026-11-21T06:00:00.000Z');
+  assert.equal(long.intent.resume_after_verification,false);
+  assert.throws(()=>freshIntentEnvelope(binding,key,keyId,issued,5*60*60*1000),/Closed disposable rehearsal intent lifetime/);
 });
 test('intent signature rejects tampering and wrong key',()=>{
   for(const field of ['archive_digest','target_project_ref','target_migration_head','authority_generation','resume_after_verification']){
@@ -150,7 +157,7 @@ test('Storage worker exact owner contracts reject relabeling and arbitrary role 
   assert.equal(storageWorkerActor('native-text-v4-fresh-supabase-admin'),'supabase_admin');
   assert.equal(storageWorkerActor('immutable-private-fresh-supabase-admin',legacy),'supabase_admin');
   assert.equal(storageWorkerActor('immutable-private-fresh-postgres',current),'postgres');
-  assert.equal(resourceProfile('immutable-private-fresh-postgres').work_ms,10800000);
+  assert.equal(resourceProfile('immutable-private-fresh-postgres').work_ms,18000000);
   assert.equal(resourceProfile('immutable-private-fresh-supabase-admin').work_ms,1800000);
   for(const [profile,owner] of [
     ['native-text-v4-fresh-supabase-admin',current],['immutable-private-fresh-supabase-admin',current],

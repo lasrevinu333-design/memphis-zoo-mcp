@@ -128,7 +128,7 @@ export function selectPrivateProfile(source){
 // Signed DATA construction only. Caller must authenticate the archive and invoke
 // captureVerifiedImmutableFreshRestoreIntent before any target is created.
 export function freshIntentEnvelope(binding,key,keyId,now=new Date(),lifetimeMs=60*60*1000){
-  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===4*60*60*1000,'Closed disposable rehearsal intent lifetime required');
+  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===6*60*60*1000,'Closed disposable rehearsal intent lifetime required');
   requireSigningKey(key,'Independent rehearsal intent key');
   assert.match(keyId,/^[a-zA-Z0-9._:-]{1,120}$/);
   const release=Object.fromEntries(['release_id','backend_commit','frontend_commit','migration_head','migration_manifest_sha256']
@@ -318,7 +318,7 @@ export async function runPrivate(){
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
     const currentFullRestore=!contextDiagnosticOnly&&ownerProfile.id==='immutable-private-current-postgres';
     if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres').work_ms+100000;
-    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?4*60*60*1000:60*60*1000);
+    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?6*60*60*1000:60*60*1000);
     captureVerifiedImmutableFreshRestoreIntent({verifiedArchive:archive,originalIntentEnvelope:envelope,intentVerifyKey:key,intentVerifyKeyId:keyId});
     const secretEnv={...baseEnv,REHEARSAL_SCOPE:'backup_only',OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',
       GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,RESTORE_SOURCE_DIR:archive.directory,
