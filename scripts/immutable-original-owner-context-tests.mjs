@@ -26,6 +26,22 @@ const profiles=[
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
 ];
 const checkpoint=new Error('INERT_NATIVE_CHECKPOINT');
+test('finish failures export fixed labels through the private receipt without database error detail',()=>{
+ for(const [message,label] of [
+  ['Immutable import actual mixed DATA count changed','FINISH_ORDINARY_COUNT_DIFFERS'],
+  ['Immutable ordinary final DATA multiset differs','FINISH_ORDINARY_DATA_DIFFERS'],
+  ['Immutable private final DATA multiset differs','FINISH_PRIVATE_DATA_DIFFERS'],
+ ]){
+  const cause=Object.assign(new Error(message),{code:'P0001',detail:'PRIVATE DETAIL'});
+  const error=Object.assign(new Error('PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'),{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED',sql_state:'P0001'});
+  recordImmutableFreshFailure(error,{import_operation:'FINISH_IMPORT',...classifyImmutableImportGuard(cause,[])});
+  const value=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);
+  assert.equal(value.fresh_refusal,label);
+  assert.deepEqual(projectPrivateRestoreDiagnostic(value),value);
+  assert.doesNotMatch(JSON.stringify(value),/PRIVATE DETAIL|Immutable .* differs/);
+ }
+ assert.deepEqual(classifyImmutableImportGuard(Object.assign(new Error('PRIVATE LOOKALIKE'),{code:'P0001'}),[]),{});
+});
 test('closed JavaScript planner validation labels survive the receipt chain without exporting values',()=>{
  const error=Object.assign(new Error('PRIVATE FIELD VALUE'),{code:'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED'});
  recordImmutableFreshFailure(error,{import_operation:'PLAN_ORDINARY_ORDER',import_validation:'PLANNER_FK_COLUMNS',raw_value:'PRIVATE FIELD VALUE'});

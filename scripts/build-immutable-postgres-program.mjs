@@ -1,4 +1,4 @@
-import {extendCurrentLiveDataSnapshot,extendIndexedOrdinaryStage,extendTypedOrdinarySetInsert} from './immutable-current-live-data-source.mjs';
+import {extendCurrentLiveDataSnapshot,extendIndexedOrdinaryStage,extendTypedOrdinarySetInsert,extendCurrentFinishReleaseHistoryCount} from './immutable-current-live-data-source.mjs';
 import {extendCurrentCyclicCohorts} from './immutable-current-cyclic-cohort-source.mjs';
 import {extendCurrentCatalogStability} from './immutable-current-catalog-stability-source.mjs';
 import {extendCurrentBoundedOrdinaryStage} from './immutable-current-bounded-stage-source.mjs';
@@ -127,7 +127,7 @@ const statements=order.map(name=>{
 const result={format:'custodial.immutable-private-current-postgres-program.v1',profile:{id:'immutable-private-current-postgres',actor:'postgres'},provenance:{sourcePath:installedPath,sourceSha256:sha(installed),definitions:specs.map(([identity,,sha256])=>({identity,sha256}))},recipes:[...recipes,currentCoverallRestoreRecipe(),currentLeadershipRestoreRecipe(),currentOc24RestoreRecipe(),currentCoverageRestoreRecipe(),currentRestrictedCoverageRestoreRecipe(),currentAbsenceRestoreRecipe(),currentLegacyDailyFenceRecipe()],statements};
 domain.assertCurrent();messages.assertCurrent();
 const indexed=extendIndexedOrdinaryStage(extendCurrentLiveDataSnapshot(extendCurrentCatalogStability(extendCurrentBoundedOrdinaryStage(extendCurrentCyclicCohorts(extendCurrentRestoreGuardCohort(result))))));
-const compiled=extendTypedOrdinarySetInsert(indexed);
+const compiled=extendCurrentFinishReleaseHistoryCount(extendTypedOrdinarySetInsert(indexed));
 const output=JSON.stringify(compiled,null,2)+'\n';
 if(process.argv.includes('--check'))assert.equal(readFileSync('proposals/immutable-private-current-postgres-program.json','utf8'),output);
 else writeFileSync('proposals/immutable-private-current-postgres-program.json',output,{flag:'wx'});

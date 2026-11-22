@@ -114,7 +114,25 @@ export function classifyImmutableImportPermissionContext(error,tables){
  }
  return Object.freeze(result);
 }
+const finishRefusals=new Map([
+ ['Immutable import actual mixed DATA count changed','FINISH_ORDINARY_COUNT_DIFFERS'],
+ ['Immutable import partial staged original','FINISH_PRIVATE_STAGE_COUNT_DIFFERS'],
+ ['Immutable import original raw changed','FINISH_PRIVATE_RAW_DIFFERS'],
+ ['Immutable import typed original changed','FINISH_PRIVATE_CODEC_DIFFERS'],
+ ['Immutable import actual inserted count changed','FINISH_PRIVATE_COUNT_DIFFERS'],
+ ['Immutable import foreign final staged relation refused','FINISH_FOREIGN_STAGE_RELATION'],
+ ['Immutable ordinary final staged originals differ','FINISH_ORDINARY_STAGE_DIFFERS'],
+ ['Immutable ordinary final DATA multiset differs','FINISH_ORDINARY_DATA_DIFFERS'],
+ ['Immutable private final staged originals differ','FINISH_PRIVATE_STAGE_DIFFERS'],
+ ['Immutable private final DATA multiset differs','FINISH_PRIVATE_DATA_DIFFERS'],
+]);
+for(const label of finishRefusals.values())enums.fresh_refusal.add(label);
+
 export function classifyImmutableImportGuard(error,tables){
+ if(own(error,'code')==='P0001'){
+  const refusal=finishRefusals.get(own(error,'message'));
+  return Object.freeze(refusal?{fresh_refusal:refusal}:{});
+ }
  if(own(error,'code')!=='55000'||own(error,'message')!=='IMMUTABLE_MIXED_INSERT_GUARD_UNSUPPORTED')return Object.freeze({});
  const raw=own(error,'detail');if(typeof raw!=='string'||Buffer.byteLength(raw)>8192||types.isProxy(tables)||!Array.isArray(tables))return Object.freeze({});
  let d;try{d=JSON.parse(raw);}catch{return Object.freeze({});}

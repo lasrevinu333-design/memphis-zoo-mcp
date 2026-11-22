@@ -1,0 +1,13 @@
+{
+  "format": "custodial.current-finish-release-history-cardinality-inverse.v1",
+  "previousProgramSha256": "057f298bc9c5f1ffd583d6f7c653be52320e0ffda8e0b9189ce5daf1c7912ecd",
+  "currentProgramSha256": "2fe7af2fd4e2a0b8d3af73b8a79d76fe277dd277e662a58fa4640ee842907efd",
+  "previousStatementSha256": "4a86d7f932f8d4cfae93a8a44f702b6175493fa2b3c64e426b298c353e04fafd",
+  "currentStatementSha256": "78c74ebd6ec337436cb1adc4802fea377f05522cec88b57af74c08385c1b3ed4",
+  "hunks": [
+    {
+      "before": "  IF observed<>(CASE WHEN member->>'schema_name'='public' AND member->>'table_name'='release_deployment_manifest'\n     THEN 1 ELSE (member->>'row_count')::bigint END)\n   THEN RAISE EXCEPTION 'Immutable import actual mixed DATA count changed'; END IF;\n",
+      "after": "  -- The initializer retains every signed release-history row. The single\n  -- deployed identity is checked separately by the sealed target context.\n  IF observed<>(member->>'row_count')::bigint\n   THEN RAISE EXCEPTION 'Immutable import actual mixed DATA count changed'; END IF;\n"
+    }
+  ]
+}

@@ -25,6 +25,13 @@ const typedInsertInverse = () => {
   return JSON.parse(bytes);
 };
 
+const releaseHistoryCountMarker = '-- The initializer retains every signed release-history row.';
+const releaseHistoryCountInverse = () => {
+  const bytes = readFileSync(new URL('../release/installed-source/20261122_current_finish_release_history_inverse.json', import.meta.url));
+  assert.equal(sha256(bytes), '15c9f1cc258a303feca800d43e06db325b6b120aeefbd7ce9367702e97a2b5c9');
+  return JSON.parse(bytes);
+};
+
 function transform(original, reverse, proof) {
   const { previousProgramSha256, currentProgramSha256, previousStatementSha256, currentStatementSha256, hunks } = proof;
   assert.equal(sha256(serialize(original)), reverse ? currentProgramSha256 : previousProgramSha256);
@@ -54,10 +61,21 @@ export function extendTypedOrdinarySetInsert(program) {
   return transform(program, false, typedInsertInverse());
 }
 
-export function removeCurrentLiveDataSnapshot(program) {
-  const indexed = program.statements[0].sql.includes(typedInsertMarker)
-    ? transform(program, true, typedInsertInverse())
+export function extendCurrentFinishReleaseHistoryCount(program) {
+  return transform(program, false, releaseHistoryCountInverse());
+}
+
+export function removeCurrentFinishReleaseHistoryCount(program) {
+  return program.statements[0].sql.includes(releaseHistoryCountMarker)
+    ? transform(program, true, releaseHistoryCountInverse())
     : program;
+}
+
+export function removeCurrentLiveDataSnapshot(program) {
+  const typed = removeCurrentFinishReleaseHistoryCount(program);
+  const indexed = typed.statements[0].sql.includes(typedInsertMarker)
+    ? transform(typed, true, typedInsertInverse())
+    : typed;
   const prior = indexed.statements[0].sql.includes(indexedStageMarker)
     ? transform(indexed, true, indexedStageInverse())
     : indexed;

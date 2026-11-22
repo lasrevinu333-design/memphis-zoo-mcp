@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { extendCurrentLiveDataSnapshot, extendIndexedOrdinaryStage, extendTypedOrdinarySetInsert, removeCurrentLiveDataSnapshot } from './immutable-current-live-data-source.mjs';
+import { extendCurrentLiveDataSnapshot, extendIndexedOrdinaryStage, extendTypedOrdinarySetInsert, removeCurrentFinishReleaseHistoryCount, removeCurrentLiveDataSnapshot } from './immutable-current-live-data-source.mjs';
 
 const document = JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json', import.meta.url)));
 const prior = removeCurrentLiveDataSnapshot(document);
@@ -18,9 +18,10 @@ test('the measured live-data projection changes only the original first statemen
   assert.equal(createHash('sha256').update(JSON.stringify(lockedDataProgram, null, 2) + '\n').digest('hex'),
     '39cf55e18a69f41c3f53cdb122dd6245b33cc35a9a2967d85f4be6adbbceb4be');
   const indexed = extendIndexedOrdinaryStage(lockedDataProgram);
-  assert.deepEqual(extendTypedOrdinarySetInsert(indexed), document);
+  const typed = removeCurrentFinishReleaseHistoryCount(document);
+  assert.deepEqual(extendTypedOrdinarySetInsert(indexed), typed);
   const insert = 'insert_staged_immutable_ordinary_table';
-  assert.equal(sql.replace(exactFunction(sql, insert), () => exactFunction(indexed.statements[0].sql, insert)),
+  assert.equal(typed.statements[0].sql.replace(exactFunction(sql, insert), () => exactFunction(indexed.statements[0].sql, insert)),
     indexed.statements[0].sql);
   assert.deepEqual(document.statements.slice(1), prior.statements.slice(1));
   assert.deepEqual(document.recipes, prior.recipes);

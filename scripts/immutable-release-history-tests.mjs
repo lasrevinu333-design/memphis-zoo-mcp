@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {selectOriginalDeployedReleaseRow} from './immutable-private-source-bootstrap.mjs';
 import {postgresTextColumnsLineEncoding,postgresJsonTextLineEncoding} from './disaster-recovery-archive.mjs';
 import {originalRowsMetadataDiagnostics} from './run-private-backup-only-rehearsal.mjs';
+import {extendCurrentFinishReleaseHistoryCount,removeCurrentFinishReleaseHistoryCount} from './immutable-current-live-data-source.mjs';
 const columns=[{name:'release_id',data_type:'text'},{name:'status',data_type:'text'},
   {name:'backend_commit',data_type:'text'},{name:'details_json',data_type:'jsonb'},{name:'deployed_at',data_type:'timestamp with time zone'}];
 const signed={release_id:'current',status:'deployed',backend_commit:'a'.repeat(40),details_json:{version:1},deployed_at:'2026-11-11T00:00:00+00:00'};
@@ -35,6 +36,20 @@ test('zero, multiple, identity-mismatched deployed rows and duplicate historical
 test('single-release historical compatibility remains',()=>{
   const x=fixture();x.releaseRows=[x.releaseRows[2]];x.releaseTable={...x.releaseTable,row_count:'1'};
   assert.equal(selectOriginalDeployedReleaseRow(x),x.releaseRows[0]);
+});
+test('the current finish routine uses the signed cardinality while preserving the complete predecessor and all other SQL',()=>{
+  const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
+  const prior=removeCurrentFinishReleaseHistoryCount(program);
+  const finish=sql=>sql.match(/CREATE FUNCTION custodial_dr\.finish_immutable_private_import\(\)[\s\S]*?END \$fn\$;/)[0];
+  const oldSql=prior.statements[0].sql,newSql=program.statements[0].sql;
+  assert.deepEqual(extendCurrentFinishReleaseHistoryCount(prior),program);
+  assert.equal(newSql.replace(finish(newSql),()=>finish(oldSql)),oldSql);
+  assert.match(finish(oldSql),/THEN 1 ELSE \(member->>'row_count'\)::bigint/);
+  assert.match(finish(newSql),/IF observed<>\(member->>'row_count'\)::bigint\n\s+THEN RAISE EXCEPTION 'Immutable import actual mixed DATA count changed'/);
+  assert.doesNotMatch(finish(newSql),/THEN 1 ELSE \(member->>'row_count'\)::bigint/);
+  const mutant=structuredClone(program);
+  mutant.statements[0].sql=mutant.statements[0].sql.replace('IF observed<>','IF observed=');
+  assert.throws(()=>removeCurrentFinishReleaseHistoryCount(mutant));
 });
 test('native initializer retains all originals and separately checks deployed identity/full multiset',()=>{
   const sql=readFileSync(new URL('./immutable-private-source-initializer.mjs',import.meta.url),'utf8');
