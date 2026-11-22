@@ -6980,12 +6980,12 @@
       {
         "path": "scripts/immutable-fresh-legacy-completion-check.mjs",
         "mode": "100644",
-        "object_id": "951d7496e12061f9a7233dccaef8d499a5aed4df"
+        "object_id": "2c92fea101dcb69e299d0445f4204246c59b9799"
       },
       {
         "path": "scripts/immutable-ordinary-progress-source-proof.mjs",
         "mode": "100644",
-        "object_id": "639194bd8eada62465b41a17ffb3a1f335c7a5e9"
+        "object_id": "d68284bf57255736f74765c7b98be191b2e1e341"
       },
       {
         "path": "scripts/immutable-ordinary-progress-tests.mjs",
@@ -7090,7 +7090,7 @@
       {
         "path": "scripts/immutable-private-stage-diagnostic.mjs",
         "mode": "100644",
-        "object_id": "7c1c3e6c892a8a529f901adb978338d9fc0637df"
+        "object_id": "d2b57795b8f87ebbcee7daaab677e0791253a264"
       },
       {
         "path": "scripts/immutable-release-history-tests.mjs",
@@ -8430,7 +8430,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "7acea774e2e1302645a46f78750ec2f09f140ad5"
+        "object_id": "4e175372730334c862150479db3b13d50b7ce6b8"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8460,7 +8460,7 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "d994a4c756f23fb917bad37c89f111ea1a9284a0"
+        "object_id": "681092aafe19591b8be28051632e733e4d105d52"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
@@ -9070,12 +9070,12 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "2666b4327e399ddf56b84f632661bad14bf7ffd9"
+        "object_id": "2653af02816b6c5bfdc4b15fdc4e31281a17778e"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "565585f1e3f2f210adc6bb689947cd1a278aa807"
+        "object_id": "48aa135b1b0989d479e117b0f7102969b0aadb7d"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
