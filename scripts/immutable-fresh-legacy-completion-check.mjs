@@ -4,6 +4,7 @@ import pg from 'pg';
 import {readVerifiedPrivateImportSource} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
+import {recordImmutableFreshProgress} from './immutable-private-stage-diagnostic.mjs';
 import {reinstateUnvalidatedRestoreChecks,suspendUnvalidatedRestoreChecks} from './restore-unvalidated-checks.mjs';
 
 const nativeQuery=pg.Client.prototype.query;
@@ -87,8 +88,10 @@ export async function prepareLegacyCompletionGuard(db,archive,freshIntent,initia
   const captured=readVerifiedImmutableFreshRestoreIntent(freshIntent,archive);
   const profile=readVerifiedImmutableArchiveOwnerProfile(archive);
   if(profile.id!=='immutable-private-current-postgres'||profile.actor!=='postgres'
-    ||process.env.GITHUB_ACTIONS!=='true'||process.env.REHEARSAL_SCOPE!=='backup_only'
+    ||process.env.REHEARSAL_SCOPE!=='backup_only'
     ||process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER!=='true')return;
+  assert.equal(process.env.GITHUB_ACTIONS,'true','Owned current restore worker requires its GitHub Actions marker');
+  assert.match(process.env.GITHUB_RUN_ID??'',/^[1-9][0-9]*$/);
   const dbName=db.connectionParameters.database;
   assert.equal(db.connectionParameters.host,'127.0.0.1');
   assert.equal(dbName,'mz_schema_rebuild_'+process.env.GITHUB_RUN_ID);
@@ -161,6 +164,7 @@ export async function stageLegacyCompletionCheck(db,archive,freshIntent){
   assert.equal(checksToReinstate[0].constraint_comment,state.check.comment);
   assert.deepEqual((await query(readShape)).rows,[{shape:importShape}]);
   states.set(freshIntent,{...state,originalShape,importShape,checksToReinstate});
+  recordImmutableFreshProgress({fresh_stage:'LEGACY_COMPLETION_UUID_CHECK_STAGED'});
 }
 
 export async function reinstateLegacyCompletionCheck(db,archive,freshIntent,finished){
@@ -193,6 +197,7 @@ export async function reinstateLegacyCompletionCheck(db,archive,freshIntent,fini
   states.set(freshIntent,{archive,captured:state.captured,
     catalog:Object.freeze({originalShape,importShape}),
     evidence:Object.freeze({...reinstated,constraints,mode:'REINSTATED_BEFORE_COMMIT'})});
+  recordImmutableFreshProgress({fresh_stage:'LEGACY_COMPLETION_UUID_CHECK_RESTORED'});
 }
 
 export function readLegacyCompletionCheckEvidence(archive,freshIntent){

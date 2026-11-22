@@ -321,7 +321,7 @@ export async function runPrivate(){
     const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?6*60*60*1000:60*60*1000);
     captureVerifiedImmutableFreshRestoreIntent({verifiedArchive:archive,originalIntentEnvelope:envelope,intentVerifyKey:key,intentVerifyKeyId:keyId});
     const secretEnv={...baseEnv,REHEARSAL_SCOPE:'backup_only',OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',
-      GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,RESTORE_SOURCE_DIR:archive.directory,
+      GITHUB_ACTIONS:process.env.GITHUB_ACTIONS,GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,RESTORE_SOURCE_DIR:archive.directory,
       RESTORE_ARCHIVE_VERIFY_KEY:process.env.RESTORE_ARCHIVE_VERIFY_KEY,RESTORE_ARCHIVE_VERIFY_KEY_ID:process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID,
       RESTORE_INTENT_VERIFY_KEY:key,RESTORE_INTENT_VERIFY_KEY_ID:keyId,RESTORE_INTENT_JSON:JSON.stringify(envelope),
       RESTORE_APPLY:'true',RESTORE_DATABASE_ONLY:'true',SUPABASE_PROJECT_REF:source.sourceBinding.project_ref,

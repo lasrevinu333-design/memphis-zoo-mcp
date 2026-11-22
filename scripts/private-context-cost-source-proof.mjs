@@ -10,8 +10,9 @@ const rehearsalRevisions={
   replacements:[['&& 350 || 45','&& 205 || 45']],
  },
  'scripts/run-private-backup-only-rehearsal.mjs':{
-  sha256:'368ead62624f515daf0e545bf4aa4ebb059eb9b39658a8195fa3eceb50ea73ba',
-  replacements:[['lifetimeMs===6*60*60*1000','lifetimeMs===4*60*60*1000'],
+  sha256:'02b16f5e6319ba5c485f76137b21a1d5fd19bc2201ac1bf445f9637eb9bfe337',
+  replacements:[['GITHUB_ACTIONS:process.env.GITHUB_ACTIONS,GITHUB_RUN_ID','GITHUB_RUN_ID'],
+   ['lifetimeMs===6*60*60*1000','lifetimeMs===4*60*60*1000'],
    ['currentFullRestore?6*60*60*1000','currentFullRestore?4*60*60*1000']],
  },
  'scripts/immutable-private-data-import.mjs':{

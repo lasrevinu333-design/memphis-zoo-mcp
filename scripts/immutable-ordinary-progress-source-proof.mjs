@@ -12,6 +12,11 @@ export function removeOrdinaryProgressObservations(name,source){
  const file=data.files.find(f=>f.file===name);assert.ok(file,'Only the two fixed observation sources may be normalized');
  if(sha(source)===file.previousSha256)return source;
  if(name==='immutable-private-data-import.mjs')source=removePrivateContextCostObservation('scripts/'+name,source);
+ if(name==='immutable-private-stage-diagnostic.mjs'&&sha(source)==='930ae3db20f74d7a6141cd749943ef73d35e64443ea1f698d574190afc4e9c28'){
+  const completionStages=",'LEGACY_COMPLETION_UUID_CHECK_STAGED','LEGACY_COMPLETION_UUID_CHECK_RESTORED'";
+  assert.equal(source.split(completionStages).length,2);
+  source=source.replace(completionStages,'');
+ }
  assert.equal(sha(source),file.currentSha256,'Whole exact source required before observational normalization');
  for(const hunk of file.hunks){assert.equal(source.split(hunk.after).length,2);source=source.replace(hunk.after,()=>hunk.before);}
  assert.equal(sha(source),file.previousSha256,'Every predecessor control, SQL, deadline and cleanup byte must survive');return source;

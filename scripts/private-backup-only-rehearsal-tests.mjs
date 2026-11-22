@@ -6,7 +6,7 @@ import {readFileSync,writeFileSync,openSync,fsyncSync,closeSync,mkdtempSync,read
 import {resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {PG_IMAGE,privatePostgresProcessDiagnostic,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
 import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,assertPinnedPgResources,pinnedPgMemory,pinnedPgRestoreMemory,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
@@ -22,6 +22,23 @@ test('private selection is exact; new namespace names never substitute',()=>{
   assert.equal(selectPrivateProfile(source()),'private');assert.equal(selectPrivateProfile({selection:{privateTables:[]}}),'native');
   for(const values of [[names[0]],[...names,'other'],[names[0],names[0]],['custodial_employment']])
     assert.throws(()=>selectPrivateProfile({selection:{privateTables:values.map(table_name=>({table_name}))}}));
+});
+test('the current signed restore worker inherits the GitHub run marker through the closed child environment',()=>{
+  const runner=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+  const start=runner.indexOf('const secretEnv={');
+  const end=runner.indexOf('\n    requireOwnerProfile();',start);
+  assert.ok(start>=0&&end>start);
+  const makeEnvironment=new Function('baseEnv','process','archive','key','keyId','envelope','source','contextDiagnosticOnly',
+    runner.slice(start,end)+'\nreturn secretEnv;');
+  const fixtureProcess={env:{GITHUB_ACTIONS:'true',GITHUB_RUN_ID:'123',UNRELATED_ENV:'omitted'}};
+  const env=makeEnvironment({},fixtureProcess,{directory:'fixture'},key,keyId,{}, {sourceBinding:binding},false);
+  const child=spawnSync(process.execPath,['-e',`console.log(JSON.stringify({
+    hosted:process.env.GITHUB_ACTIONS, run:process.env.GITHUB_RUN_ID,
+    scope:process.env.REHEARSAL_SCOPE, provider:process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,
+    unrelated:process.env.UNRELATED_ENV,
+  }));`],{env,encoding:'utf8'});
+  assert.equal(child.status,0,child.stderr);
+  assert.deepEqual(JSON.parse(child.stdout),{hosted:'true',run:'123',scope:'backup_only',provider:'true'});
 });
 test('fresh intent preserves separate runtime and schema identities; no retry or resume',()=>{
   const e=freshIntentEnvelope(binding,key,keyId);
