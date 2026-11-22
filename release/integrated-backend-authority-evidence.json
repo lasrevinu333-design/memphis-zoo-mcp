@@ -960,7 +960,7 @@
       {
         "path": "proposals/immutable-private-current-postgres-program.json",
         "mode": "100644",
-        "object_id": "f80b07552250f0395937c39d6eece4e94231f371"
+        "object_id": "716140b0cb0a4ba9840b5eb98fb1b9fb276ad380"
       },
       {
         "path": "proposals/immutable-private-owner-context.sql",
@@ -2703,6 +2703,11 @@
         "object_id": "c5c76db45af9a1f25fd21647e10be1c7b799bd19"
       },
       {
+        "path": "release/installed-source/20261122_current_finish_release_history_inverse.json",
+        "mode": "100644",
+        "object_id": "9989c01f95262bca67f2892db272f87916f15e0d"
+      },
+      {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
@@ -4120,7 +4125,7 @@
       {
         "path": "scripts/build-immutable-postgres-program.mjs",
         "mode": "100644",
-        "object_id": "04d5de731fe561c736388dfbc98ea172ebca4737"
+        "object_id": "99ed2090977c5ae5dc592ea8499514fe743fba51"
       },
       {
         "path": "scripts/build52-release-recovery-binding-database-tests.mjs",
@@ -6905,12 +6910,12 @@
       {
         "path": "scripts/immutable-current-live-data-source.mjs",
         "mode": "100644",
-        "object_id": "4f460c92a68a7fe984bc0616531ddd63f097161c"
+        "object_id": "c9278dde2f1d8eee17bd167d20c07ae8ffd9c398"
       },
       {
         "path": "scripts/immutable-current-live-data-tests.mjs",
         "mode": "100644",
-        "object_id": "9f637958b048f56d0a923953731cf94976a81744"
+        "object_id": "a358d487aa3955a32174eba7f1433e85f2fa5f38"
       },
       {
         "path": "scripts/immutable-current-oc24-restore-source.mjs",
@@ -6985,7 +6990,7 @@
       {
         "path": "scripts/immutable-ordinary-progress-source-proof.mjs",
         "mode": "100644",
-        "object_id": "d68284bf57255736f74765c7b98be191b2e1e341"
+        "object_id": "17c5b8a3ce611587a2f82253b860408f4a0b8d70"
       },
       {
         "path": "scripts/immutable-ordinary-progress-tests.mjs",
@@ -7000,7 +7005,7 @@
       {
         "path": "scripts/immutable-original-owner-context-tests.mjs",
         "mode": "100644",
-        "object_id": "f621f5b2bc5e2589c9d084d8d627c9304a2207f9"
+        "object_id": "d257555457a21abc30ffb0bcdbc1f135b02008c0"
       },
       {
         "path": "scripts/immutable-postgres-acl-qualification-tests.mjs",
@@ -7065,7 +7070,7 @@
       {
         "path": "scripts/immutable-private-postgres-source.mjs",
         "mode": "100644",
-        "object_id": "df401baaa1acb629f13fef8c56ca5cf5f6742a65"
+        "object_id": "d78af67f5f9201d1616b0f6e4f9450187bc6b940"
       },
       {
         "path": "scripts/immutable-private-source-acl.mjs",
@@ -7090,12 +7095,12 @@
       {
         "path": "scripts/immutable-private-stage-diagnostic.mjs",
         "mode": "100644",
-        "object_id": "d2b57795b8f87ebbcee7daaab677e0791253a264"
+        "object_id": "435fd4f5595b4188b257e4d120bd0ed97ed1b78d"
       },
       {
         "path": "scripts/immutable-release-history-tests.mjs",
         "mode": "100644",
-        "object_id": "b244ada2cc6340e89f7cb1052d8a6e190c91ba3d"
+        "object_id": "1b1516447624e1352f6bdb46a1ee634f4f3fee86"
       },
       {
         "path": "scripts/immutable-source-cache-tests.mjs",
@@ -9070,7 +9075,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "2653af02816b6c5bfdc4b15fdc4e31281a17778e"
+        "object_id": "649149dbab59738d4ba5395d910201fb66f5e35f"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
@@ -14553,7 +14558,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2885,
+    "authority_path_count": 2886,
     "migration_path_count": 322,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
