@@ -661,6 +661,8 @@ export function createEventMaintenanceController({ runRpc, runScanAlertQueue }) 
   let lastStartedAt = null;
   let lastFinishedAt = null;
   let lastResult = null;
+  let maintenance = null;
+  let stopping = false;
 
   function buildStatus() {
     return {
@@ -672,7 +674,7 @@ export function createEventMaintenanceController({ runRpc, runScanAlertQueue }) 
     };
   }
 
-  async function runMaintenance(reason = "manual") {
+  async function performMaintenance(reason = "manual") {
     if (running) {
       const result = { ok: true, skipped: true, reason: "already_running" };
       lastResult = result;
@@ -715,6 +717,13 @@ export function createEventMaintenanceController({ runRpc, runScanAlertQueue }) 
     }
   }
 
+  function runMaintenance(reason) {
+    if (stopping) return Promise.resolve({ ok: true, skipped: true, reason: "shutdown" });
+    if (maintenance) return performMaintenance(reason);
+    maintenance = performMaintenance(reason).finally(() => { maintenance = null; });
+    return maintenance;
+  }
+
   return {
     kick(reason = "kick") {
       runMaintenance(reason).catch((error) => {
@@ -725,6 +734,10 @@ export function createEventMaintenanceController({ runRpc, runScanAlertQueue }) 
       });
     },
     runMaintenance,
+    async stop() {
+      stopping = true;
+      await maintenance;
+    },
     getStatus() {
       return buildStatus();
     },

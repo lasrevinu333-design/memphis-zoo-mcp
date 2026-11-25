@@ -147,7 +147,6 @@ const geminiControlledRepairWorker = createGeminiControlledRepairWorker({
   releaseId: RELEASE_ID,
   backendCommit: BACKEND_COMMIT_SHA,
 });
-geminiControlledRepairWorker.start();
 const opsTrustedDeviceStore = createSupabaseTrustedDeviceStore(supabaseAdmin);
 
 const SCAN_RPC_ALLOWLIST = new Set([
@@ -208,6 +207,8 @@ let feedbackReminderSweepInFlight = false;
 let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 let operationalNotificationWorkerInFlight = false;
+let shutdownStarted = false;
+const ownedSweeps = new Set();
 const operationalNotificationJobHandlers = new Map();
 
 function registerOperationalNotificationJobHandler(jobType, handler) {
@@ -1271,14 +1272,6 @@ async function runReadOnlySql(sql) {
   return result.rows;
 }
 
-async function runSchemaCatalogSql(sql) {
-  return runSupabaseReadOnlySql({
-    sql,
-    maxRows: 250_000,
-    maxResponseBytes: 100_000_000,
-  });
-}
-
 async function runOperationalCommand(command, payload = {}) {
   return runRpc("app_apply_operational_command", {
     p_command: String(command || "").trim(),
@@ -1668,79 +1661,103 @@ async function processGuestCleanlinessNotificationJob(job, { assertActive = () =
 }
 
 async function runOperationalNotificationWorker({ limit = 10 } = {}) {
+  if (shutdownStarted) return { ok: true, skipped: "shutdown" };
   if (operationalNotificationWorkerInFlight) return { ok: true, skipped: "in_flight" };
   operationalNotificationWorkerInFlight = true;
   try {
-    const claimed = await runRpc("claim_operational_notification_jobs_v2", {
-      p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
-      p_limit: Math.max(1, Math.min(50, Number(limit) || 10)),
-      p_lease_seconds: 120,
-      p_guest_reporting_enabled: GUEST_FEATURE.enabled === true,
-    });
-    const jobs = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
+    const maxJobs = Math.max(1, Math.min(50, Math.trunc(Number(limit) || 10)));
     const results = [];
-    for (const job of jobs) {
-      const result = await withApplicationMutationLease({
-        supabase: supabaseAdmin,
-        serviceName: "memphis-zoo-operational-notification-worker",
-        operation: async (mutationLease) => {
-          let succeeded = false;
-          let errorMessage = null;
-          let terminal = false;
-          let deferFinish = false;
-          let deferGuest = false;
-          try {
+    let claimFailed = false;
+    for (let i = 0; i < maxJobs && !shutdownStarted; i++) {
+      let job = null;
+      try {
+        const result = await withApplicationMutationLease({
+          supabase: supabaseAdmin,
+          serviceName: "memphis-zoo-operational-notification-worker",
+          operation: async (mutationLease) => {
             mutationLease.assertActive();
-            if (job.job_type === "guest_cleanliness_report") {
-              await processGuestCleanlinessNotificationJob(job, mutationLease);
+            if (shutdownStarted) return null;
+            // Claim only the next job, after restore-lease entry, so later
+            // jobs retain the original attempt budget until ready to run.
+            const claimed = await runRpc("claim_operational_notification_jobs_v2", {
+              p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+              p_limit: 1,
+              p_lease_seconds: 120,
+              p_guest_reporting_enabled: GUEST_FEATURE.enabled === true,
+            });
+            job = Array.isArray(claimed) ? claimed[0] : claimed;
+            if (!job) return null;
+            let succeeded = false;
+            let errorMessage = null;
+            let terminal = false;
+            let deferFinish = false;
+            let deferGuest = false;
+            try {
+              mutationLease.assertActive();
+              if (job.job_type === "guest_cleanliness_report") {
+                await processGuestCleanlinessNotificationJob(job, mutationLease);
+              } else {
+                const handler = operationalNotificationJobHandlers.get(String(job.job_type || "").trim());
+                if (!handler) throw new Error(`Unsupported operational notification job type: ${job.job_type}`);
+                await handler(job, mutationLease);
+              }
+              mutationLease.assertActive();
+              succeeded = true;
+            } catch (error) {
+              errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
+              deferGuest = error?.deferGuest === true && job.job_type === "guest_cleanliness_report";
+              terminal = error?.terminal === true;
+              deferFinish = error?.deferFinish === true;
+            }
+            if (deferGuest) {
+              mutationLease.assertActive();
+              await runRpc("pause_guest_notification_job",{p_job_id:job.job_id,p_lease_token:job.lease_token});
+              return {job_id:job.job_id,succeeded:false,paused:true,terminal:false};
+            }
+            if (deferFinish) {
+              return { job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage };
+            }
+            const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
+            mutationLease.assertActive();
+            if (terminal) {
+              await runRpc("finish_operational_notification_job_terminal", {
+                p_job_id: job.job_id,
+                p_lease_token: job.lease_token,
+                p_error: errorMessage,
+              });
             } else {
-              const handler = operationalNotificationJobHandlers.get(String(job.job_type || "").trim());
-              if (!handler) throw new Error(`Unsupported operational notification job type: ${job.job_type}`);
-              await handler(job, mutationLease);
+              await runRpc("finish_operational_notification_job", {
+                p_job_id: job.job_id,
+                p_lease_token: job.lease_token,
+                p_succeeded: succeeded,
+                p_error: errorMessage,
+                p_retry_seconds: retrySeconds,
+              });
             }
             mutationLease.assertActive();
-            succeeded = true;
-          } catch (error) {
-            errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
-            deferGuest = error?.deferGuest === true && job.job_type === "guest_cleanliness_report";
-            terminal = error?.terminal === true;
-            deferFinish = error?.deferFinish === true;
-          }
-          if (deferGuest) {
-            mutationLease.assertActive();
-            await runRpc("pause_guest_notification_job",{p_job_id:job.job_id,p_lease_token:job.lease_token});
-            return {job_id:job.job_id,succeeded:false,paused:true,terminal:false};
-          }
-          if (deferFinish) {
-            return { job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage };
-          }
-          const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
-          mutationLease.assertActive();
-          if (terminal) {
-            await runRpc("finish_operational_notification_job_terminal", {
-              p_job_id: job.job_id,
-              p_lease_token: job.lease_token,
-              p_error: errorMessage,
-            });
-          } else {
-            await runRpc("finish_operational_notification_job", {
-              p_job_id: job.job_id,
-              p_lease_token: job.lease_token,
-              p_succeeded: succeeded,
-              p_error: errorMessage,
-              p_retry_seconds: retrySeconds,
-            });
-          }
-          mutationLease.assertActive();
-          return { job_id: job.job_id, succeeded, terminal, error: errorMessage };
-        },
-      });
-      results.push(result);
+            return { job_id: job.job_id, succeeded, terminal, error: errorMessage };
+          },
+        });
+        if (!result) break;
+        results.push(result);
+      } catch {
+        console.error("Operational notification job settlement could not be confirmed.", {
+          job_id: job?.job_id ?? null,
+        });
+        // Never redispatch or claim the same original manually after an
+        // uncertain finish. Its durable lease/provider state is authoritative.
+        if (!job) {
+          claimFailed = true;
+          break;
+        }
+        results.push({ job_id: job.job_id, succeeded: false, settlement_unknown: true });
+      }
     }
-    const custodial = await runCustodialOfflineReconciliationNotificationWorker({ limit });
+    const custodial = shutdownStarted ? { skipped: "shutdown" }
+      : await runCustodialOfflineReconciliationNotificationWorker({ limit });
     return {
-      ok: true,
-      claimed: jobs.length,
+      ok: !claimFailed && !results.some(item => item.settlement_unknown),
+      claimed: results.length,
       completed: results.filter((item) => item.succeeded).length,
       results,
       custodial_offline_reconciliation: custodial,
@@ -2624,10 +2641,15 @@ async function serveHealthDependencies(req, res) {
         to_regclass('public.msg_message_audit') is not null as message_audit_table,
         to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null as exact_finish_rpc,
         to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null as manager_messaging_rpc,
-        to_regprocedure('public.claim_operational_notification_jobs(text,integer,integer)') is not null as worker_claim_rpc,
+        exists(select 1 from pg_proc p cross join lateral aclexplode(p.proacl) acl
+          join pg_roles r on r.oid=acl.grantee
+          where p.oid=to_regprocedure('public.claim_operational_notification_jobs_v2(text,integer,integer,boolean)')
+          and r.rolname='service_role') as worker_claim_rpc,
         (select count(*)::int from public.operational_notification_jobs where status in ('pending','leased')) as notification_backlog,
         (select count(*)::int from public.operational_notification_jobs where status = 'dead') as notification_dead_letters,
-        (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases
+        (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases,
+        (select count(*)::int from public.operational_notification_jobs
+          where status = 'leased' and leased_until < now() and attempts >= max_attempts) as exhausted_worker_leases
     `);
     const dependencies = rows?.[0] || {};
     let canaryPaused = null;
@@ -2677,6 +2699,7 @@ async function serveHealthDependencies(req, res) {
         backlog: Number(dependencies.notification_backlog || 0),
         dead_letters: Number(dependencies.notification_dead_letters || 0),
         expired_leases: Number(dependencies.expired_worker_leases || 0),
+        exhausted_leases: Number(dependencies.exhausted_worker_leases || 0),
       },
       schema_fingerprint: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).schema.fingerprint,
     })));
@@ -2736,7 +2759,7 @@ app.get("/admin-api/release-schema-identity", requireReleaseSchemaIdentityToken,
     // This endpoint is intentionally authenticated and uses only the shared
     // SELECT-only executor. It reports a fingerprint calculated from the
     // connected catalog, never the source target fingerprint.
-    const observed = await observeProductionSchemaIdentity({ runReadOnlySql: runSchemaCatalogSql });
+    const observed = await observeProductionSchemaIdentity();
     res.status(200).json({ ok: true, ...observed });
   } catch (error) {
     res.status(503).json({ ok: false, error: "Production schema identity observation failed." });
@@ -3008,7 +3031,7 @@ app.post("/marketing-api/guest-cleanliness-issues/:reportId/review", requireGues
       notes: req.body?.notes,
       actor: req.guestMarketingReview.actor,
     });
-    if (item.status === "open") runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("guest dispatch worker kick failed:", error));
+    if (item.status === "open") startOwnedSweep("guest dispatch", runOperationalNotificationWorker);
     res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
   } catch (error) {
     res.status(error?.status || 500).json({ ok: false, error: error?.message || "Guest Marketing review failed" });
@@ -3409,21 +3432,29 @@ if (releaseCanaryConfigurationRequired()) {
   nativeRouteProofSecret();
 }
 assertConfiguredReleaseIdentity();
+function startOwnedSweep(name, sweep) {
+  if (shutdownStarted) return;
+  const work = Promise.resolve().then(sweep).catch(() => console.error(`[${name}] sweep failed.`));
+  ownedSweeps.add(work);
+  void work.then(() => ownedSweeps.delete(work));
+}
+
+const sweepTimers = [];
 const EVENT_MAINTENANCE_SWEEP_MS = toSafeNonNegativeInt(process.env.EVENT_MAINTENANCE_SWEEP_MS, 60_000);
 if (EVENT_MAINTENANCE_SWEEP_MS > 0) {
-  setInterval(() => {
-    eventMaintenanceController.kick("scheduled_worker");
-  }, EVENT_MAINTENANCE_SWEEP_MS).unref?.();
+  sweepTimers.push(setInterval(() => {
+    startOwnedSweep("event maintenance", () => eventMaintenanceController.runMaintenance("scheduled_worker"));
+  }, EVENT_MAINTENANCE_SWEEP_MS).unref());
 }
 if (FEEDBACK_REMINDER_SWEEP_MS > 0) {
-  setInterval(() => {
-    runSystemFeedbackReminderSweep().catch((error) => console.error("system feedback reminder sweep failed:", error));
-  }, FEEDBACK_REMINDER_SWEEP_MS).unref?.();
+  sweepTimers.push(setInterval(() => {
+    startOwnedSweep("feedback reminder", runSystemFeedbackReminderSweep);
+  }, FEEDBACK_REMINDER_SWEEP_MS).unref());
 }
 if (OPERATIONAL_NOTIFICATION_SWEEP_MS > 0) {
-  setInterval(() => {
-    runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("operational notification worker failed:", error));
-  }, OPERATIONAL_NOTIFICATION_SWEEP_MS).unref?.();
+  sweepTimers.push(setInterval(() => {
+    startOwnedSweep("operational notification", runOperationalNotificationWorker);
+  }, OPERATIONAL_NOTIFICATION_SWEEP_MS).unref());
 }
 const httpServer = app.listen(port, () => {
   console.log("Memphis Zoo MCP server initialized.");
@@ -3445,35 +3476,38 @@ const httpServer = app.listen(port, () => {
   console.log("Admin API endpoint: /admin-api");
   console.log("Dashboard API endpoint: /dashboard-api");
   console.log("Scan API endpoint: /scan-api");
-  runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("operational notification startup sweep failed:", error));
+  if (!shutdownStarted) geminiControlledRepairWorker.start();
+  startOwnedSweep("operational notification startup", runOperationalNotificationWorker);
 });
 
-let shutdownStarted = false;
 async function gracefulShutdown(signal) {
   if (shutdownStarted) return;
   shutdownStarted = true;
-  console.log(`[shutdown] ${signal} received; draining active connections.`);
+  console.log(`[shutdown] ${signal} received; draining connections and active work.`);
+  const forcedExit = setTimeout(() => {
+    console.error("[shutdown] Grace period expired with unsettled work.");
+    process.exit(1);
+  }, 25_000);
+  forcedExit.unref?.();
 
+  for (const timer of sweepTimers) clearInterval(timer);
+  const httpDrain = new Promise((resolve, reject) => {
+    httpServer.close(error => error ? reject(error) : resolve());
+  });
   for (const { transport, server } of sseTransports.values()) {
     try { transport.close(); } catch {}
     try { server.close(); } catch {}
   }
   sseTransports.clear();
-  try { await geminiControlledRepairWorker.stop(); } catch (error) {
-    console.error("[shutdown] Gemini worker stop failed:", error);
-  }
 
-  const forcedExit = setTimeout(() => {
-    console.error("[shutdown] Grace period expired; forcing process exit.");
-    process.exit(1);
-  }, 25_000);
-  forcedExit.unref?.();
-
-  httpServer.close((error) => {
-    if (error) console.error("[shutdown] HTTP server close failed:", error);
-    else console.log("[shutdown] HTTP server drained cleanly.");
-    process.exit(error ? 1 : 0);
-  });
+  const results = await Promise.allSettled([
+    httpDrain, eventMaintenanceController.stop(), geminiControlledRepairWorker.stop(), ...ownedSweeps,
+  ]);
+  clearTimeout(forcedExit);
+  const failed = results.some(result => result.status === "rejected");
+  if (failed) console.error("[shutdown] One or more drains failed.");
+  else console.log("[shutdown] Connections and active work drained.");
+  process.exit(failed ? 1 : 0);
 }
 
 process.once("SIGTERM", () => { gracefulShutdown("SIGTERM"); });

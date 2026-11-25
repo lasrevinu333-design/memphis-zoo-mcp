@@ -58,6 +58,9 @@ export function assertConfiguredReleaseIdentity({ required = releaseAttestationR
       || process.env.SOURCE_VERSION
       || "unknown",
   ).trim();
+  if (required && !/^[a-f0-9]{40}$/.test(deploymentCommit)) {
+    throw new Error("A full backend deployment commit is required in production.");
+  }
   if (deploymentCommit !== "unknown" && deploymentCommit !== attestation.backend_commit_sha) {
     throw new Error("The deployed backend commit does not equal the signed release attestation.");
   }

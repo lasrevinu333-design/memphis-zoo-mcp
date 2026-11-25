@@ -359,16 +359,23 @@ export async function runReadOnlySql({ pool, sql, maxRows, max_rows, maxResponse
 export async function runReadOnlySnapshot(queries, { pool } = {}) {
   if (!Array.isArray(queries) || queries.length < 1 || queries.length > 8)
     throw new Error("Invalid read-only snapshot query set.");
-  const plans = queries.map(sql => planRead(sql));
-  return executeInReadOnlyTransaction(pool, async client => {
+  queries.forEach(sanitizeReadOnlySql);
+  return withReadOnlySnapshot(async read => {
     const groups = [];
-    for (const plan of plans) {
-      const result = readResult((await client.query(plan.sql)).rows, plan);
-      if (result.row_limit_truncated || result.response_truncated || result.omitted_oversized_rows !== 0
-        || result.originalRowCount !== result.rowCount)
-        throw new Error("Read-only snapshot exceeds its response bounds.");
-      groups.push(result.rows);
-    }
+    for (const sql of queries) groups.push((await read(sql)).rows);
     return groups;
-  });
+  }, { pool });
+}
+
+// Fixed internal catalog readers can use the same transaction across checks
+// whose statements depend on the results of preceding reads.
+export async function withReadOnlySnapshot(inspect, { pool, maxRows, maxResponseBytes } = {}) {
+  return executeInReadOnlyTransaction(pool, client => inspect(async (sql, values) => {
+    const plan = planRead(sql, { maxRows, maxResponseBytes });
+    const result = readResult((await (values ? client.query(plan.sql, values) : client.query(plan.sql))).rows, plan);
+    if (result.row_limit_truncated || result.response_truncated || result.omitted_oversized_rows !== 0
+      || result.originalRowCount !== result.rowCount)
+      throw new Error("Read-only snapshot exceeds its response bounds.");
+    return result;
+  }));
 }

@@ -147,27 +147,32 @@ export function createGeminiControlledRepairWorker({
     }
   }
 
+  let stopping = false;
+
+  async function performSweep() {
+    await heartbeat(true);
+    if (stopping) return { ok: true, skipped: "shutdown" };
+    const claimed = await rpc("gemini_console_claim_repair_jobs", {
+      p_worker_id: workerId,
+      p_limit: 1,
+      p_lease_seconds: requestedLeaseSeconds,
+    });
+    const jobs = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
+    for (const job of jobs) await processJob(job);
+    return { ok: true, claimed: jobs.length };
+  }
+
   async function sweep() {
     if (!enabled) return { ok: false, disabled: true };
-    if (inFlight) return { ok: true, skipped: "in_flight" };
-    inFlight = true;
-    try {
-      await heartbeat(true);
-      const claimed = await rpc("gemini_console_claim_repair_jobs", {
-        p_worker_id: workerId,
-        p_limit: 1,
-        p_lease_seconds: requestedLeaseSeconds,
-      });
-      const jobs = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
-      for (const job of jobs) await processJob(job);
-      return { ok: true, claimed: jobs.length };
-    } finally {
-      inFlight = false;
-    }
+    if (stopping || inFlight) return { ok: true, skipped: stopping ? "shutdown" : "in_flight" };
+    inFlight = performSweep();
+    try { return await inFlight; }
+    finally { inFlight = false; }
   }
 
   function start() {
     if (!enabled || timer) return { enabled, worker_id: workerId };
+    stopping = false;
     void sweep().catch(() => {});
     timer = setInterval(() => void sweep().catch(() => {}), intervalMs);
     timer.unref?.();
@@ -175,8 +180,11 @@ export function createGeminiControlledRepairWorker({
   }
 
   async function stop() {
+    stopping = true;
     if (timer) clearInterval(timer);
     timer = null;
+    const activeSweep = inFlight;
+    if (activeSweep) await activeSweep.catch(() => {});
     if (enabled) await heartbeat(false).catch(() => {});
   }
 

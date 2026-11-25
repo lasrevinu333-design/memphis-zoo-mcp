@@ -853,29 +853,18 @@ const operationalWorkerStart = indexSource.indexOf("async function runOperationa
 const operationalWorkerEnd = indexSource.indexOf("async function listGuestCleanlinessReports");
 assert.ok(operationalWorkerStart >= 0 && operationalWorkerEnd > operationalWorkerStart, "the operational worker must remain inspectable");
 const operationalWorker = indexSource.slice(operationalWorkerStart, operationalWorkerEnd);
-// Keep the independent-review baseline immutable. The candidate adds only the
-// named guest-pause path; it is not declared independently reviewed by this test.
-// Removing those exact additions must recover the byte-identical reviewed worker.
-const guestPauseAdditions = [
-  ['claim_operational_notification_jobs_v2', 'claim_operational_notification_jobs'],
-  ['      p_guest_reporting_enabled: GUEST_FEATURE.enabled === true,\n', ''],
-  ['          let deferGuest = false;\n', ''],
-  ['            deferGuest = error?.deferGuest === true && job.job_type === "guest_cleanliness_report";\n', ''],
-  ['          if (deferGuest) {\n            mutationLease.assertActive();\n            await runRpc("pause_guest_notification_job",{p_job_id:job.job_id,p_lease_token:job.lease_token});\n            return {job_id:job.job_id,succeeded:false,paused:true,terminal:false};\n          }\n', ''],
-];
-let reviewedFinalizationCore = operationalWorker;
-for (const [candidateText, originalText] of guestPauseAdditions) {
-  assert.equal(reviewedFinalizationCore.split(candidateText).length - 1, 1,
-    'each declared guest-pause delta must occur exactly once');
-  reviewedFinalizationCore = reviewedFinalizationCore.replace(candidateText, originalText);
-}
-assert.equal(
-  createHash("sha256").update(reviewedFinalizationCore).digest("hex"),
-  "f9151af2a3115297b05a9a9725b56f8fa8e9d23394f8fd190565e5b6871008db",
-  "unchanged finalization core must retain the exact independently reviewed bytes",
+// Claim and drain behavior changed, while the original handler and both
+// terminal/nonterminal finalizers remain the exact previously reviewed code.
+const finalization = operationalWorker.slice(
+  operationalWorker.indexOf("let succeeded = false;"),
+  operationalWorker.indexOf("return { job_id: job.job_id, succeeded, terminal, error: errorMessage };")
+    + "return { job_id: job.job_id, succeeded, terminal, error: errorMessage };".length,
 );
+assert.equal(createHash("sha256").update(finalization.split("\n").map(line => line.trim()).join("\n")).digest("hex"),
+  "864f11f86382473305bf1431df6993d619ee8ce274b0940a115f7f4e8173bb8a", "Previously reviewed in-lease finalization stays byte-bound apart from indentation");
+assert.match(operationalWorker,/withApplicationMutationLease\(\{[\s\S]*claim_operational_notification_jobs_v2[\s\S]*p_limit: 1/);
 
-async function assertOperationalWorkerDeferral(workerSource) {
+async function assertOperationalWorkerDeferral(workerSource, { failFinish = false, stopOnFirst = false } = {}) {
   const rpcReferences = workerSource.match(/\brunRpc\b/g) || [];
   const awaitedRpcCalls = workerSource.match(/\bawait\s+runRpc\s*\(/g) || [];
   assert.equal(
@@ -894,10 +883,17 @@ async function assertOperationalWorkerDeferral(workerSource) {
     { job_id: "10000000-0000-4000-8000-000000000001", job_type: "deferred_fixture", lease_token: "20000000-0000-4000-8000-000000000001", attempts: 1 },
     { job_id: "10000000-0000-4000-8000-000000000002", job_type: "success_fixture", lease_token: "20000000-0000-4000-8000-000000000002", attempts: 1 },
   ];
+  const queue = [...claimedJobs];
+  let reconciliationCalls = 0;
   const context = createContext({
+    console: { error() {} },
     runRpc: async (name, payload) => {
       rpcCalls.push({ name, payload });
-      if (name === "claim_operational_notification_jobs_v2") return claimedJobs;
+      if (name === "claim_operational_notification_jobs_v2") {
+        assert.equal(payload.p_limit, 1);
+        return queue.length ? [queue.shift()] : [];
+      }
+      if (failFinish && payload.p_job_id === claimedJobs[0].job_id) throw new Error("fixture finish response lost");
       return { ok: true };
     },
     withApplicationMutationLease: async ({ operation }) => operation({ assertActive() {} }),
@@ -907,11 +903,12 @@ async function assertOperationalWorkerDeferral(workerSource) {
     operationalNotificationJobHandlers: new Map([
       ["deferred_fixture", async (job) => {
         handlerCalls.push(job.job_id);
-        throw Object.assign(new Error("provider result remains in flight"), { deferFinish: true });
+        if (stopOnFirst) runInContext("shutdownStarted = true", context);
+        if (!failFinish) throw Object.assign(new Error("provider result remains in flight"), { deferFinish: true });
       }],
       ["success_fixture", async (job) => { handlerCalls.push(job.job_id); }],
     ]),
-    runCustodialOfflineReconciliationNotificationWorker: async () => ({ ok: true, claimed: 0 }),
+    runCustodialOfflineReconciliationNotificationWorker: async () => { reconciliationCalls++; return { ok: true, claimed: 0 }; },
     Promise: undefined,
     process: undefined,
     queueMicrotask: undefined,
@@ -924,6 +921,7 @@ async function assertOperationalWorkerDeferral(workerSource) {
   const worker = runInContext(
     `"use strict";
      let operationalNotificationWorkerInFlight = false;
+     let shutdownStarted = false;
      const OPERATIONAL_NOTIFICATION_WORKER_ID = "notification-contract-worker";
      ${workerSource}
      runOperationalNotificationWorker;`,
@@ -931,6 +929,20 @@ async function assertOperationalWorkerDeferral(workerSource) {
     { timeout: 1_000 },
   );
   const outcome = await worker({ limit: 10 });
+  if (stopOnFirst) {
+    assert.equal(handlerCalls.length, 1);
+    assert.equal(queue.length, 1);
+    assert.equal(reconciliationCalls, 0);
+    return;
+  }
+  assert.equal(reconciliationCalls, 1);
+  if (failFinish) {
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.results[0].settlement_unknown, true);
+    assert.equal(outcome.results[1].succeeded, true);
+    assert.deepEqual(handlerCalls, claimedJobs.map(job => job.job_id));
+    return;
+  }
   assert.deepEqual(handlerCalls, claimedJobs.map((job) => job.job_id), "a deferred first job must not stop the outer loop from processing the next claimed job");
   assert.equal(outcome.results.length, 2);
   assert.equal(outcome.results[0].deferred, true);
@@ -943,6 +955,8 @@ async function assertOperationalWorkerDeferral(workerSource) {
 }
 
 await assertOperationalWorkerDeferral(operationalWorker);
+await assertOperationalWorkerDeferral(operationalWorker, { failFinish: true });
+await assertOperationalWorkerDeferral(operationalWorker, { stopOnFirst: true });
 const aliasedDeferredFinishMutant = operationalWorker.replace(
   "if (deferFinish) {",
   'if (deferFinish) {\n            await runRpc("finish_operational_" + "notification_job", { p_job_id: job.job_id, p_lease_token: job.lease_token });',

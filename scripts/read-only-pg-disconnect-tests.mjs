@@ -3,12 +3,44 @@ import { EventEmitter, once } from 'node:events';
 import net from 'node:net';
 import test from 'node:test';
 import { createReadOnlyPool, runReadOnlySnapshot, runReadOnlySql } from '../src/supabase/read.js';
+import { observeProductionSchemaIdentity } from '../src/production-schema-identity.js';
+import { APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY } from './schema-fingerprint-catalog.mjs';
 
 const restrictedAuthority = {
   same_session_identity: true, transaction_read_only: true, dedicated_reader_member: true,
   exclusive_reader_membership: true, direct_object_grants_absent: true, owned_objects_absent: true,
   reader_role_restricted: true,
 };
+
+test('catalog capture binds the private ACL privilege in one restricted transaction', async () => {
+  for (const failLate of [false, true]) {
+    const calls = [], releases = [];
+    const pool = { async connect() {
+      return {
+        async query(sql, parameters) {
+          calls.push({ sql, parameters });
+          if (sql.includes('with login_role')) return { rows: [restrictedAuthority] };
+          if (sql.includes(APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY)) {
+            return { rows: [{ schema_name: 'custodial_coverall', owner_name: 'migration_owner' }] };
+          }
+          if (sql.includes('has_schema_privilege')) {
+            assert.match(sql, /has_schema_privilege\(d.defaclrole,owned.oid,\$1::text\)/);
+            assert.deepEqual(parameters, ['CREATE']);
+            if (failLate) throw new Error('fixture lost the connection during ACL capture');
+          }
+          return { rows: [] };
+        },
+        release(error) { releases.push(error); },
+      };
+    } };
+    if (failLate) await assert.rejects(observeProductionSchemaIdentity({ pool }), /during ACL capture/);
+    else assert.match((await observeProductionSchemaIdentity({ pool })).fingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(calls.filter(({ sql }) => sql === 'begin isolation level repeatable read read only').length, 1);
+    assert.equal(calls.filter(({ sql }) => sql.includes('has_schema_privilege')).length, 1);
+    assert.equal(calls.at(-1).sql, failLate ? 'rollback' : 'commit');
+    assert.equal(Boolean(releases[0]), failLate);
+  }
+});
 
 function int32(value) {
   const bytes = Buffer.alloc(4);
