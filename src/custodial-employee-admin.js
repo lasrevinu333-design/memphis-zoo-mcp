@@ -286,7 +286,7 @@ async function loadPhoneAdminSnapshot(db) {
 }
 
 function legacySnapshot(snapshot) {
-  const assignedByEmployee = new Map((snapshot.phones || []).filter((phone) => phone.assigned_employee_id).map((phone) => [phone.assigned_employee_id, phone.device_id]));
+  const assignedByEmployee = new Map((snapshot.phones || []).filter((phone) => phone.active === true && phone.assigned_employee_id).map((phone) => [phone.assigned_employee_id, phone.device_id]));
   return {
     devices: (snapshot.phones || []).map((phone) => ({
       ...phone,
