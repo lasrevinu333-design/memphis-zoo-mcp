@@ -200,7 +200,7 @@
       {
         "path": ".github/workflows/production-availability-monitor.yml",
         "mode": "100644",
-        "object_id": "ad465e47fd7a22795b497791e19bc0b7a5f722ef"
+        "object_id": "5ab4ad2c5935c63d3f48dc608c28a57fe2690c8f"
       },
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
@@ -215,7 +215,7 @@
       {
         "path": ".github/workflows/production-disaster-recovery-backup.yml",
         "mode": "100644",
-        "object_id": "80cd8a77187df0f2730ed9aaa698ec7296afa706"
+        "object_id": "5c9063ec6d6466b64f1e155fbfa9b0da8b2f5ce0"
       },
       {
         "path": ".github/workflows/production-release-deployment-record.yml",
@@ -1873,6 +1873,11 @@
         "object_id": "76f8a5e383ae649691b53704dd049c63669b6d7b"
       },
       {
+        "path": "scripts/observe-production-release-availability.mjs",
+        "mode": "100644",
+        "object_id": "5943a575e9a990ab98fa18d91a0d9bb1d2416eb7"
+      },
+      {
         "path": "scripts/oc24-candidate-diagnostics-proof.mjs",
         "mode": "100644",
         "object_id": "67c8673d153623246110667b13f87136ceeaf197"
@@ -2206,6 +2211,16 @@
         "path": "scripts/release-migration-workflow-preflight.mjs",
         "mode": "100644",
         "object_id": "190a753d081a35f7e08bcdb3782927abf71a7dd7"
+      },
+      {
+        "path": "scripts/release-monitor-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "943fb9f7c0b613b7c3cc89782d876a971df3dadf"
+      },
+      {
+        "path": "scripts/release-monitor-observations.mjs",
+        "mode": "100644",
+        "object_id": "84369fcda4d2119e640cee545ba5bd74db68f627"
       },
       {
         "path": "scripts/release-pair-consumer-regression-tests.mjs",
@@ -3101,6 +3116,11 @@
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
         "object_id": "2099445debe846162f3992233c5be5c8ce2dbd49"
+      },
+      {
+        "path": "src/dashboard-release-compatibility.js",
+        "mode": "100644",
+        "object_id": "02544c66a3625ee5c59e1a2048bf70b4d8c7ad4b"
       },
       {
         "path": "src/device-identity.js",
@@ -5723,7 +5743,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1119,
+    "authority_path_count": 1123,
     "migration_path_count": 294,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
