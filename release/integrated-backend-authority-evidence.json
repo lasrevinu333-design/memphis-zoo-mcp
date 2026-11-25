@@ -988,6 +988,11 @@
         "object_id": "453dac0f417aa9973163f5b5210d0faa270926ee"
       },
       {
+        "path": "release/applied-hotfixes/20261122145828_custodial_messenger_direct_open_v82.sql",
+        "mode": "100644",
+        "object_id": "c61e56003ad92a284dc4a64030132619a63748aa"
+      },
+      {
         "path": "release/combined-release-verification.json",
         "mode": "100644",
         "object_id": "698d18b9fa7c419c6cfe6df5b5a380d372509a77"
@@ -2740,12 +2745,12 @@
       {
         "path": "scripts/assigned-phone-location-tests.mjs",
         "mode": "100644",
-        "object_id": "0ad81e8939e6441abcc4ab5612f30561b2ddfc17"
+        "object_id": "47eeac25752f80bd079bd9d42e642731067155d5"
       },
       {
         "path": "scripts/attendance-chicago-day-tests.mjs",
         "mode": "100644",
-        "object_id": "15053efd6d5283935a92890702e14bee922437e2"
+        "object_id": "9212c018305b95b690d1b4e795d49e9308732a19"
       },
       {
         "path": "scripts/audit-guest-disabled-tests.mjs",
@@ -2935,7 +2940,7 @@
       {
         "path": "scripts/completion-taxonomy-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "01d0f6ebc44cf0bf6ecb675eb1a9b9d04b1b5d32"
+        "object_id": "844b183cc2797f15f30cd73b85b991a3e4128ad4"
       },
       {
         "path": "scripts/completion-taxonomy-database-tests.mjs",
@@ -3295,12 +3300,12 @@
       {
         "path": "scripts/dashboard-reader-produced-dto-tests.mjs",
         "mode": "100644",
-        "object_id": "c24edd8698b8c6ca5a7bb82ba1eebc370fee3b33"
+        "object_id": "a4f42204681c18d83930a6d8c0689abd62b18298"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fd7d7f999dbd30fe40c09bc9dd9373fd38ab588d"
+        "object_id": "9ea9cb3dd1af2029c94b15a2e6e456c05a949f9b"
       },
       {
         "path": "scripts/demo-leadership-blank-schedule-tests.mjs",
@@ -3460,7 +3465,7 @@
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c86a6e951db11fc4894b7ff3acd57ec138437827"
+        "object_id": "5f0a0dcd396f5a7725c14132616e4e39612b7875"
       },
       {
         "path": "scripts/employee-schedule-identity-tests.mjs",
@@ -5370,7 +5375,7 @@
       {
         "path": "scripts/gps-map-context-route-tests.mjs",
         "mode": "100644",
-        "object_id": "19193ebd80756afcc5771016ad66cbd8b3c3f5fb"
+        "object_id": "006652800eda16642d920feb7b46e8333db2d54d"
       },
       {
         "path": "scripts/gps-map-lane-history-tests.mjs",
@@ -6970,7 +6975,7 @@
       {
         "path": "scripts/public-dashboard-details-tests.mjs",
         "mode": "100644",
-        "object_id": "d8d29f1383f2f07b5116856de174a97138a28186"
+        "object_id": "6d19edc465185ba1d5e2665e071ec03ef8749c42"
       },
       {
         "path": "scripts/public-operations-viewer-tests.mjs",
@@ -6986,6 +6991,11 @@
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
         "object_id": "d9c82247d912fe27d22cc58d37265f41fd70afce"
+      },
+      {
+        "path": "scripts/read-only-pg-disconnect-tests.mjs",
+        "mode": "100644",
+        "object_id": "9f07724634cf44deff7ccd72f32bdd00eb514674"
       },
       {
         "path": "scripts/record-production-release-deployment.mjs",
@@ -8705,17 +8715,17 @@
       {
         "path": "scripts/verified-visit-completion-integration-tests.mjs",
         "mode": "100644",
-        "object_id": "10e8b64bc39009231f1b976f7bd13e8fef9cec31"
+        "object_id": "d3a0bf5dd8d11e7bb8b8cf8a6a151ccbe655f849"
       },
       {
         "path": "scripts/verified-visit-dashboard-bridge-session-tests.mjs",
         "mode": "100644",
-        "object_id": "23c4c9b8b03ee7b12a81a307eef3bedd77ccac51"
+        "object_id": "26e9c2a8d134f7cda5959113935aa8ba030223ff"
       },
       {
         "path": "scripts/verified-visit-dashboard-journey-bridge.mjs",
         "mode": "100644",
-        "object_id": "85efb3a778f48a26d78573a3ce10ce83a988213b"
+        "object_id": "0e143da8615cac91be5eb5aaefba1048445cc938"
       },
       {
         "path": "scripts/verified-visit-reminder-database-tests.mjs",
@@ -8740,7 +8750,7 @@
       {
         "path": "scripts/visitor-attendance-boundary-tests.mjs",
         "mode": "100644",
-        "object_id": "18110a84d5fdc9288e8d99b0c4f8a5ce7de55f91"
+        "object_id": "2412ebf4ff3c8c5169e21021237e8aa0486ae536"
       },
       {
         "path": "scripts/visitor-attendance-collector-tests.mjs",
@@ -9145,7 +9155,7 @@
       {
         "path": "src/assigned-phone-location.js",
         "mode": "100644",
-        "object_id": "f0396ad124c4d2aa32a5502835abf4124d9378a4"
+        "object_id": "25aaf8185b577551eab3b2c28177908321efc412"
       },
       {
         "path": "src/attendance-state.js",
@@ -9206,6 +9216,11 @@
         "path": "src/auth/mcp-self-contained-oauth.js",
         "mode": "100644",
         "object_id": "a73ac5c9403e7cb98d7374798f97eec276e47db5"
+      },
+      {
+        "path": "src/auth/private-map-manager.js",
+        "mode": "100644",
+        "object_id": "33f29315fc8af9a433a51427cdd4f2197aab5466"
       },
       {
         "path": "src/auth/same-original-recovery-manager-auth.js",
@@ -9320,7 +9335,7 @@
       {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "b17c60d126a54878043a597a63d66b2dfd167460"
+        "object_id": "c4c547bce89b14aa223afd9f1f41135346e79638"
       },
       {
         "path": "src/events-time.js",
@@ -9370,7 +9385,7 @@
       {
         "path": "src/gemini-controlled-worker.js",
         "mode": "100644",
-        "object_id": "a8a2082fb186f352265910a5d47af5030acd881b"
+        "object_id": "f2e383445a618035f523edba3f0df7148f26d7e9"
       },
       {
         "path": "src/gemini-original-outcome.js",
@@ -9410,7 +9425,7 @@
       {
         "path": "src/gps-map-context-route.js",
         "mode": "100644",
-        "object_id": "352c386be5b1c2fc878c2a02965fac49d7ccf6dc"
+        "object_id": "0f005f4567a4690846444dbe6f75aced8bd0e0ac"
       },
       {
         "path": "src/gps-map-history.js",
@@ -9425,7 +9440,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "00fe7007b3d916475231b0f62e6bcf8250084145"
+        "object_id": "1c9d4a46b00a31baf64c51b547a8d40a3c1b5db7"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -9560,7 +9575,7 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "b2bd05fad52f8cdcf014c931002cf34f1b8cb748"
+        "object_id": "69232f2ad184aceb8773e34bc99a7253be373e6a"
       },
       {
         "path": "src/messaging-original-outcome.js",
@@ -9910,7 +9925,7 @@
       {
         "path": "src/outlook-published-feed.js",
         "mode": "100644",
-        "object_id": "e2588b5ac592950d1e2f4e2ad2a8edd96714fa92"
+        "object_id": "3ebda463107fb88b91d9dc96011fa14e1cf24181"
       },
       {
         "path": "src/outlook-source-receipts.js",
@@ -9960,12 +9975,12 @@
       {
         "path": "src/production-schema-identity.js",
         "mode": "100644",
-        "object_id": "24c3a13878b22aad144ddee70cff3a7806ca4443"
+        "object_id": "5c92cbb743383df979953d1639fb37fa1a288d3a"
       },
       {
         "path": "src/public-dashboard-details.js",
         "mode": "100644",
-        "object_id": "10a0add21f4cda7a2b2fa81a1a2e881582686ee7"
+        "object_id": "3692cb334b165252f107f323a629641aca770536"
       },
       {
         "path": "src/public-operations-viewer.js",
@@ -9990,7 +10005,7 @@
       {
         "path": "src/release-manifest.js",
         "mode": "100644",
-        "object_id": "04db3bd7af63b07fd3fea1c892e770182340e8ad"
+        "object_id": "93bc25afe9701e6409f8d01eb485da3e6eeb1397"
       },
       {
         "path": "src/request-json-parser.js",
@@ -10110,7 +10125,7 @@
       {
         "path": "src/security-http-boundaries.js",
         "mode": "100644",
-        "object_id": "4544fe635035cbc79647ed0d09eb4c25dea852cb"
+        "object_id": "ca7e3f547c072d4a5e26c12f3ba3908b2c539d04"
       },
       {
         "path": "src/services/index.js",
@@ -10400,7 +10415,7 @@
       {
         "path": "src/supabase/read.js",
         "mode": "100644",
-        "object_id": "ff5cf204288485a1ed217c58a8538093ec57b4df"
+        "object_id": "937b9d4be8420a85c6965730944121d4deec742c"
       },
       {
         "path": "src/utils/diff.js",
@@ -12703,7 +12718,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2515,
+    "authority_path_count": 2518,
     "migration_path_count": 319,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
