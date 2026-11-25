@@ -3605,7 +3605,7 @@
       {
         "path": "scripts/feedback-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "134191d5a5163d5b75d781f4aa91eab7a6cc01fb"
+        "object_id": "a74c26108c1afb4ab50b79c484cf0b28791d6bd7"
       },
       {
         "path": "scripts/feedback-delivery-status-database-tests.mjs",
@@ -6605,7 +6605,7 @@
       {
         "path": "scripts/operations-mail-ledger-tests.mjs",
         "mode": "100644",
-        "object_id": "7ee21f0278fd3f07afd6ff1dcaafb4d5d305c9c0"
+        "object_id": "5d3e67eccbde5f349ff2f99128014fb2d67f564a"
       },
       {
         "path": "scripts/operations-mail-sync-adapter-tests.mjs",
@@ -9000,7 +9000,7 @@
       {
         "path": "src/ai/memphis-ai-weather.js",
         "mode": "100644",
-        "object_id": "be81d27ad314eba0446739d0c5b3fc14c4f0a46d"
+        "object_id": "d425eb6511eceddf071dd0bbd9cd575167a99675"
       },
       {
         "path": "src/ai/memphis-ai-weekly.js",
@@ -9215,7 +9215,7 @@
       {
         "path": "src/auth/mcp-self-contained-oauth.js",
         "mode": "100644",
-        "object_id": "a73ac5c9403e7cb98d7374798f97eec276e47db5"
+        "object_id": "ace3935488044c3fb6314cba9137bd405a1df965"
       },
       {
         "path": "src/auth/private-map-manager.js",
@@ -9440,7 +9440,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "1c9d4a46b00a31baf64c51b547a8d40a3c1b5db7"
+        "object_id": "445967ec2f34d332c664f0979beaee5de36d5a00"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -9570,12 +9570,12 @@
       {
         "path": "src/memphis-ai.js",
         "mode": "100644",
-        "object_id": "2e4637ba9a7490bef5375dc10d2fcbb4c1e42ce7"
+        "object_id": "cd19955b5554f596df2d261feaec1e08474b66d2"
       },
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "69232f2ad184aceb8773e34bc99a7253be373e6a"
+        "object_id": "fe3977a800f35a8cd99ed178246a460cbea968f4"
       },
       {
         "path": "src/messaging-original-outcome.js",
@@ -9880,7 +9880,7 @@
       {
         "path": "src/operations-mail-contract.js",
         "mode": "100644",
-        "object_id": "5bc9753305adb61eee5cfd0e6c29bc9b32c55a8d"
+        "object_id": "572760f7c8db6677a80e3b2f814ace093332e436"
       },
       {
         "path": "src/operations-mail-ledger.js",
