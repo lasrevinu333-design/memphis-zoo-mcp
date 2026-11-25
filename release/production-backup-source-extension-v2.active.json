@@ -13,7 +13,7 @@
   },
   "observed_ledger_count": 429,
   "observed_ledger_head": "20261122145828",
-  "observed_catalog_fingerprint": "a50f87725c4c529cb7a9ed82ebc063407848603d324ac621838b58a1bf661529",
+  "observed_catalog_fingerprint": "52104aa4ab0ada870ac17d6ad7d3bc014a374873c7ca0c54e179e01b632e0f3d",
   "ledger": [
     {
       "version": "20260514224806",

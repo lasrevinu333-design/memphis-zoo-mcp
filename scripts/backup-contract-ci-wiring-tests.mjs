@@ -36,7 +36,7 @@ test('source selects only reviewed active v2 and preserves inactive candidate an
  assert.match(read('scripts/production-backup.mjs'),/production-backup-source-extension-v2\.active\.json/);
  const active=JSON.parse(read('release/production-backup-source-extension-v2.active.json'));
  assert.equal(active.activation_status,'active');
- assert.equal(active.observed_catalog_fingerprint,'a50f87725c4c529cb7a9ed82ebc063407848603d324ac621838b58a1bf661529');
+ assert.equal(active.observed_catalog_fingerprint,'52104aa4ab0ada870ac17d6ad7d3bc014a374873c7ca0c54e179e01b632e0f3d');
  assert.equal(active.observed_ledger_count,429);assert.equal(active.observed_ledger_head,'20261122145828');
  const previous428=JSON.parse(read('release/production-backup-source-extension-v2.native428.active.json'));assert.equal(previous428.observed_ledger_count,428);
  const previous426=JSON.parse(read('release/production-backup-source-extension-v2.basecamp426.active.json'));assert.equal(previous426.observed_ledger_count,426);assert.equal(previous426.observed_catalog_fingerprint,'1569d0087224a6fe4f26e9763fdd7a8587d8c8a0ac76a74ac17c09a638c6fdc8');
