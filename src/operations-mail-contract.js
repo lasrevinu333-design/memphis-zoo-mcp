@@ -40,7 +40,10 @@ export function spiceworksObservation(input) {
     let key,value;
     if (line==='opened a new ticket.') {key='status';value='Open';activity={kind:'opened',from:null,to:'Open'};}
     else if (status) {key='status';value=status[2];
-      if(status[1]!==status[2]&&['Open','Closed'].includes(status[2]))activity={kind:status[2]==='Closed'?'closed':status[1]==='Closed'?'reopened':'opened',from:status[1],to:status[2]};}
+      if(status[1]!==status[2]){
+        const kind=status[2]==='Closed'?'closed':status[1]==='Closed'?'reopened':status[2]==='Open'?'resumed':null;
+        if(kind)activity={kind,from:status[1],to:status[2]};
+      }}
     else if (field) {key=field[1];value=clean(field[2],160);}
     else continue;
     if (!value || Object.hasOwn(changes,key)) fail('ambiguous_ticket_change');
@@ -59,12 +62,14 @@ export function reconcileSpiceworks(observations) {
     if (prior && prior!==serialized) fail('conflicting_mail_replay');
     if (prior) continue;
     messages.set(p.message_id,serialized);
-    const ticket=tickets.get(row.ticket_id)||{ticket_id:row.ticket_id,fields:{},activity:[],provenance:[]};
+    const ticket=tickets.get(row.ticket_id)||{ticket_id:row.ticket_id,fields:{},valuesAt:new Map(),activity:[],provenance:[]};
     ticket.provenance.push(p);
-    if(row.activity)ticket.activity.push({...row.activity,at:new Date(p.source_at).toISOString()});
+    if(row.activity)ticket.activity.push({...row.activity,at:new Date(p.source_at).toISOString(),message_id:p.message_id});
     for (const [key,value] of Object.entries({...row.changes,...(row.title?{title:row.title}:{})})) {
       const current=ticket.fields[key],at=Date.parse(p.source_at);
-      if (current && at===current.at && current.value!==value) fail('conflicting_same_time_ticket_change');
+      const revision=key+':'+at;
+      if(ticket.valuesAt.has(revision)&&ticket.valuesAt.get(revision)!==value)fail('conflicting_same_time_ticket_change');
+      ticket.valuesAt.set(revision,value);
       if (!current || at>current.at) ticket.fields[key]={value,at};
     }
     tickets.set(row.ticket_id,ticket);
@@ -73,7 +78,7 @@ export function reconcileSpiceworks(observations) {
     const f=Object.fromEntries(Object.entries(ticket.fields).map(([key,row])=>[key,row.value]));
     return {ticket_id:ticket.ticket_id,title:f.title||null,category:f.category||null,assignee:f.assignee||null,
       status:f.status||'Unknown',custodial:f.category==='Custodial'||(!f.category&&f.assignee==='Eric Operle'),
-      active:f.status!=='Closed',activity:ticket.activity.sort((a,b)=>a.at.localeCompare(b.at)),provenance:ticket.provenance.sort((a,b)=>a.source_at.localeCompare(b.source_at)||a.message_id.localeCompare(b.message_id))};
+      active:f.status!=='Closed',activity:ticket.activity.sort((a,b)=>a.at.localeCompare(b.at)||a.message_id.localeCompare(b.message_id)).map(({message_id,...activity})=>activity),provenance:ticket.provenance.sort((a,b)=>a.source_at.localeCompare(b.source_at)||a.message_id.localeCompare(b.message_id))};
   });
 }
 export const SCHOOL_HEADERS=Object.freeze(['Order ID','Cust Name','Buses','item purchased','visit date of tickets','Visit Time','Qty of purchase']);

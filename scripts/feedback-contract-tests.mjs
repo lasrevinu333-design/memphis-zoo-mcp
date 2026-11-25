@@ -43,8 +43,8 @@ if (feedbackHtml) {
 // authorized retrieval for historical records; this does not enable new UI
 // capture in the current program.
 assertContains(apiSource, "validateSystemFeedbackImageAttachment", "backend should validate optional feedback image attachments");
-assertContains(apiSource, "persistedSystemFeedbackImageMetadata", "backend should exclude internal upload state from persisted metadata");
-assertContains(apiSource, "removeUnreferencedSystemFeedbackImage", "backend should clean a newly uploaded object when database persistence fails");
+assert.doesNotMatch(apiSource, /_newly_uploaded|removeUnreferencedSystemFeedbackImage/, "one original may publish the private object while a peer fails");
+assertMatches(apiSource, /feedback\/\$\{operationId\}\/\$\{imageAttachment\.sha256\}/, "each original image uses its private content-addressed identity");
 assertContains(apiSource, "feedback_image_migration", "backend should migrate retained legacy inline images through the durable worker");
 assertContains(reliabilityMigration, "system_feedback_legacy_image_backups", "migration should preserve exact legacy metadata before removing inline image data");
 assertContains(reliabilityMigration, "feedback-image-migration:", "migration should enqueue an idempotent private-storage migration job");

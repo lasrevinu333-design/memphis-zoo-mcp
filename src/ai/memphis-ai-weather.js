@@ -5,17 +5,6 @@ const MEMPHIS_ZOO_LONGITUDE = Number.parseFloat(String(process.env.MEMPHIS_ZOO_L
 // MEDIUM #10: Timeout for weather API calls.
 const WEATHER_API_TIMEOUT_MS = Number.parseInt(String(process.env.MEMPHIS_WEATHER_API_TIMEOUT_MS || "8000"), 10);
 
-// MEDIUM #10: Shared fetchWithTimeout for weather API calls.
-async function weatherFetchWithTimeout(url, options = {}, timeoutMs = WEATHER_API_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 8000));
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 export function isWeatherQuestion(text = "") {
   return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
 }
@@ -91,7 +80,9 @@ export function summarizeWeatherPayload(weather, defaultLocation = DEFAULT_WEATH
   return `${weather.location || defaultLocation}: ${condition}, ${temp}. Today: ${high}, ${low}, ${wind}, ${precip}.${attribution}`;
 }
 
-export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
+export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION, { signal: parentSignal } = {}) {
+  const deadline = AbortSignal.timeout(Math.max(1000, Number(WEATHER_API_TIMEOUT_MS) || 8000));
+  const signal = parentSignal ? AbortSignal.any([parentSignal, deadline]) : deadline;
   let resolvedLocation = location || DEFAULT_WEATHER_LOCATION;
   let latitude = MEMPHIS_ZOO_LATITUDE;
   let longitude = MEMPHIS_ZOO_LONGITUDE;
@@ -99,7 +90,7 @@ export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATI
 
   if (!isDefaultMemphisZooLocation(resolvedLocation)) {
     // MEDIUM #11: Add country filter to geocoding to verify results are in the US.
-    const geoRes = await weatherFetchWithTimeout(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(resolvedLocation)}&count=1&language=en&format=json&countryCode=US`);
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(resolvedLocation)}&count=1&language=en&format=json&countryCode=US`, { signal });
     const geo = await geoRes.json().catch(() => null);
     const first = geo?.results?.[0];
     if (!geoRes.ok || !first?.latitude || !first?.longitude) throw new Error("Weather geocoding failed");
@@ -114,7 +105,7 @@ export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATI
   }
 
   // MEDIUM #10: Use weatherFetchWithTimeout for forecast API calls.
-  const forecastRes = await weatherFetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${timezone}&forecast_days=1`);
+  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${timezone}&forecast_days=1`, { signal });
   const forecast = await forecastRes.json().catch(() => null);
   if (!forecastRes.ok || !forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
   return {

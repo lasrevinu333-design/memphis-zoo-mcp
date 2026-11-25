@@ -210,13 +210,9 @@ function annotateMemphisReply(reply = {}, route = {}, sources = [], warnings = [
 
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 12000));
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
+  const timeout = AbortSignal.timeout(Math.max(1000, Number(timeoutMs) || 12000));
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  return fetch(url, { ...options, signal });
 }
 
 function allowWebSearch({ deviceId = "", identityRole = "" }) {
@@ -1792,15 +1788,16 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
   }
 
-  async function diagnoseMessage({ deviceId = "", userMessage = "", threadId = "" } = {}) {
-    const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
-    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 6);
+  async function diagnoseMessage({ userMessage = "" } = {}) {
+    // Diagnostics explain how a supplied prompt routes. An operator's broad
+    // manager session alone does not authorize a private conversation read.
+    const threadContext = {};
     const rewritten_message = rewriteFollowUpWithContext(userMessage, threadContext);
     const route = classifyMemphisIntentLocal(rewritten_message, threadContext);
     const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);
     const explicitDate = extractExplicitDate(rewritten_message);
     const weekdayRef = extractWeekdayReference(rewritten_message);
-    let serviceDate = explicitDate || threadContext?.last_service_date || todayServiceDate;
+    let serviceDate = explicitDate || mergeContextDate(userMessage, threadContext) || todayServiceDate;
     if (!explicitDate && weekdayRef && todayServiceDate) {
       serviceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || serviceDate;
     }
@@ -1811,7 +1808,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       route,
       service_date: serviceDate,
       thread_context: threadContext || {},
-      recent_messages: recentMessages || [],
+      recent_messages: [],
       likely_tool: route.intent,
       diagnostics_version: "memphis-diagnostics.v1",
     };

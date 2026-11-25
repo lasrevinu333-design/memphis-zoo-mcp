@@ -173,6 +173,32 @@ test('new opening and out-of-order closing notifications retain both timestamped
  assert.doesNotMatch(JSON.stringify(out.spiceworks_activity),/message_id|change_lines|content_sha256/);
 });
 
+test('ordinary resumes stay distinct from creation and closed transitions are preserved',async()=>{
+ const f=fixture();
+ for(const [n,steps] of [['13',['opened a new ticket.']],['14',['changed status from Open -> Pending']],
+  ['15',['changed status from Pending -> Open']],['16',['changed status from Open -> Waiting']],
+  ['17',['changed status from Waiting -> Open']],['18',['changed status from Open -> Closed']],
+  ['19',['changed status from Closed -> Pending']],['20',['changed status from Pending -> Closed']],
+  ['21',['changed status from Closed -> Open']]]){
+  await f.save('spiceworks',ticket('mail-'+n,'2026-11-10T'+n+':00:00Z',steps));
+ }
+ await f.save('spiceworks',ticket('mail-17','2026-11-10T17:00:00Z',['changed status from Waiting -> Open']));
+ const result=await readOperationsMailLedger({client:f.client});
+ assert.equal(result.spiceworks.rows[0].status,'Open');
+ assert.deepEqual(result.spiceworks_activity.rows.map(row=>row.kind),['opened','resumed','resumed','closed','reopened','closed','reopened']);
+ assert.equal(result.spiceworks_activity.rows.filter(row=>row.kind==='opened'&&row.at>'2026-11-10T14:00:00.000Z').length,0);
+});
+test('older equal-time contradictory source events fail in every input order',async()=>{
+ const f=fixture();
+ await f.save('spiceworks',ticket('latest','2026-11-10T18:00:00Z',['changed status from Open -> Pending']));
+ await f.save('spiceworks',ticket('older-open','2026-11-10T14:00:00Z',['opened a new ticket.']));
+ await f.save('spiceworks',ticket('older-close','2026-11-10T14:00:00Z',['changed status from Open -> Closed']));
+ for(const first of [0,1,2])for(const second of [0,1,2]){
+  if(first===second)continue;
+  assert.throws(()=>projectOperationsMailRows([first,second,3-first-second].map(i=>f.rows[i])),/conflicting_same_time_ticket_change/);
+ }
+});
+
 // Run the new bounded source cases through the existing registered owning lane.
 await import("./school-exact-block-duplicate-tests.mjs");
 await import("./outlook-published-feed-tests.mjs");

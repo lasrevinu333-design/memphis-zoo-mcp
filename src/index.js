@@ -1923,7 +1923,7 @@ function validateSystemFeedbackImageAttachment(input) {
   };
 }
 
-async function storeSystemFeedbackImageAttachment(feedbackId, operationId, imageAttachment, { assertActive = () => {} } = {}) {
+async function storeSystemFeedbackImageAttachment(operationId, imageAttachment, { assertActive = () => {} } = {}) {
   if (!imageAttachment) return null;
   if (!supabaseAdmin) throw new Error("Feedback image storage is not configured.");
   const extension = {
@@ -1953,35 +1953,7 @@ async function storeSystemFeedbackImageAttachment(feedbackId, operationId, image
     storage_bucket: FEEDBACK_IMAGE_BUCKET,
     storage_path: objectPath,
     uploaded_at: imageAttachment.uploaded_at,
-    _newly_uploaded: !error,
   };
-}
-
-async function removeUnreferencedSystemFeedbackImage(imageAttachment, { assertActive = () => {} } = {}) {
-  if (!imageAttachment?._newly_uploaded || !imageAttachment.storage_path || !supabaseAdmin) return;
-  try {
-    const rows = await runReadOnlySql(`
-      select exists (
-        select 1
-        from public.system_feedback_items
-        where metadata_json->'image_attachment'->>'storage_path' = ${sqlLiteral(imageAttachment.storage_path)}
-      ) as referenced
-    `);
-    if (rows?.[0]?.referenced) return;
-    assertActive();
-    const { error } = await supabaseAdmin.storage
-      .from(imageAttachment.storage_bucket || FEEDBACK_IMAGE_BUCKET)
-      .remove([imageAttachment.storage_path]);
-    if (error) console.error("feedback image orphan cleanup failed:", error.message || "storage remove failed");
-  } catch (error) {
-    console.error("feedback image orphan cleanup failed:", error?.message || "unknown cleanup error");
-  }
-}
-
-function persistedSystemFeedbackImageMetadata(imageAttachment) {
-  if (!imageAttachment) return null;
-  const { _newly_uploaded, ...persisted } = imageAttachment;
-  return persisted;
 }
 
 async function migrateLegacySystemFeedbackImageJob(job, mutationLease = {}) {
@@ -1999,23 +1971,15 @@ async function migrateLegacySystemFeedbackImageJob(job, mutationLease = {}) {
   const legacy = metadata?.image_attachment?.data_url;
   if (!legacy) return { migrated: false, reason: "already_migrated_or_no_image" };
   const validatedImage = validateSystemFeedbackImageAttachment(metadata.image_attachment);
-  const storedImage = await storeSystemFeedbackImageAttachment(
-    feedbackId,
-    `legacy-${feedbackId}`,
-    validatedImage,
-    mutationLease,
-  );
-  const persistedImage = persistedSystemFeedbackImageMetadata(storedImage);
-  const updatedMetadata = { ...metadata, image_attachment: persistedImage };
-  try {
-    await runOperationalCommand("feedback_legacy_image_migration", {
-      id: feedbackId, metadata_json: updatedMetadata,
-      storage_bucket: persistedImage.storage_bucket, storage_path: persistedImage.storage_path,
-    });
-  } catch (error) {
-    await removeUnreferencedSystemFeedbackImage(storedImage, mutationLease);
-    throw error;
-  }
+  const storedImage = await storeSystemFeedbackImageAttachment(`legacy-${feedbackId}`, validatedImage, mutationLease);
+  const updatedMetadata = { ...metadata, image_attachment: storedImage };
+  mutationLease.assertActive?.();
+  // The content-addressed object belongs to this original even if the
+  // following write is uncertain. Another exact retry may already refer to it.
+  await runOperationalCommand("feedback_legacy_image_migration", {
+    id: feedbackId, metadata_json: updatedMetadata,
+    storage_bucket: storedImage.storage_bucket, storage_path: storedImage.storage_path,
+  });
   return { migrated: true, feedback_id: feedbackId };
 }
 
@@ -2028,7 +1992,12 @@ function summarizeSystemFeedback({ category, priority, message, hubContext, subm
   return `${priority.toUpperCase()} ${category.replace(/_/g, " ")} feedback${who} via ${hubContext}: ${clipped}`;
 }
 
-async function createSystemFeedbackItem(payload = {}) {
+async function createSystemFeedbackItem(payload = {}, { revalidate, assertActive }) {
+  async function requireCurrent() {
+    assertActive?.();
+    await revalidate();
+    assertActive?.();
+  }
   const normalized = normalizeFeedbackInput(payload);
   const { category, priority, message, submittedBy, hubContext, deviceId, pageUrl } = normalized;
   const identityVerification = payload.identity_verification && typeof payload.identity_verification === "object"
@@ -2065,43 +2034,39 @@ async function createSystemFeedbackItem(payload = {}) {
     }
     return { ...existingRows[0], newly_inserted: false };
   }
-  const imageAttachment = await storeSystemFeedbackImageAttachment(
-    feedbackId,
-    operationId,
-    validatedImage,
-  );
+  await requireCurrent();
+  const imageAttachment = await storeSystemFeedbackImageAttachment(operationId, validatedImage, { assertActive });
+  await requireCurrent();
   const metadata = {
     submitted_via: "system_feedback",
     user_agent: String(payload.user_agent || "").slice(0, 500) || null,
     page_title: String(payload.page_title || "").slice(0, 200) || null,
     identity_verification: identityVerification,
-    image_attachment: persistedSystemFeedbackImageMetadata(imageAttachment),
+    image_attachment: imageAttachment,
   };
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
-  try {
-    await runOperationalCommand("feedback_create", {
-      id: feedbackId, operation_id: operationId, request_fingerprint: requestFingerprint,
-      category, priority, message, submitted_by: submittedBy, hub_context: hubContext,
-      device_id: deviceId, page_url: pageUrl, summary, metadata_json: metadata,
-    });
-
-    const rows = await runReadOnlySql(`
-      select id, operation_id, request_fingerprint, category, priority, message, submitted_by, hub_context, device_id, page_url,
-             status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
-             feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
-      from public.system_feedback_items
-      where operation_id = ${sqlLiteral(operationId)}::uuid
-      limit 1
-    `);
-    if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback could not be created.");
-    if (rows[0].request_fingerprint && rows[0].request_fingerprint !== requestFingerprint) {
-      throw Object.assign(new Error("operation_id conflicts with another feedback submission."), { status: 409 });
-    }
-    return { ...rows[0], newly_inserted: rows[0].id === feedbackId };
-  } catch (error) {
-    await removeUnreferencedSystemFeedbackImage(imageAttachment);
-    throw error;
+  const command = {
+    id: feedbackId, operation_id: operationId, request_fingerprint: requestFingerprint,
+    category, priority, message, submitted_by: submittedBy, hub_context: hubContext,
+    device_id: deviceId, page_url: pageUrl, summary, metadata_json: metadata,
+  };
+  assertActive?.();
+  await runOperationalCommand("feedback_create", command);
+  // A failed mutation/readback cannot disown the original's private object.
+  // A concurrent admitted retry can still publish its exact reference.
+  const rows = await runReadOnlySql(`
+    select id, operation_id, request_fingerprint, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    where operation_id = ${sqlLiteral(operationId)}::uuid
+    limit 1
+  `);
+  if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback could not be created.");
+  if (rows[0].request_fingerprint && rows[0].request_fingerprint !== requestFingerprint) {
+    throw Object.assign(new Error("operation_id conflicts with another feedback submission."), { status: 409 });
   }
+  return { ...rows[0], newly_inserted: rows[0].id === feedbackId };
 }
 
 function buildSystemFeedbackNotificationBody(item, { reminder = false } = {}) {
@@ -2899,6 +2864,9 @@ app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), requireF
       ...authoritativeFeedbackPayload(request),
       operation_id: operationId,
       user_agent: String(request.get("user-agent") || "").slice(0, 500),
+    }, {
+      revalidate: () => revalidateFeedbackSubmission(request,actor),
+      assertActive: req.restoreMutationLease?.assertActive,
     });
     await revalidateFeedbackSubmission(request,actor);
     const [deliveryItem] = await attachFeedbackDelivery([item], { client: supabaseAdmin });

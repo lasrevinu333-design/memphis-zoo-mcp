@@ -504,7 +504,12 @@ function loginPage(requestToken, csrf, error = "") {
 }
 
 function consentPage(requestToken, csrf, request) {
-  const scopes = String(request.scope).split(" ").map((scope) => `<li><code>${escapeHtml(scope)}</code></li>`).join("");
+  const labels = {
+    "mcp:read": "Operator reads, including repository access and general read-only SQL over records available to the connector.",
+    "mcp:write": "Operator changes through the tools that accept this scope.",
+  };
+  const scopes = String(request.scope).split(" ").map(scope =>
+    `<li><code>${escapeHtml(scope)}</code> ${escapeHtml(labels[scope] || "")}</li>`).join("");
   return page("Authorize Memphis Zoo MCP", `<h1>Authorize ${escapeHtml(request.client_name || "ChatGPT")}</h1><p class="warning"><strong>Operator approval required:</strong> this grants the listed access to the Memphis Zoo MCP server. ChatGPT may separately confirm write tool calls.</p><p class="detail"><strong>Redirect:</strong> <code>${escapeHtml(request.redirect_uri)}</code><br><strong>Resource:</strong> <code>${escapeHtml(request.resource)}</code></p><p>Requested scopes:</p><ul>${scopes}</ul><div class="actions"><form method="post" action="/oauth/decision"><input type="hidden" name="request" value="${escapeHtml(requestToken)}"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><button name="decision" value="approve" type="submit">Approve access</button></form><form method="post" action="/oauth/decision"><input type="hidden" name="request" value="${escapeHtml(requestToken)}"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><button class="deny" name="decision" value="deny" type="submit">Deny</button></form></div>`);
 }
 
