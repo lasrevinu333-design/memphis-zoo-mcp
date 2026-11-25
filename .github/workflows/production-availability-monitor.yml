@@ -51,7 +51,7 @@ jobs:
             printf '%s' "$MEMPHIS_STATIC_WEEKLY_RELEASE_ATTESTATION_JSON" > "$STATIC_WEEKLY_RELEASE_ATTESTATION_INPUT"
             chmod 0444 "$STATIC_WEEKLY_RELEASE_ATTESTATION_INPUT"
           fi
-          npm run --silent release:live:check
+          node scripts/observe-production-release-availability.mjs
       - name: Summarize the bounded release observation
         if: always() && steps.live_probe.outcome != 'skipped'
         env:
