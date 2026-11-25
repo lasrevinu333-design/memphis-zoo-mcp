@@ -10,7 +10,7 @@ const clone=value=>structuredClone(value);
 const READER='custodial_application_reader';
 function summarySource(root){
  const source=readFileSync(resolve(root,'src/index.js'),'utf8');
- const begin=source.indexOf('async function runPublicDashboardSummary() {');
+ const begin=source.indexOf('async function runPublicDashboardSummary(');
  const end=source.indexOf('\nasync function runCanaryChecks()',begin);
  assert.ok(begin>=0&&end>begin,'shipping Dashboard summary source required');
  return source.slice(begin,end);
@@ -41,7 +41,10 @@ export async function qualifyNativeOriginalVisitDashboardJourney({admin,backendR
  const localRoot=fileURLToPath(new URL('..',import.meta.url));
  const body=summarySource(backendRoot);
  assert.equal(sha(body),sha(summarySource(localRoot)),'bridge and shipping summary bytes differ');
- const fixedReads=[...body.matchAll(/runReadOnlySql\(`([\s\S]*?)`\)/g)].map(match=>match[1]);
+ const snapshotCall=body.match(/runReadOnlySnapshot\(\[([\s\S]*?)\]\);/);
+ assert.ok(snapshotCall,'exact shipping snapshot call required');
+ const fixedReads=[...snapshotCall[1].matchAll(/`([\s\S]*?)`/g)].map(match=>
+  match[1].replace(/\$\{includeProtectedTicketNote \? "[^"]*" : ""\}/g,''));
  assert.equal(fixedReads.length,4,'all four current shipping Dashboard reads required');
  assert.equal(new Set(fixedReads).size,4);
  const originalRead=fixedReads.filter(sql=>sql.includes('read_current_original_dashboard_completions_v1()'));
@@ -50,22 +53,28 @@ export async function qualifyNativeOriginalVisitDashboardJourney({admin,backendR
  const backendPid=(await admin.query('select pg_backend_pid() pid')).rows[0]?.pid;
  assert.ok(Number.isInteger(backendPid));
  let reads=0,writerAttempts=0,committed=null,completionLoan,readerTail=Promise.resolve();
- async function readerTransaction(sql,values=[]){
+ async function readerTransaction(statements){
   assert.equal((await admin.query('select pg_backend_pid() pid')).rows[0]?.pid,backendPid,
    'dedicated original fixture SQL session changed');
-  await admin.query('begin read only');
+  await admin.query('begin isolation level repeatable read read only');
   try{
    await admin.query('set local role '+READER);
    const who=(await admin.query('select current_user who,current_setting(\'transaction_read_only\') ro')).rows[0];
    assert.equal(who.who,READER);assert.equal(who.ro,'on');
-   const result=(await admin.query(sql,values)).rows;reads++;await admin.query('commit');return result;
+   const result=[];
+   for(const [sql,values] of statements)result.push((await admin.query(sql,values)).rows);
+   reads++;await admin.query('commit');return result;
   }catch(error){try{await admin.query('rollback');}catch(cleanup){error.rollbackFailure=cleanup;}throw error;}
  }
- // Shipping summary uses Promise.all; one original dedicated SQLsession must
- // execute these role-bound transactions serially, never overlap BEGIN/COMMIT.
- function reader(sql,values=[]){
-  const work=readerTail.then(()=>readerTransaction(sql,values));
+ // Each section shares one snapshot on the owned session, and separate
+ // role-bound reads still never overlap BEGIN/COMMIT.
+ function queueSnapshot(statements){
+  const work=readerTail.then(()=>readerTransaction(statements));
   readerTail=work.catch(()=>{});return work;
+ }
+ async function reader(sql,values=[]){
+  const [rows]=await queueSnapshot([[sql,values]]);
+  return rows;
  }
  const startArgs=nativeArguments(nativeStartLoan);
  assert.equal(startArgs.p_location_code,prepared.location_code);
@@ -96,7 +105,10 @@ export async function qualifyNativeOriginalVisitDashboardJourney({admin,backendR
  const {originalCompletionDashboardPresentationProof}=await import(pathToFileURL(resolve(frontendRoot,'scripts/operations-dashboard-tests.mjs')));
  const proof=await currentOriginalCompletionDashboardProof({
   sourceFixture:expected,readRole:READER,
-  runReadOnlySql:sql=>{assert.ok(fixedReads.includes(sql),'only exact shipping Dashboard queries allowed');return reader(sql);},
+  runReadOnlySnapshot:queries=>{
+   assert.deepEqual(Array.from(queries),fixedReads,'only the exact shipping Dashboard snapshot is allowed');
+   return queueSnapshot(fixedReads.map(sql=>[sql,[]]));
+  },
   commitOriginalVisit:async()=>{
    assert.equal(writerAttempts++,0,'never replay an attempted original writer, including unknown results');
    committed=await originalFixture.commitOriginal(completionLoan);

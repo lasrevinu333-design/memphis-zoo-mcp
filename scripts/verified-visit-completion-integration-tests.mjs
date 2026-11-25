@@ -140,9 +140,9 @@ async function originalCompletionReadbackDomain(){
  * normal writer and normal authenticated original-completion reader. A callback
  * name or readRole string is not SQL/auth proof; main must retain that evidence.
  */
-export async function currentOriginalCompletionDashboardProof({runReadOnlySql,readRole,
+export async function currentOriginalCompletionDashboardProof({runReadOnlySnapshot,readRole,
  sourceFixture,commitOriginalVisit,readOriginalCompletion,presentDashboard}){
- for(const fn of [runReadOnlySql,commitOriginalVisit,readOriginalCompletion,presentDashboard])
+ for(const fn of [runReadOnlySnapshot,commitOriginalVisit,readOriginalCompletion,presentDashboard])
   assert.equal(typeof fn,'function','main-owned normal SQL/writer/readback/presenter capability required');
  assert.equal(typeof readRole,'string');assert.ok(readRole.length>0,'intended normal read role required');
  const expected=structuredClone(sourceFixture);assert.ok(expected&&typeof expected==='object');
@@ -153,14 +153,14 @@ export async function currentOriginalCompletionDashboardProof({runReadOnlySql,re
  // Execute the actual current summary body, including ALL four fixed
  // reads, the same-snapshot exact-session original join, and its map/filter composition. Never rebuild its DTO here.
  const source=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
- const start=source.indexOf('async function runPublicDashboardSummary() {');
+ const start=source.indexOf('async function runPublicDashboardSummary(');
  const end=source.indexOf('\nasync function runCanaryChecks()',start);
  assert.ok(start>=0&&end>start,'current owning summary source boundary required');
  const version=readFileSync(new URL('../src/app-version.js',import.meta.url),'utf8');
  const events=readFileSync(new URL('../src/events-api.js',import.meta.url),'utf8');
  const literal=(body,key)=>{const match=body.match(new RegExp('(?:export )?const '+key+' = "([^"\\n]+)";'));
   assert.ok(match,'actual current metadata literal '+key+' required');return match[1];};
- const context={runReadOnlySql,hasCanonicalCompletionSelection,Date,APP_VERSION:literal(version,'APP_VERSION'),
+ const context={runReadOnlySnapshot,hasCanonicalCompletionSelection,Date,APP_VERSION:literal(version,'APP_VERSION'),
   EVENTS_CONTRACT_VERSION:literal(events,'EVENTS_CONTRACT_VERSION')};
  context.RELEASE_ID=context.APP_VERSION;
  for(const key of ['SCAN_CONTRACT_VERSION','DASHBOARD_CONTRACT_VERSION','MESSAGING_CONTRACT_VERSION','SCHEDULE_CONTRACT_VERSION'])

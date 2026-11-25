@@ -10,7 +10,7 @@ const row={location_id:'98000000-0000-4000-8000-000000000001',location_name:'Wes
   status_code:'okay',services_performed:['Full cleaning services'],latest_original_completion:{credential_id:secret},token:secret,notes:secret};
 const summary={meta:{contracts:{dashboard:'dashboard.v1'},generated_at:now.toISOString(),token:secret},snapshot:{open_ticket_count:1,secret},
   restrooms:[row],exhibits:[],open_tickets:[{ticket_id:'T1',location_name:'West Admin',maintenance_issue:'Soap dispenser',reported_by:'Karen',credential:secret}]};
-const events=[{id:'E1',event_name:'Field trip',audience_scope:'all_working_employees',notes:secret,credentials:secret},
+const events=[{id:'E1',event_name:'Field trip',status:'SCHEDULED',audience_scope:'all_working_employees',notes:secret,credentials:secret},
   {id:'E2',event_name:secret,audience_scope:'individual_employees'},{id:'E3',event_name:secret}];
 const mail={schools:{state:'snapshot',generated_at:now.toISOString(),coverage:'imported_only',mailbox_completeness_verified:false,
   rows:[{id:'S1',name:'School',students:15,arrival_at:now.toISOString(),source_payload:secret,notes:secret}]},

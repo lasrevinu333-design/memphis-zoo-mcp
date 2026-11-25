@@ -8,7 +8,7 @@ const catalogText=readFileSync(new URL('../src/completion-taxonomy-v1.json',impo
 const catalog=JSON.parse(catalogText),digest=createHash('sha256').update(catalogText).digest('hex');
 const main=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
 assert.match(main,/app\.get\("\/admin-api\/custodial\/cleaning-sessions\/:sessionUuid\/completion-evidence", requireOpsManagerAuth,\s*makeCompletionEvidenceReader\(\{ runRpc, managerId: offlineAuthorityManagerId, backendSecret: offlineAuthoritySecret, leadershipRecordBridge: completionEvidenceRecordBridge \}\)\)/);
-const summary=main.slice(main.indexOf('async function runPublicDashboardSummary()'),main.indexOf('async function runPublicDashboardSummary()')+12000);
+const summary=main.slice(main.indexOf('async function runPublicDashboardSummary('),main.indexOf('async function runPublicDashboardSummary(')+12000);
 assert.match(summary,/latest_completed_session_uuid/);
 assert.match(summary,/latest_verified_check_session_uuid/);
 assert.equal(catalog.version,'COMP011-20261003-v1');

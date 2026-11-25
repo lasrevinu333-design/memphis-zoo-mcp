@@ -58,7 +58,7 @@ import {
   prepareVerifiedNativeOfflineWorkArguments,
   verifyNativeDeviceRequestAttestation,
 } from "./auth/device-credential-auth.js";
-import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
+import { runReadOnlySql as runSupabaseReadOnlySql, runReadOnlySnapshot } from "./supabase/read.js";
 import { readOriginalScanCompletion, SCAN_COMPLETION_READBACK_PATH } from './scan-completion-readback.js';
 import { installRetainedNativeEvidenceRoute } from "./native-retained-wire-intake.js";
 import { installNativePrivateCustodyExchangeRoute, installNativePrivateCustodyCurrentQueryRoute, installSameOriginalRecoveryTargetRoute } from "./native-private-custody-http-route.js";
@@ -1190,7 +1190,10 @@ async function persistAttendanceState(payload = {}) {
 
 async function fetchCurrentAttendance(options = {}) {
   const now = Date.now();
-  if (!options.force && attendanceCache.data && now - attendanceCache.fetched_at_ms < ATTENDANCE_CACHE_MS) {
+  const cacheAge = now - attendanceCache.fetched_at_ms;
+  if (!options.force && attendanceCache.data && attendanceCache.data.stale === false
+    && cacheAge >= 0 && cacheAge < ATTENDANCE_CACHE_MS
+    && isCurrentAttendanceTimestamp(attendanceCache.data.fetched_at, now)) {
     return { ...attendanceCache.data, cached: true };
   }
 
@@ -1232,17 +1235,20 @@ async function fetchCurrentAttendance(options = {}) {
     const html = await response.text();
     const parsed = parseAttendanceHtml(html);
 
+    const fetchedAt = new Date(now).toISOString();
+    const current = isCurrentAttendanceTimestamp(fetchedAt, Date.now());
     const data = {
       ...parsed,
       source_url: ATTENDANCE_SOURCE_URL,
       source: "scrape",
       content_type: contentType,
-      fetched_at: new Date().toISOString(),
+      fetched_at: fetchedAt,
       cached: false,
-      stale: false,
+      stale: !current,
+      ...(!current ? { warning: "Attendance observation is no longer current." } : {}),
     };
 
-    attendanceCache = { data, fetched_at_ms: now };
+    if (current && now >= attendanceCache.fetched_at_ms) attendanceCache = { data, fetched_at_ms: now };
     return data;
   } catch (error) {
     if (attendanceCache.data) {
@@ -2210,16 +2216,16 @@ async function runSystemFeedbackReminderSweep() {
   }
 }
 
-async function runPublicDashboardSummary() {
-  const [snapshotRows, locationRows, ticketRows, verifiedCheckRows] = await Promise.all([
-    runReadOnlySql(`
+async function runPublicDashboardSummary({ includeProtectedTicketNote = false } = {}) {
+  const [snapshotRows, locationRows, ticketRows, verifiedCheckRows] = await runReadOnlySnapshot([
+    `
       select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
              overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
       from public.v_admin_health_snapshot
       order by snapshot_at desc
       limit 1
-    `),
-    runReadOnlySql(`
+    `,
+    `
       select location.location_id, location.location_code, location.location_name, location.location_type, location.form_type,
              location.latest_employee_name, location.latest_completed_at, location.latest_checked_at,
              location.latest_completed_session_id, location.latest_completed_session_uuid,
@@ -2234,19 +2240,19 @@ async function runPublicDashboardSummary() {
        and location.latest_completed_session_uuid = (original_completion.latest_original_completion->>'session_uuid')
       order by case location.status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
                location.open_ticket_count desc, location.location_name
-    `),
-    runReadOnlySql(`
+    `,
+    `
       select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier, issue_source,
-             issue_payload->'top_level_note' as recorded_issue_note,
+             ${includeProtectedTicketNote ? "issue_payload->'top_level_note' as recorded_issue_note," : ""}
              out_of_order, date_submitted_display, created_at_display
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
-    `),
-    runReadOnlySql(`
+    `,
+    `
       select location_id,latest_verified_check_at,latest_verified_checker_name,
              latest_verified_check_session_uuid,latest_verified_check_completion_id
       from custodial_release_identity.read_current_verified_dashboard_checks_v1()
-    `),
+    `,
   ]);
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
@@ -2255,7 +2261,7 @@ async function runPublicDashboardSummary() {
     // The current completion form's Other issue label retains its explanatory
     // note in protected ticket evidence. Display that existing text without
     // exposing the raw payload or changing the authoritative category/history.
-    if (typeof ticket.maintenance_issue === "string" && ticket.maintenance_issue.trim().toLowerCase() === "other issue"
+    if (includeProtectedTicketNote && typeof ticket.maintenance_issue === "string" && ticket.maintenance_issue.trim().toLowerCase() === "other issue"
       && typeof recorded_issue_note === "string" && recorded_issue_note.trim()) {
       ticket.maintenance_issue = `${ticket.maintenance_issue}: ${recorded_issue_note.trim()}`.slice(0, 500);
     }
@@ -3118,7 +3124,7 @@ installAssignedPhoneLocationRoutes(app, {
   verifyNative: verifyNativeDeviceRequestAttestation, runRpc,
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
-  try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
+  try { const data = await runPublicDashboardSummary({ includeProtectedTicketNote: true }); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
 app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req, res) => {

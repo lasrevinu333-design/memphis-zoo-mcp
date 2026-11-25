@@ -259,7 +259,7 @@ async function rollbackQuietly(client) {
   }
 }
 
-async function executeInReadOnlyTransaction(pool, sql) {
+async function executeInReadOnlyTransaction(pool, read) {
   const client = await resolveReadOnlyPool(pool).connect();
   let reusable = true;
   let connectionError = null;
@@ -271,10 +271,10 @@ async function executeInReadOnlyTransaction(pool, sql) {
     await client.query(`set local lock_timeout = '${DEFAULT_SQL_READ_LOCK_TIMEOUT_MS}ms'`);
     await client.query("set local row_security = on");
     await assertDedicatedReadAuthority(client);
-    const result = await client.query(sql);
+    const result = await read(client);
     await client.query("commit");
     if (connectionError) throw connectionError;
-    return result.rows;
+    return result;
   } catch (error) {
     reusable = false;
     await rollbackQuietly(client);
@@ -319,16 +319,14 @@ export function sanitizeReadOnlySql(sql) {
   };
 }
 
-export async function runReadOnlySql({ pool, sql, maxRows, max_rows, maxResponseBytes, max_response_bytes } = {}) {
+function planRead(sql, options = {}) {
   const sanitized = sanitizeReadOnlySql(sql);
-  const limits = getReadLimits({
-    maxRows: maxRows ?? max_rows,
-    maxResponseBytes: maxResponseBytes ?? max_response_bytes,
-  });
-  const wrappedSql = canWrapReadQuery(sanitized.normalized) ? wrapReadQuery(sanitized.sql, limits) : sanitized.sql;
+  const limits = getReadLimits(options);
+  const wrapped = canWrapReadQuery(sanitized.normalized);
+  return { sql: wrapped ? wrapReadQuery(sanitized.sql, limits) : sanitized.sql, limits, wrapped };
+}
 
-  const data = await executeInReadOnlyTransaction(pool, wrappedSql);
-
+function readResult(data, { limits, wrapped }) {
   const originalRowCount = Array.isArray(data) ? data.length : null;
   const rowLimitTruncated = Array.isArray(data) && data.length > limits.max_rows;
   const rowsWithinRowLimit = rowLimitTruncated ? data.slice(0, limits.max_rows) : data;
@@ -345,7 +343,32 @@ export async function runReadOnlySql({ pool, sql, maxRows, max_rows, maxResponse
     first_oversized_row_bytes: compacted.first_oversized_row_bytes,
     omitted_oversized_value_bytes: compacted.omitted_oversized_value_bytes,
     limits,
-    wrapped: canWrapReadQuery(sanitized.normalized),
+    wrapped,
     rows: compacted.rows,
   };
+}
+
+export async function runReadOnlySql({ pool, sql, maxRows, max_rows, maxResponseBytes, max_response_bytes } = {}) {
+  const plan = planRead(sql, { maxRows: maxRows ?? max_rows, maxResponseBytes: maxResponseBytes ?? max_response_bytes });
+  const data = await executeInReadOnlyTransaction(pool, async client => (await client.query(plan.sql)).rows);
+  return readResult(data, plan);
+}
+
+// Internal callers use this for sections of a single response that must
+// describe the same commit. Each query keeps its independent row/byte cap.
+export async function runReadOnlySnapshot(queries, { pool } = {}) {
+  if (!Array.isArray(queries) || queries.length < 1 || queries.length > 8)
+    throw new Error("Invalid read-only snapshot query set.");
+  const plans = queries.map(sql => planRead(sql));
+  return executeInReadOnlyTransaction(pool, async client => {
+    const groups = [];
+    for (const plan of plans) {
+      const result = readResult((await client.query(plan.sql)).rows, plan);
+      if (result.row_limit_truncated || result.response_truncated || result.omitted_oversized_rows !== 0
+        || result.originalRowCount !== result.rowCount)
+        throw new Error("Read-only snapshot exceeds its response bounds.");
+      groups.push(result.rows);
+    }
+    return groups;
+  });
 }

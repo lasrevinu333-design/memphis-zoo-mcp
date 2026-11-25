@@ -17,9 +17,12 @@ assert.doesNotMatch(
 
 assert.match(
   source,
-  /import\s*\{\s*runReadOnlySql\s+as\s+runSupabaseReadOnlySql\s*\}\s*from\s*["']\.\/supabase\/read\.js["']/,
-  'index backend must import the shared read-only SQL wrapper so WITH queries used by dashboard summary are wrapped before RPC execution'
+  /import\s*\{\s*runReadOnlySql\s+as\s+runSupabaseReadOnlySql,\s*runReadOnlySnapshot\s*\}\s*from\s*["']\.\/supabase\/read\.js["']/,
+  'dashboard catalog reads share the restricted read-only SQL adapter'
 );
+
+assert.match(source,/async function runPublicDashboardSummary\([^\n]*\) \{[\s\S]{0,160}await runReadOnlySnapshot\(\[/,
+  'dashboard sections use one server-owned database snapshot');
 
 assert.match(
   source,

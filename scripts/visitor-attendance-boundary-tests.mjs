@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {normalizeAttendanceRecord,canonicalAttendanceTimestamp} from '../src/attendance-state.js';
 import {visitorRuntimeFixture} from './fixtures/visitor-attendance-runtime-fixture.mjs';
-const nowMs=Date.now(),base=Math.floor(nowMs/1000)*1000;
+// These offset tests specify one Chicago day. Rollover and DST are exercised
+// separately by attendance-chicago-day-tests.mjs.
+const nowMs=Date.parse('2026-10-31T18:00:00Z'),base=Math.floor(nowMs/1000)*1000;
 const iso=ms=>new Date(ms).toISOString();
 const payload={attendance:0,last_year:100,planned:200,yesterday:150,yesterday_plan:175,source:'home-browser-auto-push',fetched_at:iso(base+123)};
 let passed=0;const failures=[];

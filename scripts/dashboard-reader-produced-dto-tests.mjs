@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import {requireHealthDiagnostics,healthResponse,isReleaseMonitorRequest} from '../src/security-http-boundaries.js';
 import { publicOperationsDashboard } from '../src/public-operations-viewer.js';
+import { publicDashboardDetails } from '../src/public-dashboard-details.js';
 import { resolveReleaseSchemaTarget } from './production-target-schema-profile.mjs';
 import { assertDashboardReleaseCompatibility } from '../src/dashboard-release-compatibility.js';
 
@@ -65,7 +66,6 @@ const context = vm.createContext({
       { location_id: 'synthetic-exhibit', latest_verified_check_at: '2026-10-21T15:00:00Z', latest_verified_checker_name: 'Synthetic checker', latest_verified_check_session_uuid: 'synthetic-later-check', latest_verified_check_completion_id: 'synthetic-later-check-completion' },
     ];
     if (sql.includes('from public.v_open_maintenance_tickets')) {
-      assert.match(sql,/issue_payload->'top_level_note' as recorded_issue_note/);
       assert.doesNotMatch(sql,/select\s+\*|[ ,]issue_payload[ ,]/i,'read only the bounded note field, not its raw payload');
       return [
         {ticket_id:'note-text',maintenance_issue:'Other issue',recorded_issue_note:' Paper towels unavailable '},
@@ -80,6 +80,11 @@ const context = vm.createContext({
     assert.fail(`Unreviewed shipping SQL reached DTO fixture: ${sql.slice(0, 80)}`);
   },
 });
+context.runReadOnlySnapshot = async queries => {
+  assert.equal(queries.length,4);
+  state.calls.push({snapshot:queries.length});
+  return Promise.all(queries.map(context.runReadOnlySql));
+};
 vm.runInContext(readFileSync(join(root, 'src/app-version.js'), 'utf8').replaceAll('export const ', 'const '), context);
 // Execute the real release-manifest producer with an explicitly empty test
 // attestation environment. This proves DTO shape/join, not signed-live identity.
@@ -97,7 +102,8 @@ for (const name of ['CANARY_RESTROOM_CODE', 'CANARY_EXHIBIT_CODE', 'HEALTH_PROBE
   const declaration = source.match(new RegExp(`const ${name} = [^;]+;`)); assert.ok(declaration); vm.runInContext(declaration[0], context);
 }
 vm.runInContext(between('function buildHealthPayload(', '\nfunction staticWeeklyControlPlanePublicUrl('), context);
-vm.runInContext(between('async function runPublicDashboardSummary()', '\nasync function runCanaryChecks()'), context);
+vm.runInContext(between('async function runPublicDashboardSummary(', '\nasync function runCanaryChecks()') +
+  '\nglobalThis.publicSummarySource=runPublicDashboardSummary;', context);
 vm.runInContext(between('async function runCanaryChecks()', '\nfunction createMcpServer('), context);
 vm.runInContext(source.split('\n').find(line => line.startsWith('app.get("/version",')), context);
 vm.runInContext(between('app.get(["/health", "/health/dependencies"]', '\napp.get("/admin-api/health"'), context);
@@ -158,6 +164,13 @@ assert.equal(tickets.find(row=>row.ticket_id==='ordinary').maintenance_issue,'Si
 assert.equal(tickets.find(row=>row.ticket_id==='long').maintenance_issue.length,500);
 assert.equal(tickets.find(row=>row.ticket_id==='escaped').maintenance_issue,'Other issue: <script>untrusted note</script>','escaping belongs to the shipping text renderer, no data rewrite');
 assert.equal(tickets.some(row=>'recorded_issue_note' in row||'issue_payload' in row),false);
+const readsBeforePublic = state.calls.length;
+const publicSummary = publicDashboardDetails(await context.publicSummarySource());
+assert.equal(publicSummary.open_tickets.find(row=>row.ticket_id==='note-text').maintenance_issue,'Other issue');
+assert.doesNotMatch(JSON.stringify(publicSummary), /Paper towels unavailable|untrusted note/);
+const publicReads=state.calls.slice(readsBeforePublic);
+assert.equal(publicReads[0].snapshot,4);
+assert.doesNotMatch(publicReads.find(call=>call.sql?.includes('v_open_maintenance_tickets')).sql,/issue_payload/);
 assert.deepEqual(publicOperationsDashboard({...protectedSummary.body.data,status:'current',locations_total:47}),{status:'current',locations_total:47},'public viewer projection never includes private tickets or saved notes');
 const count = state.calls.length;
 assert.equal((await get('/dashboard-api/summary')).statusCode, 401);

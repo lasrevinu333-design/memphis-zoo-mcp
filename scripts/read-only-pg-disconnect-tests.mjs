@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { EventEmitter, once } from 'node:events';
 import net from 'node:net';
 import test from 'node:test';
-import { createReadOnlyPool, runReadOnlySql } from '../src/supabase/read.js';
+import { createReadOnlyPool, runReadOnlySnapshot, runReadOnlySql } from '../src/supabase/read.js';
+
+const restrictedAuthority = {
+  same_session_identity: true, transaction_read_only: true, dedicated_reader_member: true,
+  exclusive_reader_membership: true, direct_object_grants_absent: true, owned_objects_absent: true,
+  reader_role_restricted: true,
+};
 
 function int32(value) {
   const bytes = Buffer.alloc(4);
@@ -52,17 +58,12 @@ for (const phase of ['idle', 'checked out']) {
 }
 
 test('a connection error on commit discards the original client and the next reader succeeds', async () => {
-  const authority = {
-    same_session_identity: true, transaction_read_only: true, dedicated_reader_member: true,
-    exclusive_reader_membership: true, direct_object_grants_absent: true, owned_objects_absent: true,
-    reader_role_restricted: true,
-  };
   class Client extends EventEmitter {
     constructor(error) { super(); this.error = error; this.commands = []; this.releases = []; }
     async query(sql) {
       this.commands.push(sql);
       if (sql === 'commit' && this.error) this.emit('error', this.error);
-      const rows = sql.includes('with login_role') ? [authority] : [{ fixture: 1 }];
+      const rows = sql.includes('with login_role') ? [restrictedAuthority] : [{ fixture: 1 }];
       return { rows };
     }
     release(error) { this.releases.push(error); }
@@ -79,4 +80,36 @@ test('a connection error on commit discards the original client and the next rea
   assert.deepEqual(replacement.releases, [undefined]);
   assert.equal(replacement.commands[0], 'begin isolation level repeatable read read only');
   assert.ok(replacement.commands.includes('set local row_security = on'));
+});
+
+test('dashboard sections share one restricted repeatable-read transaction and a failure rolls it back', async () => {
+  for (const failing of [false, true]) {
+    let checkouts = 0, revision = 1, snapshot = null;
+    const commands = [], releases = [];
+    const client = {
+      async query(sql) {
+        commands.push(sql);
+        if (sql === 'begin isolation level repeatable read read only') snapshot = revision;
+        if (sql.includes('with login_role')) return { rows: [restrictedAuthority] };
+        if (sql.includes('fixture_first')) {
+          revision++;
+          return { rows: [{ revision: snapshot }] };
+        }
+        if (sql.includes('fixture_second')) {
+          if (failing) throw new Error('Synthetic snapshot section failure');
+          return { rows: [{ revision: snapshot }] };
+        }
+        return { rows: [] };
+      },
+      release(reason) { releases.push(reason); },
+    };
+    const pool = { connect: async () => { checkouts++; return client; } };
+    const promise = runReadOnlySnapshot(['select fixture_first', 'select fixture_second'], { pool });
+    if (failing) await assert.rejects(promise, /Synthetic snapshot section failure/);
+    else assert.deepEqual(await promise, [[{ revision: 1 }], [{ revision: 1 }]]);
+    assert.equal(checkouts, 1);
+    assert.equal(releases.length, 1);
+    assert.equal(commands.at(-1), failing ? 'rollback' : 'commit');
+    assert.ok(commands.includes('set local row_security = on'));
+  }
 });
