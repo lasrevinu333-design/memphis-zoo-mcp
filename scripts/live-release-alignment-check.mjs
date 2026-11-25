@@ -2,11 +2,13 @@
 import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs';
 import {createHash} from 'node:crypto';
 import assert from "node:assert/strict";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertBackendFrontendIdentity, assertFrontendReleaseDeclaration, assertFrontendReleaseIdentity, assertManifestContract, assertExactReleaseAttestation, assertObservedSchemaIdentity } from "../src/release-contract.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
+import { assertDashboardReleaseCompatibility } from "../src/dashboard-release-compatibility.js";
+import { assertSchedulerObservation,observeReleaseEndpoints,releaseMonitorEndpointPlan } from "./release-monitor-observations.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(new URL("..", import.meta.url))));
 const canonicalInput = JSON.parse(readFileSync(resolve(root, "release/schema-alignment-input.json"), "utf8"));
@@ -36,39 +38,35 @@ function readReadonlyExternalAttestation(path) {
   return assertExactReleaseAttestation(JSON.parse(readFileSync(real, "utf8")), { publicKeyPem });
 }
 
-async function fetchJson(url, label, headers = {}) {
-  const response = await fetch(url, { headers: { accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
-  return response.json();
-}
-
-async function fetchTimedJson(url, label, headers = {}) {
-  const startedAt = performance.now();
-  const json = await fetchJson(url, label, headers);
-  return { json, elapsed_ms: performance.now() - startedAt };
-}
-
+const reportPath = String(process.env.LIVE_RELEASE_OBSERVATION_REPORT || '').trim();
+const runNumber = value => /^\d{1,24}$/.test(value || '') ? value : null;
+const report = { schema:'custodial.availability-observation.v1',started_at:new Date().toISOString(),
+  run_id:runNumber(process.env.GITHUB_RUN_ID),run_attempt:runNumber(process.env.GITHUB_RUN_ATTEMPT),
+  release_target:null,probes:[],integrated_release:'unverified',failed_check:null };
+let check = 'configuration';
+try {
 const attestation = readReadonlyExternalAttestation(requiredEnv("LIVE_RELEASE_ATTESTATION_INPUT"));
-const backendUrl = requiredEnv("BACKEND_RELEASE_MANIFEST_URL");
-const frontendReleaseUrl = requiredEnv("FRONTEND_RELEASE_MANIFEST_URL");
-const frontendDeploymentUrl = requiredEnv("FRONTEND_DEPLOYMENT_MANIFEST_URL");
-const schemaToken = requiredEnv("LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN");
-const identityUrl = String(process.env.BACKEND_SCHEMA_IDENTITY_URL || new URL("/admin-api/release-schema-identity", backendUrl).toString());
-const healthUrl = String(process.env.BACKEND_HEALTH_URL || new URL("/health", backendUrl).toString());
-const authorityHealthUrl = String(process.env.BACKEND_AUTHORITY_HEALTH_URL || new URL("/scan-api/authority-health", backendUrl).toString());
-const schedulerReadyUrl = requiredEnv("STATIC_WEEKLY_CONTROL_PLANE_READY_URL");
+const schedulerInput = String(process.env.STATIC_WEEKLY_RELEASE_ATTESTATION_INPUT || '').trim();
+const schedulerAttestation = schedulerInput ? readReadonlyExternalAttestation(schedulerInput) : attestation;
+report.release_target={release_id:attestation.release_id,backend_commit_sha:attestation.backend_commit_sha,
+  scheduler_commit_sha:schedulerAttestation.backend_commit_sha,frontend_commit_sha:attestation.frontend_commit_sha,
+  deployment_schema_fingerprint:schemaTarget.deploymentFingerprint};
+const plan = releaseMonitorEndpointPlan({
+  backendUrl:requiredEnv('BACKEND_RELEASE_MANIFEST_URL'), frontendReleaseUrl:requiredEnv('FRONTEND_RELEASE_MANIFEST_URL'),
+  frontendDeploymentUrl:requiredEnv('FRONTEND_DEPLOYMENT_MANIFEST_URL'), schedulerReadyUrl:requiredEnv('STATIC_WEEKLY_CONTROL_PLANE_READY_URL'),
+  schemaToken:requiredEnv('LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN'), identityUrl:process.env.BACKEND_SCHEMA_IDENTITY_URL,
+  healthUrl:process.env.BACKEND_HEALTH_URL,authorityHealthUrl:process.env.BACKEND_AUTHORITY_HEALTH_URL,
+});
+check='endpoint_responses';
+const batch = await observeReleaseEndpoints(plan);
+report.probes = batch.map(item => item.observed);
+assert.ok(report.probes.every(item=>item.state==='received'),'A required endpoint response was unavailable.');
+const [frontend,deployment,backend,observed,health,authorityHealth,schedulerReady,dashboardCanary]=batch.map(item=>item.json);
+const healthProbe = batch.find(item=>item.observed.id==='backend_dependencies');
+check='dashboard_application_reader';
+assertDashboardReleaseCompatibility({ canary: dashboardCanary, health, releaseId: attestation.release_id, appVersion: backend.backend?.app_version, backendCommitSha: attestation.backend_commit_sha });
 
-const [frontend, deployment, backend, observed, healthProbe, authorityHealth, schedulerReady] = await Promise.all([
-  fetchJson(frontendReleaseUrl, "frontend release manifest"),
-  fetchJson(frontendDeploymentUrl, "frontend deployment manifest"),
-  fetchJson(backendUrl, "backend release manifest"),
-  fetchJson(identityUrl, "authenticated production schema identity", { authorization: `Bearer ${schemaToken}` }),
-  fetchTimedJson(healthUrl, "backend dependency health"),
-  fetchJson(authorityHealthUrl, "canonical custodial authority health"),
-  fetchJson(schedulerReadyUrl, "static weekly scheduler readiness"),
-]);
-const health = healthProbe.json;
-
+check='signed_application_and_frontend';
 assert.equal(backend.release_id, attestation.release_id, "backend release is not the signed exact attestation");
 assert.equal(frontend.release_id, attestation.release_id, "frontend release is not the signed exact attestation");
 assert.equal(deployment.release_id, attestation.release_id, "frontend deployment is not the signed exact attestation");
@@ -86,14 +84,17 @@ assertFrontendReleaseIdentity(deployment, canonicalInput);
 assert.equal(backend.schema?.fingerprint, schemaTarget.canonicalFingerprint, "backend application schema is not the source canonical identity");
 assert.equal(backend.schema?.deployment_fingerprint, schemaTarget.deploymentFingerprint, "backend raw target is not the closed declared production profile");
 assert.equal(backend.schema?.deployment_profile_sha256, profileSha256, "backend production profile source bytes differ");
+check='observed_production_schema';
 assertObservedSchemaIdentity(observed, schemaTarget.deploymentFingerprint);
 const schemaAlignment = assertSchemaAlignment({ backendManifest: backend, frontendManifest: frontend, deploymentManifest: deployment });
+check='backend_dependencies_and_worker';
 assert.equal(health.ok, true, "backend dependency health is not green");
 assert.equal(health.database_reachable, true, "backend cannot reach its database");
 assert.equal(health.required_schema_present, true, "backend required schema is incomplete");
 assert.equal(health.worker?.dead_letters, 0, "backend has dead operational jobs");
 assert.equal(health.worker?.expired_leases, 0, "backend has expired operational-job leases");
-assert.ok(healthProbe.elapsed_ms <= 4_000, `backend dependency health exceeded four seconds (${healthProbe.elapsed_ms.toFixed(0)} ms)`);
+assert.ok(healthProbe.elapsedMs <= 4_000, `backend dependency health exceeded four seconds (${healthProbe.elapsedMs.toFixed(0)} ms)`);
+check='custodial_authority';
 assert.equal(authorityHealth.ok, true, "canonical custodial authority health endpoint failed");
 assert.equal(authorityHealth.data?.ok, true, "canonical custodial authority inventory is not green");
 assert.equal(authorityHealth.data?.authority, "offline-authority.v5", "canonical custodial authority contract is unexpected");
@@ -105,23 +106,32 @@ assert.ok(authorityHealth.data?.checks && typeof authorityHealth.data.checks ===
   && Object.values(authorityHealth.data.checks).length > 0
   && Object.values(authorityHealth.data.checks).every((value) => value === true),
 "canonical custodial authority checks are incomplete");
+check='physical_release_canary';
 assert.equal(health.release_canary?.configured, true, "one-phone release canary is not configured");
 assert.equal(health.release_canary?.control_initialized, true, "one-phone release canary control is not initialized");
 assert.equal(health.release_canary?.paused, false, "one-phone release canary remains operator-paused");
 assert.equal(authorityHealth.data?.release_canary?.configured, true, "authority health does not expose the configured canary");
 assert.equal(authorityHealth.data?.release_canary?.control_initialized, true, "authority health does not prove initialized canary control");
 assert.equal(authorityHealth.data?.release_canary?.paused, false, "authority health reports an operator-paused canary");
-assert.equal(schedulerReady.ok, true, "static weekly scheduler readiness is not green");
-assert.equal(schedulerReady.data?.ready, true, "static weekly scheduler authority is not ready");
-assert.equal(schedulerReady.data?.solver?.available, true, "static weekly HiGHS solver is unavailable");
-for (const field of ["release_id", "backend_commit_sha", "backend_tree_sha", "frontend_commit_sha", "schema_fingerprint"]) {
-  assert.equal(schedulerReady.release_identity?.[field], attestation[field], `static weekly scheduler ${field} is not the signed exact attestation`);
-}
-
+check='signed_scheduler_readiness';
+assertSchedulerObservation(schedulerReady,schedulerAttestation,attestation);
+report.integrated_release='verified';
 console.log(JSON.stringify({ ok: true, release_id: attestation.release_id, backend_commit_sha: attestation.backend_commit_sha,
   backend_tree_sha: attestation.backend_tree_sha, backend_evidence_sha256: attestation.backend_evidence_sha256,
   frontend_commit_sha: attestation.frontend_commit_sha, observed_production_schema_fingerprint: observed.fingerprint,
   schema_alignment_mode: schemaAlignment.mode, schema_transition_id: schemaAlignment.transition?.transition_id || null,
   canonical_application_schema_fingerprint: schemaTarget.canonicalFingerprint,
   expected_deployment_schema_fingerprint: schemaTarget.deploymentFingerprint, production_catalog_profile_sha256: profileSha256,
-  backend_health_latency_ms: Math.round(healthProbe.elapsed_ms), operational_backlog: health.worker?.backlog || 0 }, null, 2));
+  backend_health_latency_ms: Math.round(healthProbe.elapsedMs), operational_backlog: health.worker?.backlog || 0 }, null, 2));
+
+} catch (error) {
+  report.failed_check = check;
+  if (!reportPath) throw error;
+  // Scheduled evidence carries fixed labels only, never endpoint credentials,
+  // response bodies or database contents.
+  console.error(`Release readiness is unverified at ${check}. See the endpoint observation artifact.`);
+  process.exitCode = 1;
+} finally {
+  report.completed_at = new Date().toISOString();
+  if (reportPath) writeFileSync(reportPath, JSON.stringify(report,null,2)+'\n', {flag:'wx',mode:0o600});
+}

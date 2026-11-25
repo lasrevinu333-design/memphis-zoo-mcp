@@ -24,6 +24,9 @@ export const RELEASE_ATTESTATION_TRUST_ROOTS = Object.freeze([
   RELEASE_ATTESTATION_TRUST_ROOT,
   Object.freeze({keyId: "memphis-zoo-release-2026-08-13",
     publicKeySpkiSha256: "094b591c0da0d16549c82210b02285dbe88f80ad5a6305b53285ddb8893b54b7"}),
+  // Preserve the owner-approved identity used by the deployed fc2b989 release.
+  Object.freeze({keyId: "memphis-release-recovery-20260928-v1",
+    publicKeySpkiSha256: "a0af17f2aabc006af0a5ea3d80e2ccbab0650c1689f7ed828ec7aeb1075c5190"}),
 ]);
 
 export function releaseAttestationPayload(input) {
