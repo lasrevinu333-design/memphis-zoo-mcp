@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, readFileSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import {packageVerifiedBackup,requireOriginalStorageSize} from "./production-backup-integrity.mjs";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import pg from "pg";
@@ -74,6 +75,8 @@ const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_U
 const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const apply = String(process.env.RESTORE_APPLY || "false").toLowerCase() === "true";
+const verifiedTarball = String(process.env.VERIFIED_BACKUP_TARBALL || "").trim();
+if (apply && verifiedTarball) throw new Error("Backup packaging requires verify-only archive admission.");
 const databaseOnly = String(process.env.RESTORE_DATABASE_ONLY || "false").toLowerCase() === "true";
 const archiveVerifyKey = requireSigningKey(process.env.RESTORE_ARCHIVE_VERIFY_KEY, "RESTORE_ARCHIVE_VERIFY_KEY");
 const archiveVerifyKeyId = String(process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID || "").trim();
@@ -248,6 +251,14 @@ if(privateImportBlocker){
 }
 
 if (!apply) {
+  if (verifiedTarball) {
+    requireOriginalArchiveSource();
+    if (summary.format !== "memphis-zoo-disaster-recovery.v4") throw new Error("Verified backup packaging requires the current signed Storage inventory.");
+    for (const object of objects) {
+      if (requireOriginalStorageSize(object) !== object.size_bytes) throw new Error("Sealed Storage bytes differ from original provider size.");
+    }
+    await packageVerifiedBackup(sourceInputDir, verifiedArchive, verifiedTarball);
+  }
   return JSON.stringify({
     ok: true,
     dry_run: true,

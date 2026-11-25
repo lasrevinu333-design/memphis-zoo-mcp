@@ -116,10 +116,10 @@ test('generic failed child is sanitized and never retried', async t => {
   const f = harness(t, { failures: [transient({ code: 'BACKUP_DUMP_FORGED', stderr: 'PRIVATE_SENTINEL' })] });
   await fails(f, 0, 'BACKUP_DUMP_FAILED'); assert.equal(f.dumps(), 1); assert.deepEqual(f.sleeps, []);
 });
-test('source-pinned capture prefix is unchanged and wrapper requires same transaction', () => {
+test('source-pinned capture prefix validates private schema output and wrapper requires same transaction', () => {
   const source = readFileSync(new URL('./production-backup.mjs', import.meta.url), 'utf8');
   const capture = source.slice(source.indexOf('async function captureApplicationSchema('), source.indexOf('\nconst client ='));
-  assert.equal(createHash('sha256').update(capture.slice(0, capture.indexOf('\n  const sections = [];'))).digest('hex'), '5d4af573a170c41193ef88a8a6524fbca9f4089b8e3ce36ccb9761468d9f38dd');
+  assert.equal(createHash('sha256').update(capture.slice(0, capture.indexOf('\n  const sections = [];'))).digest('hex'), 'b2e484ecc2127ccfb7de3bb6e1443d20f1ed63b54ebd6f2544df5093effdc717');
   assert.match(source, /row\.snapshot_id !== snapshot\.snapshot_id/);
   assert.match(source, /row\.same_transaction !== true/);
   assert.match(source, /row\.read_only !== 'on' \|\| row\.isolation !== 'repeatable read'/);

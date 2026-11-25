@@ -7,12 +7,13 @@ import {
   createReadStream,
   createWriteStream,
   mkdirSync,
-  readdirSync,
+  lstatSync,
   readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
+import {createPrivateBackupDirectory,productionBackupConnection,readBackupFiles,requireOriginalStorageResponse} from "./production-backup-integrity.mjs";
 import { Readable } from "node:stream";
 import { finished, pipeline } from "node:stream/promises";
 import { promisify, types } from "node:util";
@@ -83,22 +84,9 @@ if (!secret) throw new Error("SUPABASE_SECRET or SUPABASE_SERVICE_ROLE_KEY is re
 if (!databaseUrl) throw new Error("SUPABASE_DB_URL or DATABASE_URL is required for a transactionally consistent snapshot.");
 if (!databaseCaCertPath) throw new Error("SUPABASE_DB_CA_CERT_PATH is required for synchronized schema capture.");
 if (!backupDir) throw new Error("BACKUP_DIR is required.");
-let databaseConnection;
-try {
-  databaseConnection = new URL(databaseUrl);
-} catch {
-  // The production backup contract requires a URL-form PostgreSQL connection string.
-}
-const databaseUsername = decodeURIComponent(databaseConnection?.username || "").trim();
-const databasePassword = decodeURIComponent(databaseConnection?.password || "");
-const databaseHost = String(databaseConnection?.hostname || "").trim();
-const databasePort = String(databaseConnection?.port || "5432").trim();
-const databaseName = decodeURIComponent(String(databaseConnection?.pathname || "").replace(/^\//, "")).trim();
-if (!["postgres:", "postgresql:"].includes(databaseConnection?.protocol)
-    || !databaseUsername || !databasePassword || !databaseHost
-    || !/^[1-9][0-9]{0,4}$/.test(databasePort) || !databaseName || databaseName.includes("/")) {
-  throw new Error("SUPABASE_DB_URL must be an explicit PostgreSQL URL for containerized pg_dump.");
-}
+const databaseConnection = productionBackupConnection(databaseUrl);
+const {user:databaseUsername,password:databasePassword,host:databaseHost,database:databaseName}=databaseConnection;
+const databasePort = String(databaseConnection.port);
 if (!/^[a-zA-Z0-9._:-]{1,120}$/.test(manifestSigningKeyId)) throw new Error("BACKUP_MANIFEST_SIGNING_KEY_ID is required.");
 if (!/^[0-9a-f]{40}$/.test(backupToolCommit) || !/^[0-9a-f]{40}$/.test(backupToolTree)) {
   throw new Error("BACKUP_TOOL_COMMIT and BACKUP_TOOL_TREE must be exact Git identities.");
@@ -108,13 +96,14 @@ if (!/^supabase\/postgres@sha256:[0-9a-f]{64}$/.test(pgDumpImage)) {
 }
 if (!runtimeConfigurationInput) throw new Error("BACKUP_RUNTIME_CONFIGURATION_JSON is required and must contain only non-secret recoverable deployment configuration.");
 
-for (const path of [backupDir, join(backupDir, "database"), join(backupDir, "inventory"), join(backupDir, "storage", "objects")]) {
+createPrivateBackupDirectory(backupDir);
+for (const path of [join(backupDir, "database"), join(backupDir, "inventory"), join(backupDir, "storage", "objects")]) {
   mkdirSync(path, { recursive: true, mode: 0o700 });
   chmodSync(path, 0o700);
 }
 
 function writeJson(path, value) {
-  writeFileSync(path, stableJsonFile(value), { mode: 0o600 });
+  writeFileSync(path, stableJsonFile(value), { mode: 0o600, flag: "wx" });
   chmodSync(path, 0o600);
 }
 
@@ -145,7 +134,7 @@ function finishRawStorageObjectArchiveRow(raw, {file, size_bytes, sha256}) {
 }
 
 function writeRawStorageInventory(path, rows) {
-  writeFileSync(path, encodeRawStorageInventoryRows(rows), { mode: 0o600 });
+  writeFileSync(path, encodeRawStorageInventoryRows(rows), { mode: 0o600, flag: "wx" });
   chmodSync(path, 0o600);
 }
 
@@ -192,16 +181,6 @@ const backupNativeTextOutputStatements = Object.freeze([
   "set local bytea_output = 'hex'",
 ]);
 
-function walkFiles(directory) {
-  const result = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...walkFiles(path));
-    else if (entry.isFile() && entry.name !== "SHA256SUMS" && entry.name !== "backup-summary.json") result.push(path);
-  }
-  return result.sort();
-}
-
 function sha256File(path) {
   return new Promise((resolveHash, reject) => {
     const hash = createHash("sha256");
@@ -236,9 +215,11 @@ async function captureApplicationSchema(exportedSnapshot) {
     env: { ...process.env, PGPASSWORD: databasePassword },
     maxBuffer: 10 * 1024 * 1024,
   });
-  if (!statSync(applicationSchemaPath).isFile() || statSync(applicationSchemaPath).size < 1024) {
+  const applicationSchemaState = lstatSync(applicationSchemaPath);
+  if (!applicationSchemaState.isFile() || applicationSchemaState.nlink !== 1 || applicationSchemaState.size < 1024) {
     throw new Error("The synchronized application schema is missing or implausibly small.");
   }
+  chmodSync(applicationSchemaPath, 0o600);
   const sections = [];
   for (const profile of productionBackupSchemaSections) {
     await execFileAsync("docker", productionBackupPgDumpSectionDockerArgs({
@@ -251,17 +232,18 @@ async function captureApplicationSchema(exportedSnapshot) {
       maxBuffer: 10 * 1024 * 1024,
     });
     const sectionPath = join(backupDir, profile.path);
-    const state = statSync(sectionPath);
-    if (!state.isFile() || state.size === 0) {
+    const state = lstatSync(sectionPath);
+    if (!state.isFile() || state.nlink !== 1 || state.size === 0) {
       throw new Error("The synchronized schema evidence section is missing or empty.");
     }
+    chmodSync(sectionPath, 0o600);
     sections.push({ ...profile, sha256: await sha256File(sectionPath) });
   }
   return requireProductionBackupSchemaSections(sections);
 }
 
 const client = new Client({
-  connectionString: databaseUrl,
+  ...databaseConnection,
   application_name: "memphis-zoo-consistent-backup",
   ...(databaseCaCertPath ? {
     ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true },
@@ -531,13 +513,24 @@ for (const original of storageObjects) {
   const object = original.row;
   const file = storageObjectArchivePath(object.bucket_id, object.name);
   const outputPath = join(backupDir, file);
-  const encodedName = String(object.name).split("/").map(encodeURIComponent).join("/");
+  const segments = String(object.name).split("/");
+  if (segments.some(segment => segment === "." || segment === "..")) throw new Error("Storage object path cannot be encoded unambiguously.");
+  const encodedName = segments.map(encodeURIComponent).join("/");
   const response = await fetch(`https://${projectRef}.supabase.co/storage/v1/object/authenticated/${encodeURIComponent(object.bucket_id)}/${encodedName}`, {
+    redirect: "error",
     headers: { apikey: secret, Authorization: `Bearer ${secret}` },
   });
-  if (!response.ok || !response.body) throw new Error(`Storage backup failed for object ${object.id} with HTTP ${response.status}.`);
+  let expectedBytes;
+  try {
+    expectedBytes = requireOriginalStorageResponse(object, response);
+  } catch (error) {
+    await response.body?.cancel().catch(() => {});
+    throw error;
+  }
   await pipeline(Readable.fromWeb(response.body), createWriteStream(outputPath, { flags: "wx", mode: 0o600 }));
   chmodSync(outputPath, 0o600);
+  const capturedBytes = statSync(outputPath).size;
+  if (capturedBytes !== expectedBytes) throw new Error("Downloaded Storage bytes differ from the original object size.");
   // Re-enter the original native text profile after the capture COMMIT.
   // SET LOCAL was intentionally transaction-only; session defaults may differ.
   // Mark the BEGIN attempt before its await so the existing outer finally
@@ -557,7 +550,7 @@ for (const original of storageObjects) {
   backupTransactionMayBeOpen = false;
   const archived = finishRawStorageObjectArchiveRow(original.archive_row, {
     file,
-    size_bytes: statSync(outputPath).size,
+    size_bytes: capturedBytes,
     sha256: await sha256File(outputPath),
   });
   originalObjectManifestText.push(archived);
@@ -608,10 +601,11 @@ const summary = {
 };
 writeJson(join(backupDir, "backup-summary.json"), summary);
 
-const hashFiles = [...walkFiles(backupDir), join(backupDir, "backup-summary.json")].sort();
+const hashFiles = readBackupFiles(backupDir);
+if (hashFiles.includes("SHA256SUMS") || hashFiles.includes("archive-signature.json")) throw new Error("Backup controls already exist in the capture directory.");
 const manifestLines = [];
-for (const path of hashFiles) manifestLines.push(`${await sha256File(path)}  ${relative(backupDir, path)}`);
-writeFileSync(join(backupDir, "SHA256SUMS"), `${manifestLines.join("\n")}\n`, { mode: 0o600 });
+for (const path of hashFiles) manifestLines.push(`${await sha256File(join(backupDir, path))}  ${path}`);
+writeFileSync(join(backupDir, "SHA256SUMS"), `${manifestLines.join("\n")}\n`, { mode: 0o600, flag: "wx" });
 chmodSync(join(backupDir, "SHA256SUMS"), 0o600);
 const archiveDigest = await sha256File(join(backupDir, "SHA256SUMS"));
 writeJson(join(backupDir, "archive-signature.json"), {
