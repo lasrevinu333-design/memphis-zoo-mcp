@@ -10,6 +10,11 @@ import {requireSigningKey} from './disaster-recovery-crypto.mjs';
 // Detached provenance/result DATA only. Neither function admits SQL, restores
 // rows, resumes an app or signs candidate migration/runtime attestations.
 const IMMUTABLE_BACKUP_LAUNCHERS=Object.freeze({
+ '76396c7b636284f91fb15fdce1e4bc5e91f2de58':Object.freeze({
+  repository:'lasrevinu333-design/memphis-zoo-mcp',
+  toolCommit:'75c5ef7badbd4e0298830a53460ec38aaf404c20',
+  workflowSha256:'cc36196e01d0dba7186e2dd006e2495c4b2448fc02e00d5aa1e41be266d88772',
+ }),
  '5e150a484915849d41ae330babcc4f28cb488729':Object.freeze({repository:'lasrevinu333-design/memphis-zoo-mcp',
   toolCommit:'685d6213d449fcc8dafcba24a47c7e6df0da3db2',workflowSha256:'29b2c38abfee2891f32a3cd9d38437a697c4577bb38528417097d8d93cf77259'}),
 });

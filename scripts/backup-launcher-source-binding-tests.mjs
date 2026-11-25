@@ -15,4 +15,23 @@ for(const [name,edit]of[
  ['wrong workflow path',x=>x.run.path='other.yml'],['no original data',x=>x.summary.database_row_count=0],
  ['missing launcher identity',x=>delete x.run.head_sha],['missing tool identity',x=>delete x.summary.source_identity.backup_tool_commit],
 ]){const value=input();edit(value);assert.throws(()=>assertBackupOnlySourceBinding(value),name);checks++;}
+const currentLauncher='76396c7b636284f91fb15fdce1e4bc5e91f2de58';
+const currentTool='75c5ef7badbd4e0298830a53460ec38aaf404c20';
+const currentWorkflow=fs.readFileSync(new URL('../release/backup-launcher-source/'+currentLauncher+'.yml',import.meta.url),'utf8');
+const current=()=>{
+ const value=input();value.run.head_sha=currentLauncher;
+ value.run.id=45645963579;value.backupRunId='45645963579';
+ value.summary.source_identity.backup_tool_commit=currentTool;
+ value.launcherWorkflowSource=currentWorkflow;
+ return value;
+};
+assert.doesNotThrow(()=>assertBackupOnlySourceBinding(current()));checks++;
+for(const edit of [
+ value=>{value.run.head_sha=launcher;},
+ value=>{value.summary.source_identity.backup_tool_commit=tool;},
+ value=>{value.launcherWorkflowSource=workflow;},
+ value=>{value.launcherWorkflowSource=currentWorkflow.replace(currentTool,tool);},
+]){
+ const value=current();edit(value);assert.throws(()=>assertBackupOnlySourceBinding(value));checks++;
+}
 console.log(JSON.stringify({status:'PASS_EXACT_LAUNCHER_AND_CHECKED_OUT_TOOL_BINDING',checks,databaseContacted:false,restored:false,productionWritten:false,releaseAdmission:false}));
