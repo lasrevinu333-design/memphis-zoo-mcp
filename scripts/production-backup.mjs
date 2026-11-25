@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { once } from "node:events";
 import {
   chmodSync,
   createReadStream,
@@ -84,6 +85,7 @@ if (!secret) throw new Error("SUPABASE_SECRET or SUPABASE_SERVICE_ROLE_KEY is re
 if (!databaseUrl) throw new Error("SUPABASE_DB_URL or DATABASE_URL is required for a transactionally consistent snapshot.");
 if (!databaseCaCertPath) throw new Error("SUPABASE_DB_CA_CERT_PATH is required for synchronized schema capture.");
 if (!backupDir) throw new Error("BACKUP_DIR is required.");
+if (!Number.isSafeInteger(pageSize)) throw new Error("BACKUP_PAGE_SIZE must be an integer.");
 const databaseConnection = productionBackupConnection(databaseUrl);
 const {user:databaseUsername,password:databasePassword,host:databaseHost,database:databaseName}=databaseConnection;
 const databasePort = String(databaseConnection.port);
@@ -432,14 +434,23 @@ try {
       : "order by ctid";
     let offset = 0;
     try {
-      while (offset < countedRows) {
-        const result = await client.query(
-          `select ${rowProjection} as row from (select * from only ${target} ${order} limit $1 offset $2) snapshot_row`,
-          [pageSize, offset],
+      if (countedRows > 0) {
+        await client.query(
+          `declare custodial_backup_rows no scroll cursor without hold for select ${rowProjection} as row from (select * from only ${target} ${order}) snapshot_row`,
         );
-        const rows = requireProductionBackupPage(result,{offset,rowCount:countedRows,pageSize});
-        for (const item of rows) stream.write(`${encodeProductionBackupTextColumnsDataRow(item.row)}\n`);
-        offset += rows.length;
+        while (offset < countedRows) {
+          const result = await client.query(`fetch forward ${pageSize} from custodial_backup_rows`);
+          const rows = requireProductionBackupPage(result,{offset,rowCount:countedRows,pageSize});
+          for (const item of rows) {
+            if (!stream.write(`${encodeProductionBackupTextColumnsDataRow(item.row)}\n`)) await once(stream, "drain");
+          }
+          offset += rows.length;
+        }
+        const end = await client.query("fetch forward 1 from custodial_backup_rows");
+        if (end.rowCount !== 0 || end.rows.length !== 0) {
+          throw new Error("Backup cursor returned more rows than its exact snapshot count.");
+        }
+        await client.query("close custodial_backup_rows");
       }
       if (offset !== countedRows) throw new Error("Backup table export did not preserve its counted snapshot rows.");
       stream.end();
