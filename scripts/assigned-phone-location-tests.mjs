@@ -21,15 +21,20 @@ test('capture age, not receipt time or session, decides live versus stale',()=>{
  assert.throws(()=>phoneLocations([row,row],now));
 });
 test('actual HTTP parser preserves signed bytes; anonymous/public cannot read; authority changes withhold response',async()=>{
- const app=express();app.use(createGeneralJsonMiddleware());let writes=0,verifyBytes=null,change=false;
- const manager={role:'ops_manager',manager_id:id(5),credential_id:id(6),device_id:'manager',permissions:{schema:'custodial.manager-permissions.v1',read:true}};
- let activeReq;
+ const app=express();app.use(createGeneralJsonMiddleware());let writes=0,verifyBytes=null,change=null,allowed=true;
+ const manager={role:'ops_manager',manager_id:id(5),credential_id:id(6),device_id:'manager',
+  expires_at:new Date(Date.now()+60000).toISOString(),permissions:{schema:'custodial.manager-permissions.v1',read:true}};
+ let currentManager=manager;
  installAssignedPhoneLocationRoutes(app,{now:()=>now,
   parseJson:express.json({verify(req,res,bytes){req.scanAuthorityRawBody=Buffer.from(bytes);}}),
   requireDevice(req,res,next){Object.assign(req,{...request(),body:req.body});next();},
-  requireManager(req,res,next){if(req.headers['x-synthetic-manager']==='yes')req.memphisAuth={...manager};activeReq=req;next();},
+  requireManager(req,res,next){
+   if(req.headers['x-synthetic-manager']!=='yes')return res.status(403).json({ok:false});
+   if(!allowed)return res.status(401).json({ok:false});
+   req.memphisAuth={...currentManager};next();
+  },
   rateLimit(req,res,next){next();},verifyNative(req){verifyBytes=req.scanAuthorityRawBody;assert.ok(Buffer.isBuffer(verifyBytes));},
-  async runRpc(fn,args){if(fn==='custodial_record_phone_position'){writes++;return {ok:true,sample_id:args.p_sample_id};}if(change)activeReq.memphisAuth.manager_id=id(7);return [row];}
+  async runRpc(fn,args){if(fn==='custodial_record_phone_position'){writes++;return {ok:true,sample_id:args.p_sample_id};}change?.();return [row];}
  });
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
  const base=`http://127.0.0.1:${server.address().port}`;
@@ -39,6 +44,15 @@ test('actual HTTP parser preserves signed bytes; anonymous/public cannot read; a
   assert.equal((await fetch(base+'/viewer-api/phone-locations')).status,404);
   const result=await fetch(base+'/dashboard-api/phone-locations',{headers:{'x-synthetic-manager':'yes'}});assert.equal(result.status,200);assert.equal(result.headers.get('cache-control'),'private, no-store');assert.equal((await result.json()).data.phones[0].state,'live');
   assert.equal((await fetch(base+'/dashboard-api/phone-locations?employee_id='+id(9),{headers:{'x-synthetic-manager':'yes'}})).status,422);
-  change=true;assert.equal((await fetch(base+'/dashboard-api/phone-locations',{headers:{'x-synthetic-manager':'yes'}})).status,403);
+  const get=()=>fetch(base+'/dashboard-api/phone-locations',{headers:{'x-synthetic-manager':'yes'}});
+  for(const [status,transition] of [
+   [401,()=>{allowed=false;}],
+   [403,()=>{currentManager={...manager,manager_id:id(7)};}],
+   [403,()=>{currentManager={...manager,expires_at:'2000-01-01T00:00:00.000Z'};}],
+   [403,()=>{currentManager={...manager,permissions:{...manager.permissions,read:false}};}],
+  ]){
+   allowed=true;currentManager=manager;change=transition;
+   const denied=await get();assert.equal(denied.status,status);assert.equal((await denied.json()).data,undefined);
+  }
  }finally{await new Promise(r=>server.close(r));}
 });

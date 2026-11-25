@@ -420,15 +420,25 @@ function boundedWholeNumber(value, fallback, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, Number(raw)));
 }
 
-export async function listSharedEvents(runReadOnlySql) {
+export async function listSharedEvents(runReadOnlySql, { audience = 'manager', employeeId } = {}) {
+  if (!['manager', 'public', 'employee'].includes(audience) || (audience === 'employee' && !isUuid(employeeId)))
+    throw new Error('Current event audience required.');
+  const published = `e.status in ('SCHEDULED','CANCELLED','SUPERSEDED')
+    and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'`;
+  const general = `e.audience_scope in ('assigned_location','all_working_employees')`;
+  const scope = audience === 'manager'
+    ? `(e.status = 'NEEDS_REVIEW'
+      or (e.status = 'CANCELLED' and coalesce(e.needs_review,false) = true)
+      or (${published}))`
+    : `(${published})${audience === 'employee' ? " and coalesce((place.authority->>'admissible')::boolean,false)" : ""}
+      and (${general}${audience === 'employee'
+        ? ` or (e.audience_scope = 'specific_employees' and ${sqlLiteral(employeeId)}::uuid = any(e.audience_employee_ids))`
+        : ''})`;
+  // All operational consumers are bounded to the current/upcoming window.
+  // Historical held records stay in their source and manager review workflow.
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `(e.status = 'NEEDS_REVIEW' or
-      (e.status = 'CANCELLED' and coalesce(e.needs_review,false) = true) or
-      (e.status in ('SCHEDULED','CANCELLED','SUPERSEDED') and coalesce(e.needs_review, false) = false
-       and e.event_scope <> 'UNKNOWN'
-       and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date))`,
-    `order by case when e.status = 'NEEDS_REVIEW' then 0 else 1 end,
-      e.event_date asc, e.start_time asc, e.event_name asc limit 501`
+    `coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date and ${scope}`,
+    `order by e.event_date asc, e.start_time asc, e.event_name asc, e.id asc limit 501`
   ));
   if (!Array.isArray(rows) || rows.length > 500) throw new Error("Complete bounded event source unavailable.");
   return rows;
@@ -892,7 +902,7 @@ export function createEventsEmployeeRouter({
       if (!isUuid(employeeId) || !isUuid(credential.credential_id)) {
         return res.status(403).json({ok:false,error:"Current enrolled employee identity required."});
       }
-      const rows = await listSharedEvents(runReadOnlySql);
+      const rows = await listSharedEvents(runReadOnlySql, { audience: 'employee', employeeId });
       const events = employeeVisibleEvents(rows, employeeId).map(toEmployeeEvent);
       const syncStatus = typeof readSyncStatus === "function" ? await readSyncStatus().catch(() => null) : null;
       let schools = null, fresh = null;

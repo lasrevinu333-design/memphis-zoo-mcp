@@ -23,7 +23,7 @@ export async function readOutlookPublishedFeed({client,signal,assertCurrent,
   };
   current();
   const [events,mail]=await Promise.all([
-    listSharedEvents(checkedSql),
+    listSharedEvents(checkedSql,{audience:'public'}),
     (async()=>{current();const value=await readMail({client,signal});current();return value;})(),
   ]);
   current();

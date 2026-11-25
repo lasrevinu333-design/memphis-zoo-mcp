@@ -12,13 +12,13 @@ import {runReadOnlySql} from '../src/supabase/read.js';
 import {HISTORY_SQL} from '../src/gps-map-history.js';
 import {completeGpsHistoryRows,makeGpsMapContextHandler,installGpsMapContextRoute,GPS_MAP_CONTEXT_ROUTE} from '../src/gps-map-context-route.js';
 const id=n=>`94000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-const principal={role:'ops_manager',manager_id:id(1),credential_id:id(2),device_id:'SYNTHETIC_GPS_MANAGER',
+const principal={role:'ops_manager',manager_id:id(1),credential_id:id(2),device_id:'SYNTHETIC_GPS_MANAGER',expires_at:new Date(Date.now()+60000).toISOString(),
   read_only:true,permissions:{schema:'custodial.manager-permissions.v1',read:true,owner:false}};
 const instant=Date.parse('2026-10-09T16:10:00Z');
 const row={open_work_id:id(3),source_kind:'native_offline_context',work_session_id:null,work_context_id:id(3),work_session_uuid:'synthetic-native',client_session_id:'synthetic-native',employee_id:id(4),work_device_id:id(5),work_location_id:id(6),location_code:'SYNTHETIC_LOCATION',device_identifier:'SYNTHETIC_DEVICE',work_status:'active',started_at:'2026-10-09T16:00:00Z',ended_at:null,event_id:id(7),event_session_id:null,event_device_id:id(5),event_location_id:id(6),event_device_identifier:'SYNTHETIC_DEVICE',event_location_code:'SYNTHETIC_LOCATION',event_result:'location_uncalibrated',received_at:'2026-10-09T16:01:01Z',association_count:1,payload_json:{session_uuid:'synthetic-native',client_session_id:'synthetic-native',observed_at:'2026-10-09T16:01:00Z',client_latitude:35,client_longitude:-90,accuracy_m:5}};
 const complete=(rows=[row])=>({ok:true,row_limit_truncated:false,response_truncated:false,omitted_oversized_rows:0,rowCount:rows.length,originalRowCount:rows.length,rows});
 const response=()=>({headers:{},setHeader(k,v){this.headers[k]=v;},status(n){this.code=n;return this;},json(body){this.body=body;return this;}});
-const invoke=async({session=structuredClone(principal),query={},body={},result=complete(),read=null,now=()=>instant}={})=>{let calls=0;const req={memphisAuth:session,query,body},res=response();await makeGpsMapContextHandler({runReadOnlyQuery:async sql=>{calls++;assert.equal(sql,HISTORY_SQL);return read?read(req):result;},now})(req,res);return{req,res,calls};};
+const invoke=async({session=structuredClone(principal),query={},body={},result=complete(),read=null,now=()=>instant}={})=>{let calls=0;const req={memphisAuth:session,query,body},res=response();await makeGpsMapContextHandler({requireOpsManagerAuth:(_req,_res,next)=>next(),runReadOnlyQuery:async sql=>{calls++;assert.equal(sql,HISTORY_SQL);return read?read(req):result;},now})(req,res);return{req,res,calls};};
 
 test('named read-only manager consumes original native context and missing controls stay unverified',async()=>{const {res,calls}=await invoke();assert.equal(calls,1);assert.equal(res.code,200);assert.equal(res.headers['Cache-Control'],'private, no-store');assert.equal(res.body.meta.contract,'gps-map-context.v1');assert.equal(res.body.meta.manager_id,principal.manager_id);assert.equal(res.body.data.work[0].session.employeeId,id(4));assert.equal(res.body.data.work[0].session.sessionId,null);assert.equal(res.body.data.controls,null);assert.equal(res.body.data.geographic_registration,'unverified_controls_missing');});
 test('absent or malformed named manager and missing read permission refuse before SQL',async()=>{for(const delta of [null,{role:'employee'},{manager_id:'fake'},{credential_id:null},{permissions:{read:true}},{permissions:{schema:'custodial.manager-permissions.v1',read:false}}]){const session=delta===null?null:{...principal,...delta};const r=await invoke({session});assert.equal(r.res.code,403);assert.equal(r.calls,0);}});
@@ -51,8 +51,8 @@ await test('exact main mount, real signed/current-manager auth, loopback HTTP an
  const trusted={credential_id:principal.credential_id,device_id:principal.device_id,manager_id:manager.manager_id,manager,token_hash:'synthetic-test-only',max_access_level:'full_access',revoked_at:null,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+3600000).toISOString()};
  const token=createOpsManagerSession({credentialId:trusted.credential_id,deviceId:trusted.device_id,manager,accessLevel:'read_only',env}).token;
  const wrongIssuedDeviceToken=createOpsManagerSession({credentialId:trusted.credential_id,deviceId:'OTHER_ISSUED_DEVICE',manager,accessLevel:'read_only',env}).token;
- const app=express();let reads=0,fixtureResult=complete(),fixtureError=null;
- vm.runInNewContext(mount,{app,installGpsMapContextRoute,requireOpsManagerAuth:makeOpsAccessMiddleware({env,trustedDeviceStore:{find:async credential=>credential===trusted.credential_id?trusted:null}}),runSupabaseReadOnlySql:async({sql})=>{reads++;assert.equal(sql,HISTORY_SQL);if(fixtureError)throw fixtureError;return fixtureResult;}},{timeout:1000});
+ const app=express();let reads=0,fixtureResult=complete(),fixtureError=null,duringRead=null;
+ vm.runInNewContext(mount,{app,installGpsMapContextRoute,requireOpsManagerAuth:makeOpsAccessMiddleware({env,trustedDeviceStore:{find:async credential=>credential===trusted.credential_id?trusted:null}}),runSupabaseReadOnlySql:async({sql})=>{reads++;assert.equal(sql,HISTORY_SQL);if(fixtureError)throw fixtureError;duringRead?.();return fixtureResult;}},{timeout:1000});
  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
  const origin=`http://127.0.0.1:${server.address().port}`,url=origin+GPS_MAP_CONTEXT_ROUTE,headers={authorization:'Bearer '+token,'X-Device-Id':trusted.device_id};
  try{
@@ -62,16 +62,24 @@ await test('exact main mount, real signed/current-manager auth, loopback HTTP an
   await t.test('delegated readonly manager gets exact contract, not geographic admission',async()=>{const response=await fetch(url,{headers});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'private, no-store');const p=await response.json();assert.equal(p.meta.contract,'gps-map-context.v1');assert.equal(p.meta.manager_id,principal.manager_id);assert.equal(p.data.controls,null);assert.equal(p.data.work[0].session.employeeId,id(4));});
   await t.test('exact existing frontend path source consumes loopback-backed contract',async()=>{const require=createRequire(import.meta.url);assert.ok(process.env.CUSTODIAL_FRONTEND_ROOT,'CUSTODIAL_FRONTEND_ROOT must explicitly name the paired frontend checkout');
    const pathSource=require(resolve(process.env.CUSTODIAL_FRONTEND_ROOT,'custodial-gps-path-source.js'));const outgoing=[];let updated;const updateReady=new Promise(resolve=>updated=resolve);
-   const data=await pathSource.read({headers,onUpdate:updated,fetchImpl:async(u,o)=>{outgoing.push(u);assert.equal(o.method,'GET');assert.equal(o.cache,'no-store');
+   const data=await pathSource.read({headers,includeAssignedPhones:true,onUpdate:updated,fetchImpl:async(u,o)=>{outgoing.push(u);assert.equal(o.method,'GET');assert.equal(o.cache,'no-store');
     if(u===pathSource.API)return fetch(url,o);
     assert.equal(u,pathSource.PHONE_API);return {ok:true,status:200,json:async()=>({ok:true,meta:{contract:'custodial.assigned-phone-location.v1',generated_at:'2026-10-09T16:10:00Z'},data:{phones:[{deviceId:'SYNTHETIC_DEVICE'}]}})};
    }});
    const historyView=data.historyPending?await updateReady:data;
    assert.deepEqual(outgoing.sort(),[pathSource.API,pathSource.PHONE_API].sort());assert.equal(data.phones.length,1);assert.equal(data.phones[0].deviceId,'SYNTHETIC_DEVICE');
-   assert.equal(historyView.historyUnavailable,false);assert.equal(historyView.work.length,1);});
+   assert.equal(historyView.historyUnavailable,false);assert.equal(historyView.work.length,1);
+   outgoing.length=0;
+   const historyOnly=await pathSource.read({headers,fetchImpl:async(u,o)=>{outgoing.push(u);return fetch(url,o);}});
+   assert.deepEqual(outgoing,[pathSource.API]);assert.equal(historyOnly.work.length,1);});
   await t.test('forged query and POST do not reach reader',async()=>{const before=reads;assert.equal((await fetch(url+'?controls=forged',{headers})).status,422);assert.equal((await fetch(url,{headers,method:'POST'})).status,404);assert.equal(reads,before);});
   await t.test('partial rows cannot become HTTP success or frontend data',async()=>{fixtureResult={...complete(),row_limit_truncated:true};const r=await fetch(url,{headers});assert.equal(r.status,503);assert.equal((await r.json()).data,undefined);fixtureResult=complete();});
   await t.test('private SQL error is redacted',async()=>{fixtureError=new Error('PRIVATE SQL DETAIL');const r=await fetch(url,{headers});assert.equal(r.status,503);assert.doesNotMatch(await r.text(),/PRIVATE SQL DETAIL/);fixtureError=null;});
+  await t.test('registry revocation during read withholds history without modifying the request',async()=>{
+   duringRead=()=>{trusted.revoked_at=new Date().toISOString();};
+   try{const r=await fetch(url,{headers});assert.equal(r.status,401);assert.equal((await r.json()).data,undefined);}
+   finally{duringRead=null;trusted.revoked_at=null;}
+  });
   await t.test('current credential revocation and manager reassignment refuse before SQL',async()=>{const before=reads;trusted.revoked_at=new Date().toISOString();assert.equal((await fetch(url,{headers})).status,401);trusted.revoked_at=null;trusted.manager_id=id(90);assert.equal((await fetch(url,{headers})).status,403);assert.equal(reads,before);});
   }
  }finally{server.closeAllConnections();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}

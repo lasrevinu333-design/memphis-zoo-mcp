@@ -1,4 +1,4 @@
-import { hasManagerPermission } from './auth/manager-permissions.js';
+import { mapManagerBinding, recheckMapManager } from './auth/private-map-manager.js';
 
 export const PHONE_POSITION_PATH = '/scan-api/phone-position';
 export const PHONE_LOCATION_PATH = '/dashboard-api/phone-locations';
@@ -6,10 +6,6 @@ export const PHONE_LOCATION_CONTRACT = 'custodial.assigned-phone-location.v1';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 const fail=(status,code)=>{throw Object.assign(new Error(code),{status,code});};
-const principal=req=>req.memphisAuth?.role==='ops_manager'
-  &&UUID.test(req.memphisAuth.manager_id||'')&&UUID.test(req.memphisAuth.credential_id||'')
-  &&hasManagerPermission(req.memphisAuth,'read')
-  ? JSON.stringify([req.memphisAuth.manager_id,req.memphisAuth.credential_id,req.memphisAuth.device_id]):null;
 
 export function positionArguments(req,now=Date.now()) {
   const b=req.body,d=req.memphisDevice,c=req.memphisDeviceCredential;
@@ -63,14 +59,15 @@ export function installAssignedPhoneLocationRoutes(app,{parseJson,requireDevice,
   });
   app.get(PHONE_LOCATION_PATH,requireManager,async(req,res)=>{
     res.setHeader('Cache-Control','private, no-store');
-    const before=principal(req);
+    const before=mapManagerBinding(req.memphisAuth);
     if(!before)return res.status(403).json({ok:false,code:'named_manager_read_required'});
     if(Object.keys(req.query||{}).length||Object.keys(req.body||{}).length)
       return res.status(422).json({ok:false,code:'phone_location_filters_refused'});
     try{
       const rows=await runRpc('custodial_read_phone_positions',{}),instant=now();
       const phones=phoneLocations(rows,instant);
-      if(principal(req)!==before)return res.status(403).json({ok:false,code:'manager_authority_changed'});
+      const access=await recheckMapManager(req,before,requireManager);
+      if(access!==200)return res.status(access).json({ok:false,code:'manager_authority_changed'});
       return res.status(200).json({ok:true,data:{phones},meta:{contract:PHONE_LOCATION_CONTRACT,generated_at:new Date(instant).toISOString()}});
     }catch{return res.status(503).json({ok:false,code:'phone_locations_unavailable'});}
   });

@@ -47,7 +47,9 @@ function mailFeed(feed, fields) {
 }
 export function publicOperationsDetails(events, mail, now = new Date(), city = null) {
   // Addressed employee messages and unresolved audiences are not a public event feed.
-  const visible = events.filter(row => ['assigned_location','all_working_employees'].includes(row?.audience_scope));
+  const visible = events.filter(row => ['assigned_location','all_working_employees'].includes(row?.audience_scope)
+    && ['SCHEDULED','CANCELLED','SUPERSEDED'].includes(row.status)
+    && row.needs_review !== true);
   return {schema:'custodial.operations-board.v1',generated_at:now.toISOString(),timezone:'America/Chicago',
     events:projectOperationsEvents(visible),
     manager_on_duty:managerOnDuty(chicagoServiceDate(now)),

@@ -138,7 +138,7 @@ export function createReadOnlyPool({ connectionString = readOnlyDatabaseUrl(), P
   if (!connectionString) {
     throw new Error("CUSTODIAL_READONLY_DATABASE_URL is required for database reads.");
   }
-  return new PoolClass({
+  const pool = new PoolClass({
     connectionString,
     max: 6,
     idleTimeoutMillis: 10_000,
@@ -146,6 +146,12 @@ export function createReadOnlyPool({ connectionString = readOnlyDatabaseUrl(), P
     application_name: "memphis-custodial-readonly",
     types: readOnlyPgTypes,
   });
+  pool.on?.("error", () => {
+    // pg-pool has already removed the failed idle connection. Avoid logging
+    // connection details, which can contain private database configuration.
+    console.warn("Dedicated database reader lost an idle connection.");
+  });
+  return pool;
 }
 
 function resolveReadOnlyPool(pool) {
@@ -256,6 +262,9 @@ async function rollbackQuietly(client) {
 async function executeInReadOnlyTransaction(pool, sql) {
   const client = await resolveReadOnlyPool(pool).connect();
   let reusable = true;
+  let connectionError = null;
+  const onConnectionError = error => { connectionError ??= error; };
+  client.on?.("error", onConnectionError);
   try {
     await client.query("begin isolation level repeatable read read only");
     await client.query(`set local statement_timeout = '${DEFAULT_SQL_READ_STATEMENT_TIMEOUT_MS}ms'`);
@@ -264,13 +273,18 @@ async function executeInReadOnlyTransaction(pool, sql) {
     await assertDedicatedReadAuthority(client);
     const result = await client.query(sql);
     await client.query("commit");
+    if (connectionError) throw connectionError;
     return result.rows;
   } catch (error) {
     reusable = false;
     await rollbackQuietly(client);
     throw error;
   } finally {
-    client.release(reusable ? undefined : new Error("read-only database transaction failed"));
+    try {
+      client.release(connectionError || (reusable ? undefined : new Error("read-only database transaction failed")));
+    } finally {
+      client.removeListener?.("error", onConnectionError);
+    }
   }
 }
 
