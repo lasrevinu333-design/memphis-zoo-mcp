@@ -3835,7 +3835,7 @@
       {
         "path": "scripts/apply-current429-forward-plan.mjs",
         "mode": "100644",
-        "object_id": "8a9e7a5e44d2e8a075a45dd9db6e0b0d6e9064e1"
+        "object_id": "adef80d287ce62aee48b2508927a28069b9e9048"
       },
       {
         "path": "scripts/apply-production-restore-reconciliation.mjs",
@@ -4550,7 +4550,7 @@
       {
         "path": "scripts/current428-rollback-target.mjs",
         "mode": "100644",
-        "object_id": "c2f3fe74a0381ab123990b09785acec9b7b5798b"
+        "object_id": "90825874234f957434a342289a7029433a6a3cb8"
       },
       {
         "path": "scripts/current429-forward-qualification-source.mjs",
@@ -4565,7 +4565,7 @@
       {
         "path": "scripts/current429-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "82a992ddcad003e18eed1c7ce800b3c9e2f14a6a"
+        "object_id": "313933a08f7e038a61dd850c723dde608483985a"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -10580,7 +10580,7 @@
       {
         "path": "scripts/verify-current429-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "4a4d9b4897e45e25231e1837b20cf4d78e6f51b0"
+        "object_id": "50ae5bf1f8f440b32872333057213bc048b9a98c"
       },
       {
         "path": "scripts/verify-encrypted-backup-readback.py",
