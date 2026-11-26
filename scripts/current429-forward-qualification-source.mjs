@@ -6,13 +6,14 @@ import {readVerifiedMigrationTargetCaptureSource,readVerifiedArchiveSourceBindin
 import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {splitSchemaStatements} from './isolated-event-owner-schema.mjs';
 import {readVerifiedCurrent428ForwardQualificationSource} from './current428-forward-qualification-source.mjs';
+import {current429BackupDigest} from './immutable-current429-recurring-receipt-source.mjs';
 
 export const current429 = Object.freeze({
   runId:'45645963579',
   artifactId:'15039085011',
   ciphertextBytes:96961760,
   ciphertextSha256:'86e4a42617a7da2c9b6b28ef24a8d3cef9e0e64580fba77aa94666effb8cf3db',
-  archiveDigest:'f305655a56e2538b41a21293f76750c752ec063196cac452ad11d9fe9865c489',
+  archiveDigest:current429BackupDigest,
   producerCommit:'75c5ef7badbd4e0298830a53460ec38aaf404c20',
   producerTree:'1b68053e55857f2ea8bc8b3eb04cc6e37f2f71dc',
   projectRef:'rqquvtjdmugpigbndmne',

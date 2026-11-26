@@ -114,6 +114,54 @@
           "previous": ""
         }
       ]
+    },
+    "scripts/immutable-private-data-import.mjs": {
+      "previous_sha256": "8e0d041aed3b88655aece12b101b515c56ee91ac41a83a8243a34f178f83a43c",
+      "current_sha256": "cbbaef7f2f67e01216ffc015d67303216d5e1987ba5287c8220b92617edd44ad",
+      "reverse_hunks": [
+        {
+          "start": 964,
+          "end": 1056,
+          "current": "import {current429BackupDigest} from './immutable-current429-recurring-receipt-source.mjs';\n",
+          "previous": ""
+        },
+        {
+          "start": 56546,
+          "end": 56749,
+          "current": "  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'\n    ?(original.sourceBinding.archive_digest===current429BackupDigest?52:51)\n",
+          "previous": "  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?51\n"
+        },
+        {
+          "start": 193770,
+          "end": 193973,
+          "current": "  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'\n    ?(original.sourceBinding.archive_digest===current429BackupDigest?52:51)\n",
+          "previous": "  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?51\n"
+        }
+      ]
+    },
+    "scripts/immutable-private-source-initializer.mjs": {
+      "previous_sha256": "eaf71a749e75e4723063723091af9b2b092fef665b28bf069aee3440e4b777bc",
+      "current_sha256": "7c7cff9354850ab6e02e2fcbff4c0d162ff79f93f9724e7d60731b955b8dc5aa",
+      "reverse_hunks": [
+        {
+          "start": 1032,
+          "end": 1149,
+          "current": "import {current429BackupDigest,recurringReceiptIdentity} from './immutable-current429-recurring-receipt-source.mjs';\n",
+          "previous": ""
+        },
+        {
+          "start": 13522,
+          "end": 13700,
+          "current": " const current429=source.sourceBinding?.archive_digest===current429BackupDigest;\n const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?(current429?52:51):25;\n",
+          "previous": " const recipeCount=ownerProfile.id==='immutable-private-current-postgres'?51:25;\n"
+        },
+        {
+          "start": 13809,
+          "end": 15715,
+          "current": " if(ownerProfile.id==='immutable-private-current-postgres'){\n  if(current429)assert.equal(recipeIdentities.at(-1),recurringReceiptIdentity);\n  const priorIdentities=current429?recipeIdentities.slice(0,-1):recipeIdentities;\n  assert.equal(priorIdentities.at(-26),'custodial_coverall.bind_manual_delivery_after_acceptance()');\n  assert.equal(priorIdentities.at(-25),'custodial_leadership_private.bind_registration_generation()');\n  assert.equal(priorIdentities.at(-24),'public.custodial_oc24_completion_selection_guard()');\n  assert.equal(priorIdentities.at(-23),'public.sch_guard_operational_coverage_template()');\n  assert.equal(priorIdentities.at(-22),'public.sch_guard_restricted_coverage_template()');\n  assert.equal(priorIdentities.at(-21),'public.sch_daily_absence_override_regenerate_trigger()');\n  assert.equal(priorIdentities.at(-20),'public.static_weekly_reject_legacy_daily_schedule_write()');\n  assert.deepEqual(priorIdentities.slice(-19),[\"custodial_coverall.reconcile_manual_delivery_after_lunch()\",\"public.capture_system_feedback_email_intent()\",\"public.custodial_sessions_preserve_original_identity()\",\"public.gemini_console_require_live_worker()\",\"public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()\",\"public.ops_manager_notification_bind_credential()\",\"public.prevent_duplicate_daily_schedule_assignment()\",\"public.sch_apply_default_coverage_purpose()\",\"public.sch_clear_scan_alerts_after_scan_event()\",\"public.sch_guard_operational_daily_assignment()\",\"public.sch_guard_restricted_daily_assignment()\",\"public.sch_guard_restricted_location_coverage_template()\",\"public.sch_pto_absence_sync_trigger()\",\"public.static_weekly_component_guard()\",\"public.static_weekly_sch022_occurrence_gate()\",\"public.static_weekly_sch022_publication_gate()\",\"public.static_weekly_v8_guard_vacancy_closure()\",\"public.static_weekly_version_guard()\",\"public.sync_migration_log_summary()\"]);\n",
+          "previous": " if(recipeCount===51){\n  assert.equal(recipeIdentities.at(-26),'custodial_coverall.bind_manual_delivery_after_acceptance()');\n  assert.equal(recipeIdentities.at(-25),'custodial_leadership_private.bind_registration_generation()');\n  assert.equal(recipeIdentities.at(-24),'public.custodial_oc24_completion_selection_guard()');\n  assert.equal(recipeIdentities.at(-23),'public.sch_guard_operational_coverage_template()');\n  assert.equal(recipeIdentities.at(-22),'public.sch_guard_restricted_coverage_template()');\n assert.equal(recipeIdentities.at(-21),'public.sch_daily_absence_override_regenerate_trigger()');\n  assert.equal(recipeIdentities.at(-20),'public.static_weekly_reject_legacy_daily_schedule_write()');\n  assert.deepEqual(recipeIdentities.slice(-19),[\"custodial_coverall.reconcile_manual_delivery_after_lunch()\",\"public.capture_system_feedback_email_intent()\",\"public.custodial_sessions_preserve_original_identity()\",\"public.gemini_console_require_live_worker()\",\"public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()\",\"public.ops_manager_notification_bind_credential()\",\"public.prevent_duplicate_daily_schedule_assignment()\",\"public.sch_apply_default_coverage_purpose()\",\"public.sch_clear_scan_alerts_after_scan_event()\",\"public.sch_guard_operational_daily_assignment()\",\"public.sch_guard_restricted_daily_assignment()\",\"public.sch_guard_restricted_location_coverage_template()\",\"public.sch_pto_absence_sync_trigger()\",\"public.static_weekly_component_guard()\",\"public.static_weekly_sch022_occurrence_gate()\",\"public.static_weekly_sch022_publication_gate()\",\"public.static_weekly_v8_guard_vacancy_closure()\",\"public.static_weekly_version_guard()\",\"public.sync_migration_log_summary()\"]);\n"
+        }
+      ]
     }
   }
 }

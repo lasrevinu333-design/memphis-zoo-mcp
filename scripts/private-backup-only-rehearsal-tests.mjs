@@ -923,6 +923,7 @@ test('actual rehearsal host binds the same closed PostgreSQL memory allowance it
 });
 
 test('bounded substage checkpoints survive both privacy layers without changing source execution or admitting work',async()=>{
+ const {removeCurrent429Qualification}=await import('./private-context-cost-source-proof.mjs');
  const {recordImmutableFreshProgress}=await import('./immutable-private-stage-diagnostic.mjs?bounded_progress_unit_20261120');
  const keys=['RESTORE_PRIVATE_DIAGNOSTICS','REHEARSAL_SCOPE','OFFICIAL_LOCAL_STORAGE_PROVIDER','RESTORE_DATABASE_ONLY'];
  const wanted=['bounded-v1','backup_only','true','true'],saved=keys.map(k=>process.env[k]),originalError=console.error,lines=[];
@@ -949,6 +950,7 @@ test('bounded substage checkpoints survive both privacy layers without changing 
  for(const [path,pin]of [['immutable-private-source-initializer.mjs','43d7d9af01713b72979b466d503be333ba4b6665e5e4f2340b602b22b5475d79'],['immutable-private-data-import.mjs','3bb989f9b40ab83ef16330f6f79bb36355db5118810ed201cd797b5ee3590558']]){
   let source=readFileSync(new URL('./'+path,import.meta.url),'utf8');
   if(path==='immutable-private-data-import.mjs')source=removeCurrentBoundedOrdinaryConsumerSource(source);
+  else source=removeCurrent429Qualification('scripts/'+path,source);
   assert.ok(source.includes('recordImmutableFreshProgress({'));
   source=source.replace(/^[ \t]*recordImmutableFreshProgress\(\{[^;\n]+\}\);\n/gm,'').replace('recordImmutableFreshFailure,recordImmutableFreshProgress','recordImmutableFreshFailure');
   assert.equal(hash(source),pin,'every validation, SQL, refusal, cleanup and deadline byte survives: '+path);

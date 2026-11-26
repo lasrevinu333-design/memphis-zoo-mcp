@@ -7,6 +7,7 @@ import {readVerifiedPrivateImportSource,readVerifiedImmutableBootstrapInventory,
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
+import {current429BackupDigest,readVerifiedCurrent429RecurringReceiptSource} from './immutable-current429-recurring-receipt-source.mjs';
 const profileReads=new WeakMap();
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const guards=[
@@ -16,7 +17,7 @@ const guards=[
 const tables=[['custodial_release_identity','group_original_creations'],['custodial_release_identity','employee_message_original_outcomes'],['public','release_deployment_manifest'],['public','custodial_release_authority_restore_inventory']];
 const one=rows=>{assert.equal(rows.length,1);return rows[0];};
 // Pure testable DATA validator. Its return value is never a Source capability.
-function inspectOriginalOwnerData({inventory,catalog}){
+function inspectOriginalOwnerData({inventory,catalog},current429Program=null){
  const originals=JSON.parse(inventory['inventory/original-guards.json']),relations=JSON.parse(inventory['inventory/original-relations.json']),acls=JSON.parse(inventory['inventory/original-acls.json']);
  assert.ok(Array.isArray(originals)&&originals.length===2&&Array.isArray(relations)&&Array.isArray(acls.routines)&&Array.isArray(acls.relations)&&Array.isArray(acls.namespaces_columns));
  const actor=originals[0].owner;assert.ok(actor==='postgres'||actor==='supabase_admin');
@@ -26,9 +27,11 @@ function inspectOriginalOwnerData({inventory,catalog}){
   assert.equal(one(relations.filter(r=>r.schema_name===schema_name&&r.table_name===table_name)).owner_name,actor);
   assert.equal(one(acls.relations.filter(r=>r.kind==='TABLE'&&r.schema_name===schema_name&&r.object_name===table_name)).owner_name,actor);
  }
- const domain=loadImmutableDomainSourceRecipes(),messages=loadImmutableMessageSourceRecipes(),current=loadImmutableCurrentPostgresSource();
+ const domain=loadImmutableDomainSourceRecipes(),messages=loadImmutableMessageSourceRecipes();
+ const current=current429Program??loadImmutableCurrentPostgresSource();
+ if(current429Program)assert.equal(actor,'postgres');
  const recipes=actor==='postgres'?current.recipes:[...domain.recipes,...messages.recipes];
- assert.equal(recipes.length,actor==='postgres'?49:23);assert.ok(Array.isArray(catalog.functions));
+ assert.equal(recipes.length,actor==='postgres'?(current429Program?50:49):23);assert.ok(Array.isArray(catalog.functions));
  for(const r of recipes){
   const fn=one(catalog.functions.filter(f=>`${f.schema_name}.${f.function_name}(${f.identity_arguments})`===r.identity));
   assert.equal(sha(fn.definition),r.beforeHash); // Exact original includes SECURITY DEFINER/INVOKER, config and body.
@@ -50,7 +53,11 @@ export function readVerifiedImmutableArchiveOwnerProfile(verifiedArchive){
  let record=profileReads.get(verifiedArchive);
  if(record){
   assert.equal(record.sourceBinding,original.sourceBinding);assert.equal(record.inventory,observed.inventory);assert.equal(record.catalog,capture.catalog);
- }else record={...inspectOriginalOwnerData({inventory:observed.inventory,catalog:capture.catalog}),sourceBinding:original.sourceBinding,inventory:observed.inventory,catalog:capture.catalog};
+ }else {
+  const current429Program=original.sourceBinding.archive_digest===current429BackupDigest?readVerifiedCurrent429RecurringReceiptSource(verifiedArchive):null;
+  record={...inspectOriginalOwnerData({inventory:observed.inventory,catalog:capture.catalog},current429Program),
+   sourceBinding:original.sourceBinding,inventory:observed.inventory,catalog:capture.catalog};
+ }
  // Immutable derived DATA may be reused, never its earlier currentness verdict.
  record.domain.assertCurrent();record.messages.assertCurrent();record.current.assertCurrent();
  assert.equal(readVerifiedPrivateImportSource(verifiedArchive).sourceBinding,original.sourceBinding);

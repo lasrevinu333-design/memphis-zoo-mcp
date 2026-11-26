@@ -10,6 +10,7 @@ import {readVerifiedPrivateImportSource,openVerifiedRestoreTableData,decodeResto
   createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding,readVerifiedImmutableBootstrapInventory,
   assertRestoreRowMutationFidelity,assertVerifiedLegacyRestoreDataCurrent} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
+import {current429BackupDigest} from './immutable-current429-recurring-receipt-source.mjs';
 import {immutableTextCodecSourceHashes} from './immutable-text-codec-profile.mjs';
 import {deriveOriginalAuthEnumDescriptors} from './immutable-original-enum-source.mjs';
 import {splitSchemaStatements} from './isolated-event-owner-schema.mjs';
@@ -837,7 +838,8 @@ export async function stageVerifiedImmutableFreshData(options) {
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
   const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
-  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?51
+  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'
+    ?(original.sourceBinding.archive_digest===current429BackupDigest?52:51)
     :initializedOwner.id==='immutable-private-legacy-supabase-admin'&&initializedOwner.actor==='supabase_admin'?25:null;
   if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
     ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false
@@ -2659,7 +2661,8 @@ export async function diagnoseVerifiedImmutableFreshContextCost(options) {
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
   const initializedOwner=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
-  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'?51
+  const initializedRecipeCount=initializedOwner.id==='immutable-private-current-postgres'&&initializedOwner.actor==='postgres'
+    ?(original.sourceBinding.archive_digest===current429BackupDigest?52:51)
     :initializedOwner.id==='immutable-private-legacy-supabase-admin'&&initializedOwner.actor==='supabase_admin'?25:null;
   if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
     ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false

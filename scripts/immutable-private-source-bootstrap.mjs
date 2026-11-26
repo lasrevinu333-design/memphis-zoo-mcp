@@ -10,6 +10,7 @@ import {readVerifiedPrivateImportSource,readVerifiedImmutableBootstrapInventory,
  collectVerifiedRestoreBootstrapRows,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
+import {current429BackupDigest,readVerifiedCurrent429RecurringReceiptSource} from './immutable-current429-recurring-receipt-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 
@@ -191,15 +192,19 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   releaseTable:releaseTable[0],signedRelease:identity.release});
  sourcePhase='SOURCE_RECIPES';
  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
- const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
+ const current429=original.sourceBinding.archive_digest===current429BackupDigest;
+ let postgresProgram=null;
+ if(ownerProfile.id==='immutable-private-current-postgres')
+  postgresProgram=current429?readVerifiedCurrent429RecurringReceiptSource(verifiedArchive):loadImmutableCurrentPostgresSource();
  const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
- const recipeCount=postgresProgram?51:25;
+ const recipeCount=postgresProgram?(current429?52:51):25;
  assert.equal(allRecipes.length,recipeCount);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,recipeCount);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
   assert.ok(/^(public|custodial_dr|custodial_release_identity)\.[a-z_][a-z0-9_]*\(\)$/.test(recipe.identity)
    ||postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
     'custodial_coverall.reconcile_manual_delivery_after_lunch()',
+    'custodial_coverall.reconcile_manual_delivery_after_recurring_receipt()',
     'custodial_leadership_private.bind_registration_generation()'].includes(recipe.identity));
   for(const key of ['before','after'])assert.equal(typeof recipe[key],'string');
   for(const key of ['beforeHash','afterHash','beforeBodyHash','afterBodyHash'])assert.match(recipe[key],/^[a-f0-9]{64}$/);
@@ -215,7 +220,9 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
    ?[recipe.identity,recipe.identity.slice(7)]:[recipe.registry_identity];
   const found=originalRows.filter(row=>row.object_kind==='function'&&aliases.includes(row.object_identity));
   if(postgresProgram&&['custodial_coverall.bind_manual_delivery_after_acceptance()',
-   'custodial_coverall.reconcile_manual_delivery_after_lunch()','public.sync_migration_log_summary()'].includes(recipe.identity)){
+   'custodial_coverall.reconcile_manual_delivery_after_lunch()',
+   'custodial_coverall.reconcile_manual_delivery_after_recurring_receipt()',
+   'public.sync_migration_log_summary()'].includes(recipe.identity)){
    assert.equal(found.length,0,'Fixed current unregistered callback must not rewrite original registry DATA');continue;
   }
   if(recipe.identity==='custodial_dr.guard_application_mutation()'){assert.equal(found.length,0);continue;}

@@ -7,6 +7,8 @@ import {assertCurrent429CatalogDelta} from './current429-forward-readback.mjs';
 import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
 import {verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
 import {stableJson,signBinding,releaseMigrationRehearsalAttestationBinding} from './disaster-recovery-crypto.mjs';
+import {compileCurrent429RecurringReceiptSource,readVerifiedCurrent429RecurringReceiptSource,recurringReceiptIdentity} from './immutable-current429-recurring-receipt-source.mjs';
+import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
 
 test('exact source plan binds four migrations to baseline 429',()=>{
   const plan=readCurrent429Plan();
@@ -30,6 +32,33 @@ test('backup 45645963579 admission checks the signed v2 migration head field',()
   assert.doesNotThrow(()=>assertCurrent429ForwardMetadata(metadata));
   assert.throws(()=>assertCurrent429ForwardMetadata({...metadata,binding:{...metadata.binding,
     captured_migration_head:'20261115162648',captured_ledger_head:current429.sourceHead}}));
+});
+
+test('the 429 restore supports exactly the signed recurring receipt callback without changing its normal body',()=>{
+  const original=loadImmutableCurrentPostgresSource();
+  const extended=compileCurrent429RecurringReceiptSource();
+  extended.assertCurrent();
+  assert.throws(()=>readVerifiedCurrent429RecurringReceiptSource({archive_digest:current429.archiveDigest}));
+  assert.deepEqual(extended.recipes.slice(0,-1),original.recipes);
+  assert.deepEqual(extended.statements.slice(1,-1),original.statements.slice(1,-1));
+  const recipe=extended.recipes.at(-1);
+  assert.equal(recipe.identity,recurringReceiptIdentity);
+  assert.equal(recipe.beforeHash,'d2e502ffaa6767d8bd0f51e64e1998f2fecfa078a4c55538ec6b2fdb2f4708e2');
+  assert.equal(recipe.after.replace(/ -- Historical receipt DATA[^]*? THEN RETURN NEW; END IF;\n/,''),recipe.before);
+  assert.match(recipe.after,/current_user=session_user AND current_user='postgres'/);
+  assert.match(recipe.after,/immutable_import_matches_deferred_original_record\(TG_RELID,NEW\) IS TRUE/);
+  const rows=(statement,tag)=>JSON.parse(statement.sql.split(tag)[1]);
+  const guards='$current_original_guard_cohort$',profiles='$current_original_guard_profiles$';
+  const admission=rows(extended.statements[0],guards);
+  const installation=rows(extended.statements.at(-1),profiles);
+  assert.deepEqual(admission.slice(0,-1),rows(original.statements[0],guards));
+  assert.deepEqual(installation.slice(0,-1),rows(original.statements.at(-1),profiles));
+  const {identity,definition_sha256,registry_identity,security_definer,...trigger}=admission.at(-1);
+  assert.deepEqual([identity,definition_sha256,registry_identity,security_definer],[recipe.identity,recipe.afterHash,null,true]);
+  assert.deepEqual([trigger.schema,trigger.table,trigger.name,trigger.type,trigger.enabled,trigger.constraint,trigger.deferrable,trigger.initially_deferred],
+    ['custodial_coverall','recurring_materialization_receipts','manual_recurring_delivery_after_receipt',5,'O',true,true,true]);
+  assert.deepEqual(installation.at(-1).triggers,[trigger]);
+  assert.match(extended.statements.at(-1).sql,/p_table_oid NOT IN\([^\n]+,'custodial_coverall\.recurring_materialization_receipts'::regclass\)/);
 });
 
 test('only the four exact routine additions and their intended grants may survive in the target',()=>{
