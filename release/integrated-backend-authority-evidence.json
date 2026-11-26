@@ -9145,7 +9145,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "de105f7ee475e4d995d610fa5823cd1c6f80cec2"
+        "object_id": "8eae73c8dc7bc6b846ea2f9bf4448e9f61a85ac6"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
