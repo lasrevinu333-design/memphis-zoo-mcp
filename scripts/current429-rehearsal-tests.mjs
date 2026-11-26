@@ -1,7 +1,8 @@
 import test from 'node:test';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {current429,readCurrent429Plan,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';
+import {assertCurrent429ForwardMetadata,current429,readCurrent429Plan,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';
 import {assertCurrent429CatalogDelta} from './current429-forward-readback.mjs';
 import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
 import {verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
@@ -14,6 +15,21 @@ test('exact source plan binds four migrations to baseline 429',()=>{
   assert.equal(plan.pending.length,4);
   assert.ok(plan.pending.every(item=>item.version>current429.sourceHead&&!/^\s*begin;/i.test(item.body)));
   assert.throws(()=>readVerifiedCurrent429ForwardQualificationSource({...current429}));
+});
+
+test('backup 45645963579 admission checks the signed v2 migration head field',()=>{
+  const declaration=JSON.parse(readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+  const metadata={
+    sourceBinding:{archive_digest:current429.archiveDigest,project_ref:declaration.project_ref,source_identity:{
+      backup_tool_commit:current429.producerCommit,backup_tool_tree:current429.producerTree,
+      migration_ledger_sha256:current429.sourceLedgerSha256,
+    }},
+    binding:{captured_migration_head:declaration.observed_ledger_head,captured_ledger_count:declaration.observed_ledger_count,
+      ledger_sha256:declaration.ledger_sha256,catalog_fingerprint:declaration.observed_catalog_fingerprint},
+  };
+  assert.doesNotThrow(()=>assertCurrent429ForwardMetadata(metadata));
+  assert.throws(()=>assertCurrent429ForwardMetadata({...metadata,binding:{...metadata.binding,
+    captured_migration_head:'20261115162648',captured_ledger_head:current429.sourceHead}}));
 });
 
 test('only the four exact routine additions and their intended grants may survive in the target',()=>{

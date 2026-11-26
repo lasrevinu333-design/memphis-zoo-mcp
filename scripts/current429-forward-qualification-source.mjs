@@ -60,19 +60,24 @@ export function readCurrent429Plan() {
     expected_target_ledger_count:current429.sourceCount+pending.length,expected_target_ledger_head:pending.at(-1).version});
 }
 
-export function readVerifiedCurrent429ForwardQualificationSource(archive) {
-  const original=readVerifiedMigrationTargetCaptureSource(archive);
-  const {sourceBinding:s,binding,catalog,ledger}=original;
-  verifyArchivedLedgerV2({summary:s.summary,binding,catalog,ledger});
+// Check the exact backup pins after authenticating and validating the archive.
+export function assertCurrent429ForwardMetadata({sourceBinding:s,binding}) {
   assert.equal(s.archive_digest,current429.archiveDigest);
   assert.equal(s.project_ref,current429.projectRef);
   assert.equal(s.source_identity.backup_tool_commit,current429.producerCommit);
   assert.equal(s.source_identity.backup_tool_tree,current429.producerTree);
   assert.equal(s.source_identity.migration_ledger_sha256,current429.sourceLedgerSha256);
-  assert.equal(binding.captured_ledger_head,current429.sourceHead);
+  assert.equal(binding.captured_migration_head,current429.sourceHead);
   assert.equal(binding.captured_ledger_count,current429.sourceCount);
   assert.equal(binding.ledger_sha256,current429.sourceTupleSha256);
   assert.equal(binding.catalog_fingerprint,current429.sourceCatalog);
+}
+
+export function readVerifiedCurrent429ForwardQualificationSource(archive) {
+  const original=readVerifiedMigrationTargetCaptureSource(archive);
+  const {sourceBinding,binding,catalog,ledger}=original;
+  verifyArchivedLedgerV2({summary:sourceBinding.summary,binding,catalog,ledger});
+  assertCurrent429ForwardMetadata(original);
   const owner={id:'immutable-private-current-postgres',actor:'postgres'};
   assert.deepEqual(readVerifiedImmutableArchiveOwnerProfile(archive),owner);
   const plan=readCurrent429Plan();
