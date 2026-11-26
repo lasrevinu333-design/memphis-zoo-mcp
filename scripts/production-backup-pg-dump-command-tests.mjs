@@ -222,7 +222,7 @@ if(process.argv.includes('--native-text-columns-producer-only')){
  const loopEnd=source.indexOf('  const buckets = await client.query(',loopStart);
  assert.ok(loopStart>0&&loopEnd>loopStart);
  const capture=new AsyncFunction('ports',`const {catalogResult,client,quoteIdentifier,qualified,backupTextColumnsProjection,
-  productionBackupRowCount,join,backupDir,createWriteStream,finished,pageSize,requireProductionBackupPage,
+  productionBackupRowCount,join,backupDir,createWriteStream,finished,once,pageSize,requireProductionBackupPage,
   encodeProductionBackupTextColumnsDataRow,chmodSync,productionBackupTextColumnsDataEncoding}=ports;
   const tableCatalog=[];let databaseRowCount=0;${source.slice(loopStart,loopEnd)}\nreturn {tableCatalog,databaseRowCount};`);
  const columns=[{name:'payload',generated:'',identity:'',data_type:'json'},
@@ -236,24 +236,40 @@ if(process.argv.includes('--native-text-columns-producer-only')){
  const rawJSONNull=rawSQLNull.replace('"payload" : null','"payload" : "null"').replace('"document" : null','"document" : "null"');
  async function recorded(options={}){
   const {join}=await import('node:path');
+  const {once}=await import('node:events');
   const catalogs=options.catalogs??[{schema_name:'custodial_release_identity',table_name:'unit_original',columns,primary_key:['identity_value']}];
   const records=options.records??[rawSQLNull,rawJSONNull,rawJSONNull],events=[],streams=[],lines=[],queries=[],chmods=[];
   let result,error,failed=false;
   const pageError=Error('UNIT_PAGE_REFUSED'),countError=Error('UNIT_COUNT_REFUSED');
+  let cursorOffset=null;
   const client={async query(statement,args){
    events.push('query');queries.push({statement,args});
    if(statement.startsWith('select count(*)::bigint')){
+    assert.equal(cursorOffset,null);
     if(options.countFailure)throw countError;return {rowCount:1,rows:[{row_count:String(options.declaredCount??records.length)}]};
    }
-   assert.ok(statement.startsWith('select pg_catalog.json_object(ARRAY['));
-   assert.ok(statement.endsWith('limit $1 offset $2) snapshot_row'));
-   assert.ok(!statement.includes('row_to_json(')&&!statement.includes('::jsonb'));
+   if(statement.startsWith('declare ')){
+    assert.equal(cursorOffset,null);
+    assert.ok(statement.startsWith('declare custodial_backup_rows no scroll cursor without hold for select pg_catalog.json_object(ARRAY['));
+    assert.ok(statement.endsWith(') snapshot_row'));
+    assert.doesNotMatch(statement,/row_to_json\(|::jsonb|\boffset\b/i);
+    cursorOffset=0;
+    return {rowCount:null,rows:[]};
+   }
+   assert.ok(Number.isSafeInteger(cursorOffset));
+   if(statement==='close custodial_backup_rows'){
+    cursorOffset=null;
+    return {rowCount:null,rows:[]};
+   }
+   const match=statement.match(/^fetch forward ([1-9][0-9]*) from custodial_backup_rows$/);
+   assert.ok(match);
    if(options.pageFailure)throw pageError;
-   const selected=records.slice(args[1],args[1]+args[0]);
+   const selected=records.slice(cursorOffset,cursorOffset+Number(match[1]));
+   cursorOffset+=selected.length;
    return {rowCount:selected.length,rows:selected.map(row=>({row}))};
   }};
   const ports={catalogResult:{rows:catalogs},client,quoteIdentifier,qualified,backupTextColumnsProjection:projection,
-   productionBackupRowCount,join,backupDir:'/UNIT-inert-no-file-capture',pageSize:2,finished,
+   productionBackupRowCount,join,backupDir:'/UNIT-inert-no-file-capture',pageSize:2,finished,once,
    requireProductionBackupPage,encodeProductionBackupTextColumnsDataRow:backupWire.encodeProductionBackupTextColumnsDataRow,
    productionBackupTextColumnsDataEncoding:backupWire.productionBackupTextColumnsDataEncoding,
    chmodSync(path,mode){chmods.push({path,mode});events.push('chmod');},
@@ -271,7 +287,13 @@ if(process.argv.includes('--native-text-columns-producer-only')){
   assert.equal(found.result.databaseRowCount,3);assert.equal(found.result.tableCatalog[0].row_count,'3');
   assert.equal(found.result.tableCatalog[0].data_encoding,'postgres-text-columns-line.v2');
   assert.strictEqual(found.result.tableCatalog[0].columns,columns);cases++;
-  assert.deepEqual(found.queries.slice(1).map(q=>q.args),[[2,0],[2,2]]);
+  assert.deepEqual(found.queries.slice(2).map(q=>q.statement),[
+   'fetch forward 2 from custodial_backup_rows','fetch forward 2 from custodial_backup_rows',
+   'fetch forward 1 from custodial_backup_rows','close custodial_backup_rows',
+  ]);
+  const excess=await recorded({declaredCount:2});
+  assert.match(excess.error?.message,/more rows than its exact snapshot count/);
+  assert.equal(excess.chmods.length,0);
   assert.ok(found.queries[1].statement.includes('from only "custodial_release_identity"."unit_original" order by "identity_value"'));
   for(const column of columns)assert.ok(found.queries[1].statement.includes(`snapshot_row."${column.name}"::text`));cases++;
   assert.equal(found.streams.length,1);assert.equal(found.streams[0].writableFinished,true);assert.equal(found.streams[0].destroyed,true);

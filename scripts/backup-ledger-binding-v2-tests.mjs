@@ -168,7 +168,7 @@ test('426provenance is exact source-only addition with no private absolute paths
  assert.equal(p.statement_source_bindings.length,1);const row=p.statement_source_bindings[0];assert.equal(row.retained_path,'release/installed-source/'+s.source_file);assert.equal(row.installed_sha256,s.sql_sha256);assert.equal(row.transformation,'none');assert.equal(sha(source(s.source_file,s.source_location)),row.source_raw_sha256);
 });
 
-const native428=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+const native428=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.native428.active.json',import.meta.url),'utf8'));
 const native428Candidate=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.native428.candidate.json',import.meta.url),'utf8'));
 test('exact428 preserves every426 ledger/source/member/runtime byte and binds only the two installed native repairs',()=>{
  assert.equal(validateBackupLedgerDeclarationV2(native428),true);assert.equal(validateBackupLedgerDeclarationV2(native428Candidate),true);
@@ -197,4 +197,27 @@ test('428 provenance declares observation only and retains exact existing data/r
  assert.equal(p.prior_ledger_count,426);assert.equal(p.current_ledger_count,428);assert.equal(p.prior426ledger_and196sources_unchanged,true);
  assert.equal(p.actual_catalog_delta.recordsAccountedFor,11438);assert.equal(p.actual_catalog_delta.definitionOnlyChanges.length,2);
  assert.equal(p.source_bindings_sha256,native428.source_bindings_sha256);assert.equal(p.ledger_sha256,native428.ledger_sha256);
+});
+
+
+const installed429=JSON.parse(fs.readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url),'utf8'));
+test('429 capture binds the installed Messenger repair and preserves the complete 428 baseline',()=>{
+ assert.equal(validateBackupLedgerDeclarationV2(installed429),true);
+ assert.deepEqual(installed429.ledger.slice(0,-1),native428.ledger);
+ assert.deepEqual(installed429.source_bindings.slice(0,-1),native428.source_bindings);
+ assert.deepEqual(installed429.deployed_release,native428.deployed_release);
+ assert.deepEqual(installed429.historical_baseline,native428.historical_baseline);
+ assert.equal(installed429.ledger.at(-1).version,'20261122145828');
+ assert.equal(installed429.ledger.at(-1).name,'custodial_messenger_direct_open_v82');
+ for(const s of installed429.source_bindings) assert.equal(sha(source(s.source_file,s.source_location)),s.sql_sha256);
+ assert.equal(bindBackupSchemaExtension(currentInput(installed429)).captured_ledger_count,429);
+ assert.equal(verifyArchivedSchemaExtension(archiveFor(currentInput(installed429))),true);
+});
+test('429 capture rejects an omitted or changed installed repair',()=>{
+ const missing=currentInput(installed429);
+ missing.migrationLedger.pop();
+ assert.throws(()=>bindBackupSchemaExtension(missing));
+ const changed=currentInput(installed429);
+ changed.migrationLedger.at(-1).statements[0]+='\n';
+ assert.throws(()=>bindBackupSchemaExtension(changed));
 });

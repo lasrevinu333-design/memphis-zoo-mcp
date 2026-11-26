@@ -36,8 +36,9 @@ test('source selects only reviewed active v2 and preserves inactive candidate an
  assert.match(read('scripts/production-backup.mjs'),/production-backup-source-extension-v2\.active\.json/);
  const active=JSON.parse(read('release/production-backup-source-extension-v2.active.json'));
  assert.equal(active.activation_status,'active');
- assert.equal(active.observed_catalog_fingerprint,'2115e751767fecc9e085b748accf9ae70ff0572a1bfb2d4c6c7001d08e3b9088');
- assert.equal(active.observed_ledger_count,428);assert.equal(active.observed_ledger_head,'20261115162648');
+ assert.equal(active.observed_catalog_fingerprint,'52104aa4ab0ada870ac17d6ad7d3bc014a374873c7ca0c54e179e01b632e0f3d');
+ assert.equal(active.observed_ledger_count,429);assert.equal(active.observed_ledger_head,'20261122145828');
+ const previous428=JSON.parse(read('release/production-backup-source-extension-v2.native428.active.json'));assert.equal(previous428.observed_ledger_count,428);
  const previous426=JSON.parse(read('release/production-backup-source-extension-v2.basecamp426.active.json'));assert.equal(previous426.observed_ledger_count,426);assert.equal(previous426.observed_catalog_fingerprint,'1569d0087224a6fe4f26e9763fdd7a8587d8c8a0ac76a74ac17c09a638c6fdc8');
  const previous425=JSON.parse(read('release/production-backup-source-extension-v2.messenger425.active.json'));assert.equal(previous425.observed_ledger_count,425);assert.equal(previous425.observed_catalog_fingerprint,'819f49a7c344f973e409513355bd76156dd16379ff7dcf9f7b6a71d432febe0f');
  const previous424=JSON.parse(read('release/production-backup-source-extension-v2.v80-424.active.json'));assert.equal(previous424.observed_ledger_count,424);assert.equal(previous424.observed_catalog_fingerprint,'5a423172d0911422cff099200ba600e0fcd5d806e836745208d368afc61fa8af');
