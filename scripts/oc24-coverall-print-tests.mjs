@@ -54,7 +54,7 @@ if(process.argv.includes('--civil-date-only')){
  console.log(JSON.stringify({scope:'owning civil-date document/copy behavior only; no PDF/HTTP/SQL',checks:outcomes.length,failed,outcomes},null,2));
  if(failed)process.exitCode=1;
 }else{
- const {PDFDocument}=await import('pdf-lib');
+ const {PDFDocument,PDFDict,PDFName}=await import('pdf-lib');
  const {createStaticWeeklyControlPlane}=await import('../src/static-weekly-control-plane.js');
  const {createStaticWeeklyControlPlaneRuntime}=await import('../src/static-weekly-control-plane-runtime.js');
  const {createOpsManagerSession}=await import('../src/auth/shared-access-auth.js');
@@ -107,6 +107,25 @@ for(const file of [...pair.files,pair.bilingualFile]){const bytes=Buffer.from(fi
 check('all standalone language pages retained in bilingual PDF',pageCounts['en-es'],pageCounts.en+pageCounts.es);
 assert.match(pair.texts[0].text,/Order unproven; confirm with the manager/);checks++;
 await assert.rejects(()=>renderCoverAllPdfPair({...doc,authorityRevision:8}),/digest_mismatch/);checks++;
+
+const printable=fixture();
+const longName='A'.repeat(120);
+printable.issuingManager.managerName='Synthetic Li 李 '+longName+' 😀';
+const unicodeDoc=createCoverAllPrintDocument(printable);
+const unicodePair=await renderCoverAllPdfPair(unicodeDoc);
+for(const entry of unicodePair.texts){
+ assert.ok(entry.text.includes(printable.issuingManager.managerName));checks++;
+}
+for(const file of [...unicodePair.files,unicodePair.bilingualFile]){
+ const bytes=Buffer.from(file.base64,'base64');
+ const pdf=await PDFDocument.load(bytes);
+ assert.ok(pdf.getPageCount()>0&&pdf.getPageCount()<8);checks++;
+ assert.ok(pdf.getSubject().includes(unicodeDoc.documentDigest));checks++;
+ assert.ok(pdf.context.enumerateIndirectObjects().some(([,object])=>
+  object instanceof PDFDict&&object.get(PDFName.of('Subtype'))===PDFName.of('Type0')));checks++;
+ const out=process.env.OC24_UNICODE_PDF_EVIDENCE_DIR;
+ if(out){mkdirSync(out,{recursive:true});writeFileSync(join(out,file.filename),bytes,{flag:'wx',mode:0o600});}
+}
 const noneInput=fixture();noneInput.snapshot.exceptions[0].payload.availability.breakChoice='NONE';
 Object.assign(noneInput.source.compiler_input.slots[0],{kind:'CONTRACTOR_CAPACITY',capacityId:contractor,label:'CoverAll01',incumbencies:[]});
 for(const row of noneInput.snapshot.latest_projection.assignments)if(row.owner_slot_id===contractor)Object.assign(row,{owner_kind:'CONTRACTOR_CAPACITY',capacity_id:contractor,owner_person_id:null});

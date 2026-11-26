@@ -8,12 +8,16 @@ const env={NODE_ENV:'test',SUPABASE_URL:'https://fixture.invalid',SUPABASE_SERVI
 const owner={manager_id:'11000000-0000-4000-8000-000000000001',display_name:'Synthetic Owner',system_key:'eric_custodial_manager',roles:['CUSTODIAL_MANAGER'],active:true,is_system_principal:false};
 const delegate={manager_id:'11000000-0000-4000-8000-000000000002',display_name:'Synthetic Delegate',system_key:'jennifer_sheffield_director_operations',roles:['DIRECTOR'],active:true,is_system_principal:false};
 const cid='12000000-0000-4000-8000-000000000001',did='synthetic-device';let current=delegate,revoked=false,reassigned=false,mode='normal';
-const calls=[],leases=new Set(),results=[];
+const calls=[],leases=new Set(),results=[],managerOperations=[];
 const store={async find(id){return id===cid?{credential_id:cid,device_id:did,manager_id:reassigned?owner.manager_id:current.manager_id,manager:{...current},max_access_level:'full_access',created_at:new Date(Date.now()-1000).toISOString(),expires_at:new Date(Date.now()+600000).toISOString(),revoked_at:revoked?new Date().toISOString():null}:null;}};
 const sign=manager=>createOpsManagerSession({manager,credentialId:cid,deviceId:did,authMode:'trusted_device',accessLevel:'full_access',maximumAccessLevel:'full_access',env});
 const dsession=sign(delegate),osession=sign(owner);
-const methods=['applyException','applyContractorCapacity','applyDayChanges','materializeProjection','rebuildCurrentProjection','createInitialDraft','createVacantRosterSlot','markEmployeeDeparted','replaceEmployee','fillVacantRosterSlot','publishDraft','getManagerSnapshot','beginStaffingCommand'];
+const methods=['applyException','applyContractorCapacity','applyDayChanges','materializeProjection','rebuildCurrentProjection','createInitialDraft','createVacantRosterSlot','markEmployeeDeparted','replaceEmployee','fillVacantRosterSlot','publishDraft','getManagerSnapshot','beginStaffingCommand','issueCoverAllAssignmentLink','revokeCoverAllAssignmentLink'];
 const controlPlane=Object.fromEntries(methods.map(name=>[name,async request=>{calls.push({name,request});if(mode==='reject')throw Object.assign(Error('Synthetic SQL permission rejection'),{code:'42501'});return{operation:name,revision:43,data:{projection_id:'13000000-0000-4000-8000-000000000001'}};} ]));
+controlPlane.runManagerOperation=async (binding,operation)=>{
+ managerOperations.push({...binding,hadLease:leases.size===1});
+ return operation();
+};
 controlPlane.health=async()=>({ready:true});controlPlane.close=async()=>{};
 const supabase={async rpc(name,args){if(name==='custodial_begin_application_mutation_lease'){leases.add(args.p_request_id);return{data:{mutations_paused:false,authority_generation:1}};}if(name==='custodial_release_application_mutation_lease'){leases.delete(args.p_request_id);return{data:true};}if(name==='custodial_heartbeat_application_mutation_lease')return{data:true};throw Error('Unexpected RPC');}};
 const runtime=createStaticWeeklyControlPlaneRuntime({env,database:{},controlPlane,datedTransitionController:null,supabase,trustedDeviceStore:store});
@@ -27,6 +31,38 @@ try{
   await test('delegate permitted '+path+(commandKind?' '+commandKind:''),async()=>{const before=calls.length,r=await request(path,dsession.token,{service_date:'2026-10-06',week_start:'2026-10-05',expected_revision:42,idempotency_key:'fixture-operation',...(commandKind?{command_kind:commandKind,employee_id:'14000000-0000-4000-8000-000000000001',start_date:'2026-10-06',end_date:'2026-10-06',client_prepare_key:'15000000-0000-4000-8000-000000000001',...(commandKind==='cancel_absence'?{target_absence_id:'16000000-0000-4000-8000-000000000001'}:{absence_kind:'sick'})}:{})});assert.equal(r.status,200);assert.equal(calls.length,before+1);const c=calls.at(-1);assert.equal(c.name,method);assert.equal(c.request.manager.read_only,true);assert.equal(c.request.manager.manager_id,delegate.manager_id);if(commandKind)assert.equal(c.request.commandKind,commandKind);if(c.request.signal){assert.equal(c.request.signal.aborted,true);assert.ok(Number.isFinite(c.request.deadlineAt));}});
   await test('anonymous blocked '+path,async()=>{const before=calls.length;assert.equal((await request(path,null)).status,401);assert.equal(calls.length,before);});
   await test('revoked blocked '+path,async()=>{revoked=true;try{const n=calls.length;assert.equal((await request(path)).status,401);assert.equal(calls.length,n);}finally{revoked=false;}});
+ }
+
+ const linkId='13000000-0000-4000-8000-000000000001';
+ const issueBody={week_start:'2026-10-05',service_date:'2026-10-06',expected_revision:42,
+  projection_id:linkId,capacity_id:'fixture-capacity',ttl_hours:12,request_id:linkId};
+ for(const [path,method,body] of [
+  ['/coverall-links','issueCoverAllAssignmentLink',issueBody],
+  ['/coverall-links/revoke','revokeCoverAllAssignmentLink',{link_id:linkId}],
+ ]){
+  await test('link transaction uses named CoverAll authority '+path,async()=>{
+   for(const principal of [delegate,owner]){
+    current=principal;
+    try{
+     assert.equal((await request(path,sign(principal).token,body)).status,200);
+     assert.equal(calls.at(-1).name,method);
+     assert.equal(calls.at(-1).request.manager.manager_id,principal.manager_id);
+     const transaction=managerOperations.at(-1);
+     assert.equal(transaction.manager.manager_id,principal.manager_id);
+     assert.equal(transaction.permission,'manage_coverall');
+     assert.equal(transaction.hadLease,true);
+     assert.ok(Number.isFinite(transaction.deadlineAt));
+     assert.equal(leases.size,0);
+    }finally{current=delegate;}
+   }
+  });
+  await test('revoked link credential never reaches transaction '+path,async()=>{
+   const prior=managerOperations.length;
+   revoked=true;
+   try{assert.equal((await request(path,dsession.token,body)).status,401);}
+   finally{revoked=false;}
+   assert.equal(managerOperations.length,prior);
+  });
  }
  for(const path of ['/drafts/initial','/drafts/replacement','/drafts/13000000-0000-4000-8000-000000000001/publish','/approved-initial/confirm','/recurring-adaptation/confirm','/employees/departed','/employees/replacements','/roster/vacant-slots','/roster/vacant-slots/13000000-0000-4000-8000-000000000001/fill','/places/confirm','/coverall/source-confirm']){
   await test('delegate denied general/permanent '+path,async()=>{const n=calls.length;assert.equal((await request(path)).status,403);assert.equal(calls.length,n);});

@@ -1,3 +1,4 @@
+import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {canonicalJson,isIsoServiceDate,normalizeWindow,snapshotContractorCapacity} from './static-weekly-schedule-model.js';
 import {suggestCoverAllAreaOrder} from './coverall-advisory-order.js';
@@ -231,6 +232,44 @@ export function createCoverAllCopyTexts(document){
  return texts.map(entry=>({...entry,sha256:hash(entry.text)}));
 }
 
+const handoutGraphemes=new Intl.Segmenter(undefined,{granularity:'grapheme'});
+const printLineWidth=532;
+let coverAllFontBytes;
+function readCoverAllFallbackFont(){
+ coverAllFontBytes??=readFile(new URL('./coverall-fonts/DroidSansFallbackFull.ttf',import.meta.url))
+  .then(bytes=>{if(hash(bytes)!=='acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8')fail('coverall_pdf_font_integrity');return bytes;});
+ return coverAllFontBytes;
+}
+const supportsText=(charset,value)=>Array.from(value).every(char=>charset.has(char.codePointAt(0)));
+const normalizePrintText=value=>String(value).normalize('NFC').replace(/\s+/gu,' ').trim();
+const characterLabel=value=>'['+Array.from(value,char=>'U+'+char.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')).join(' ')+']';
+
+function wrapHandoutLine(value,size,primary,extra){
+ const lines=[];
+ let line=[],width=0;
+ const space=primary.font.widthOfTextAtSize(' ',size);
+ const add=(font,text,partWidth)=>{line.push({font,text,width:partWidth});width+=partWidth;};
+ const finish=()=>{if(line.length)lines.push(line);line=[];width=0;};
+ for(const word of normalizePrintText(value).split(' ').filter(Boolean)){
+  const parts=Array.from(handoutGraphemes.segment(word),({segment})=>{
+   if(supportsText(primary.characters,segment))return [primary.font,segment];
+   if(extra&&supportsText(extra.characters,segment))return [extra.font,segment];
+   return [primary.font,characterLabel(segment)];
+  }).flatMap(([font,text])=>font.widthOfTextAtSize(text,size)<=printLineWidth?[[font,text]]
+    :Array.from(text,char=>[font,char]))
+    .map(([font,text])=>[font,text,font.widthOfTextAtSize(text,size)]);
+  const total=parts.reduce((sum,part)=>sum+part[2],0);
+  if(width&&width+space+total>printLineWidth)finish();
+  if(width)add(primary.font,' ',space);
+  for(const part of parts){
+   if(width&&width+part[2]>printLineWidth)finish();
+   add(...part);
+  }
+ }
+ finish();
+ return lines;
+}
+
 export async function renderCoverAllPdfPair(document){
  assertCurrentPrintDocument(document);
  const {documentDigest}=document;
@@ -240,27 +279,41 @@ export async function renderCoverAllPdfPair(document){
   const t=labels[language]||labels.en,pdf=await PDFDocument.create();
   pdf.setTitle(`${t.title} ${document.serviceDate}`);pdf.setLanguage(language);pdf.setSubject(`projection=${document.projectionId}; revision=${document.authorityRevision}; document=${documentDigest}`);
   const font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);
+  const normal={font,characters:new Set(font.getCharacterSet())},strong={font:bold,characters:new Set(bold.getCharacterSet())};
+  const languages=language==='en-es'?['en','es']:[language];
+  const sections=document.contractors.flatMap(contractor=>languages.map(locale=>contractorLines(document,contractor,locale)));
+  let extra=null;
+  if(sections.some(entries=>entries.some(entry=>!supportsText((entry.strong?strong:normal).characters,normalizePrintText(entry.text))))){
+   pdf.registerFontkit((await import('@pdf-lib/fontkit')).default);
+   const embedded=await pdf.embedFont(await readCoverAllFallbackFont(),{subset:true});
+   extra={font:embedded,characters:new Set(embedded.getCharacterSet())};
+  }
   let page,y=0;
   const newPage=()=>{if(pdf.getPageCount()>=48)fail('coverall_pdf_page_limit');page=pdf.addPage([612,792]);y=750;};
-  function wrapped(value,size=10,strong=false){
-   const f=strong?bold:font,words=String(value).replace(/[\r\n\t]/g,' ').replace(/[–—]/g,'-').split(' '),lines=[];let part='';
-   for(const word of words){if(f.widthOfTextAtSize(word,size)>532)fail('coverall_pdf_unbreakable_text');const next=part?part+' '+word:word;if(f.widthOfTextAtSize(next,size)>532){lines.push(part);part=word;}else part=next;}if(part)lines.push(part);return lines;
-  }
-  function line(value,size=10,strong=false){
-   const f=strong?bold:font;
-   for(const part of wrapped(value,size,strong)){if(y<56)newPage();page.drawText(part,{x:40,y,size,font:f,color:rgb(.08,.12,.13)});y-=size+5;}
-  }
-  for(const c of document.contractors){
-   for(const partLanguage of language==='en-es'?['en','es']:[language]){
-    newPage();const entries=contractorLines(document,c,partLanguage);
-    for(let i=0;i<entries.length;i++){
-     const entry=entries[i];
-     // A period heading/route label must stay with the first actual area;
-     // each area heading stays with its physical-room line. Measure wrapping.
-     const kept=entries.slice(i,i+1+entry.keepNext);
-     const height=kept.reduce((sum,e)=>sum+wrapped(e.text,e.size,e.strong).length*(e.size+5),0);
-     if(entry.keepNext&&height<=694&&y-height<56)newPage();
-     line(entry.text,entry.size,entry.strong);
+  for(const entries of sections){
+   newPage();
+   const lines=entries.map(entry=>wrapHandoutLine(entry.text,entry.size,entry.strong?strong:normal,extra));
+   for(let i=0;i<entries.length;i++){
+    const entry=entries[i];
+    const height=entries.slice(i,i+1+entry.keepNext)
+      .reduce((sum,e,j)=>sum+lines[i+j].length*(e.size+5),0);
+    if(entry.keepNext&&height<=694&&y-height<56)newPage();
+    for(const segments of lines[i]){
+     if(y<56)newPage();
+     let x=40;
+     // One draw per adjacent font keeps PDF text searchable and permits mixed
+     // scripts without relying on a workstation's installed fonts.
+     const runs=[];
+     for(const segment of segments){
+      const previous=runs.at(-1);
+      if(previous?.font===segment.font){previous.text+=segment.text;previous.width+=segment.width;}
+      else runs.push({...segment});
+     }
+     for(const run of runs){
+      page.drawText(run.text,{x,y,size:entry.size,font:run.font,color:rgb(.08,.12,.13)});
+      x+=run.width;
+     }
+     y-=entry.size+5;
     }
    }
   }

@@ -2,7 +2,7 @@ import {createCustodialLeadershipControlPlane} from "./auth/custodial-leadership
 import {isCustodialLeadershipManagementSession} from "./auth/manager-permissions.js";
 import {createHash,randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {renderCanonicalCoverAllLink} from './static-weekly-coverall-access.js';
+import {coverAllLinkStylePolicy,renderCanonicalCoverAllLink} from './static-weekly-coverall-access.js';
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import express from "express";
@@ -187,7 +187,8 @@ export function createStaticWeeklyControlPlaneRuntime({
       let data, operationCompleted=false;
       try {
         const route=String(req.path||"").replace(/\/$/,"").toLowerCase();
-        const permission=route==="/static-weekly/manager-snapshot"?"read":route==="/static-weekly/contractor-capacity"
+        const permission=route==="/static-weekly/manager-snapshot"?"read":
+          ["/static-weekly/contractor-capacity","/static-weekly/coverall-links","/static-weekly/coverall-links/revoke"].includes(route)
           ||/^\/static-weekly\/staffing-commands\/[^/]+\/coverall-(?:options|prepare)$/.test(route)?"manage_coverall":
           /^\/static-weekly\/staffing-commands(?:\/|$)/.test(route)?"manage_absences":
           ["/static-weekly/exceptions","/static-weekly/day-changes/batch"].includes(route)?"manage_absences":
@@ -424,7 +425,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get('/static-weekly/coverall-links/assignment',async(req,res)=>{
     res.setHeader('Cache-Control','no-store, private, max-age=0');res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Content-Type-Options','nosniff');
-    res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy',`default-src 'none'; style-src ${coverAllLinkStylePolicy}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
     try{
       if(Object.keys(req.query).some(k=>k!=='lang')||(req.query.lang!==undefined&&typeof req.query.lang!=='string')
         ||!['en','es','both'].includes(req.query.lang||'both'))throw fail('coverall_link_invalid');
@@ -434,7 +435,7 @@ export function createStaticWeeklyControlPlaneRuntime({
         // no cookies/storage, external scripts, URL query or error interpolation.
         const script=`(async()=>{try{const f=new URLSearchParams(location.hash.slice(1));const token=f.get('access_token');history.replaceState(null,'',location.pathname+location.search);if([...f.keys()].length!==1||!/^[A-Za-z0-9_-]{43}$/.test(token||''))throw Error();const r=await fetch(location.pathname+location.search,{headers:{'X-CoverAll-Access-Token':token},credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',redirect:'error'});if(!r.ok)throw Error();const html=await r.text();document.open();document.write(html);document.close();}catch{document.body.textContent='This private handout link is unavailable or no longer current. Ask the issuing manager for a current handout.';}})();`;
         const digest=createHash('sha256').update(script).digest('base64');
-        res.setHeader('Content-Security-Policy',`default-src 'none'; connect-src 'self'; script-src 'sha256-${digest}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
+        res.setHeader('Content-Security-Policy',`default-src 'none'; connect-src 'self'; script-src 'sha256-${digest}'; style-src ${coverAllLinkStylePolicy}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
         return res.type('html').status(200).send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private CoverAll handout</title></head><body><p>Opening private handout…</p><script>'+script+'</script></body></html>');
       }
       if(typeof accessToken!=='string')throw fail('coverall_link_invalid');

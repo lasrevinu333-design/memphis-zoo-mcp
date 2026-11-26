@@ -31,9 +31,11 @@ export function scopeCanonicalCoverAllDocument(document,binding){
  const selected={...base,contractors:document.contractors.filter(c=>c.slotId===binding.capacity_id)};
  return {...selected,documentDigest:createHash('sha256').update(canonicalJson(selected)).digest('hex')};
 }
+const handoutStyle='pre{white-space:pre-wrap;overflow-wrap:anywhere;font:1rem system-ui}';
+export const coverAllLinkStylePolicy="'sha256-"+createHash('sha256').update(handoutStyle).digest('base64')+"'";
 export function renderCanonicalCoverAllLink(document,language='both'){
  if(!['en','es','both'].includes(language))fail('coverall_link_language_invalid');
  const texts=createCoverAllCopyTexts(document),selected=texts.find(t=>t.language===(language==='both'?'en-es':language));
  const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- return `<!doctype html><html lang="${language==='both'?'en':language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoverAll assignments</title></head><body><main><pre style="white-space:pre-wrap;font:1rem system-ui">${escape(selected.text)}</pre></main></body></html>`;
+ return `<!doctype html><html lang="${language==='both'?'en':language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoverAll assignments</title><style>${handoutStyle}</style></head><body><main><pre>${escape(selected.text)}</pre></main></body></html>`;
 }
