@@ -2725,7 +2725,7 @@
       {
         "path": "release/installed-source/current429-secondary-drive-vm-inverse.json",
         "mode": "100644",
-        "object_id": "393fb363daa9ce05bb17c6b2d30d3fed1e502e32"
+        "object_id": "3974c68ec9b8a1d0f37f37614d92d4745f45c51f"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -8510,7 +8510,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "4a8e49d1bf2511de05e4ae039ebe03ca739a059a"
+        "object_id": "fb067653cc1c3deb4caf74fc0868533498b384ec"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8540,7 +8540,7 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "d128337192586d8d470d90b59ee2e49cbd8fbe48"
+        "object_id": "acc4a7bc6935ed11d4c82aca2709ada80ee3afeb"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
@@ -9160,7 +9160,7 @@
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "78f085652e86e31167f26c8c81d88d3b9468c09b"
+        "object_id": "c44e179a4dbf9d98c6b325e0e7c199c11866b93d"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
