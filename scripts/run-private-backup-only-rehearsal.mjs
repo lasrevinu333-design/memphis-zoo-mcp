@@ -515,7 +515,13 @@ export async function runPrivate(){
     secretEnv.SUPABASE_DB_URL='postgresql://'+requireOwnerProfile().actor+':postgres@127.0.0.1:'+listener.port+'/'+database;
     // Existing adapter replays authenticated schema unchanged. No hydration,
     // legacy restore-intent producer, forward migrations or reconciliation.
-    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000,diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'});
+    // The secondary-drive VM hit the five-minute limit during serial DDL replay.
+    // Use part of this route's one-hour margin between restore and job deadlines.
+    const schemaReplayTimeoutMs = secondaryVm ? 15 * 60 * 1000 : 300000;
+    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{
+      env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:schemaReplayTimeoutMs,
+      diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'
+    });
     if(requireOwnerProfile().id==='immutable-private-current-postgres'){
       phase='seed_verified_isolated_cron_metadata';await verifyTarget();
       cronSetup=JSON.parse(await run(process.execPath,['scripts/seed-isolated-current-postgres-cron.mjs'],

@@ -129,7 +129,7 @@
     },
     "scripts/run-private-backup-only-rehearsal.mjs": {
       "previous_sha256": "591e153728d79d10155300b8f585031381be5ed46e2b03b201ead58a6d241ff7",
-      "current_sha256": "93bc0d51678ab8096b3899bafd125591655fc0e444c00006491f76c1508fc3ea",
+      "current_sha256": "93f8bda0c6d63304c8fcb6469b2b7dfbf80aa64406ccdffb5411f3b3f20d3dcb",
       "reverse_hunks": [
         {
           "start": 459,
@@ -166,6 +166,12 @@
           "end": 33002,
           "current": "    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres',secondaryVm).work_ms+100000;\n    const lifetimeMs=secondaryVm?secondaryVmIntentMs:(currentFullRestore?6*60*60*1000:60*60*1000);\n    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),lifetimeMs);\n",
           "previous": "    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres').work_ms+100000;\n    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?6*60*60*1000:60*60*1000);\n"
+        },
+        {
+          "start": 40939,
+          "end": 41417,
+          "current": "    // The secondary-drive VM hit the five-minute limit during serial DDL replay.\n    // Use part of this route's one-hour margin between restore and job deadlines.\n    const schemaReplayTimeoutMs = secondaryVm ? 15 * 60 * 1000 : 300000;\n    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{\n      env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:schemaReplayTimeoutMs,\n      diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'\n    });\n",
+          "previous": "    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000,diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'});\n"
         }
       ]
     }

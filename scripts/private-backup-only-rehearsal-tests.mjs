@@ -138,6 +138,23 @@ test('the secondary VM verification precedes decryption, with hosted signing and
   assert.match(applyJob,/needs\.sign_current429_vm\.result == 'success'/);
   assert.doesNotMatch(vmJob,/SUPABASE_MIGRATION_DB_URL/);
 });
+test('only the secondary VM gets extra schema replay time and uses the same isolated adapter',()=>{
+  const runner=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+  const start=runner.indexOf('const schemaReplayTimeoutMs =');
+  const end=runner.indexOf("if(requireOwnerProfile().id",start);
+  assert.ok(start>0&&end>start);
+  const replay=new Function('secondaryVm','run','secretEnv','schemaDatabaseUrl','process',
+    `return (async () => { ${runner.slice(start,end)} })();`);
+  const ownTarget='postgresql://supabase_admin:fixture@127.0.0.1:45678/mz_schema_rebuild_1';
+  return Promise.all([[true,900000],[false,300000]].map(([vm,timeout])=>{
+    const run=async (executable,args,options)=>{
+      assert.equal(executable,process.execPath);
+      assert.deepEqual(args,['scripts/restore-isolated-event-owner-schema.mjs']);
+      assert.deepEqual(options,{env:{SUPABASE_DB_URL:ownTarget},timeout,diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'});
+    };
+    return replay(vm,run,{},ownTarget,process);
+  }));
+});
 test('new runner has no hydration, legacy intent producer or migration invocation',()=>{
   const s=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   assert.doesNotMatch(s,/['"](?:--publish|-p|restore:prepare-isolated|restore:intent|release:migrations:apply)['"]/);
