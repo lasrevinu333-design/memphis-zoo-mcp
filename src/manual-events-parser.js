@@ -1,3 +1,5 @@
+import { chicagoServiceDate } from "./manager-on-duty.js";
+
 const MONTH_LOOKUP = {
   january: 1, jan: 1,
   february: 2, feb: 2,
@@ -361,8 +363,8 @@ function extractExplicitNotesValue(text = "") {
 }
 
 function isValidCalendarDate(year, month, day) {
-  const candidate = new Date(year, month - 1, day);
-  return candidate.getFullYear() === year && candidate.getMonth() === month - 1 && candidate.getDate() === day;
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  return candidate.getUTCFullYear() === year && candidate.getUTCMonth() === month - 1 && candidate.getUTCDate() === day;
 }
 
 function parseIsoCalendarDate(value) {
@@ -374,39 +376,28 @@ function parseIsoCalendarDate(value) {
   return isValidCalendarDate(year, month, day) ? `${match[1]}-${match[2]}-${match[3]}` : "";
 }
 
-function inferEventYear() {
-  return new Date().getFullYear();
-}
-
 function isoDateFor(year, month, day) {
   if (!isValidCalendarDate(year, month, day)) return "";
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function buildDate(year, month, day) {
+function buildDate(year, month, day, calendar) {
   if (!Number.isFinite(month) || !Number.isFinite(day)) return "";
+  const currentYear = Number(calendar.today.slice(0, 4));
   if (Number.isFinite(year)) {
-    const nowYear = new Date().getFullYear();
-    if (year < nowYear - 1 || year > nowYear + 2) return "";
+    if (year < currentYear - 1 || year > currentYear + 2) return "";
     return isoDateFor(year, month, day);
   }
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
   const thisYear = isoDateFor(currentYear, month, day);
-  if (!thisYear) return "";
-
-  // Memphis event intake should stay in the current calendar year by default.
-  // Only roll an undated event into next year during the last ~two weeks of the
-  // year, when January/early-next-year bookings are operationally plausible.
-  const nextYear = isoDateFor(currentYear + 1, month, day);
-  const yearEndRolloverStarts = new Date(currentYear, 11, 17, 0, 0, 0, 0);
-  const thisDate = new Date(currentYear, month - 1, day, 12, 0, 0, 0);
-  if (nextYear && now >= yearEndRolloverStarts && thisDate < now) return nextYear;
-  return thisYear;
+  const pastYearEndDate = calendar.today >= `${currentYear}-12-17` && thisYear < calendar.today;
+  const nextYear = pastYearEndDate ? isoDateFor(currentYear + 1, month, day) : "";
+  const date = thisYear && (nextYear || thisYear);
+  if (date) calendar.inferred = true;
+  return date;
 }
 
-function normalizePossibleDate(value) {
+function normalizePossibleDate(value, calendar) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return parseIsoCalendarDate(raw);
@@ -417,34 +408,34 @@ function normalizePossibleDate(value) {
   if (match) {
     const rawYear = match[3] || match[4];
     const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
-    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]), calendar);
     if (built) return built;
   }
 
   match = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
   if (match) {
     const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
-    const built = buildDate(year, Number(match[1]), Number(match[2]));
+    const built = buildDate(year, Number(match[1]), Number(match[2]), calendar);
     if (built) return built;
   }
   match = raw.match(new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i"));
   if (match) {
     const rawYear = match[3] || match[4];
     const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
-    return buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    return buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]), calendar);
   }
 
   match = raw.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i"));
   if (match) {
     const rawYear = match[3] || match[4];
     const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
-    return buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]));
+    return buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]), calendar);
   }
 
   return "";
 }
 
-function detectEventDateFromText(text = "") {
+function detectEventDateFromText(text, calendar) {
   const raw = String(text || "").trim();
   if (!raw) return "";
   const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
@@ -454,7 +445,7 @@ function detectEventDateFromText(text = "") {
   if (match) {
     const rawYear = match[3] || match[4];
     const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
-    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]), calendar);
     if (built) return built;
   }
 
@@ -463,7 +454,7 @@ function detectEventDateFromText(text = "") {
   if (match) {
     const rawYear = match[3] || match[4];
     const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
-    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]), calendar);
     if (built) return built;
   }
 
@@ -472,7 +463,7 @@ function detectEventDateFromText(text = "") {
   if (match) {
     const rawYear = match[3] || match[4];
     const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
-    const built = buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]));
+    const built = buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]), calendar);
     if (built) return built;
   }
 
@@ -482,7 +473,7 @@ function detectEventDateFromText(text = "") {
     const after = raw.slice(item.index + item[0].length, item.index + item[0].length + 3);
     if (/[:.]$/.test(before) || /^[:.]/.test(after)) continue;
     const year = item[3] ? Number(String(item[3]).length === 2 ? `20${item[3]}` : item[3]) : NaN;
-    const built = buildDate(year, Number(item[1]), Number(item[2]));
+    const built = buildDate(year, Number(item[1]), Number(item[2]), calendar);
     if (built) return built;
   }
   return "";
@@ -1416,19 +1407,18 @@ function buildParseWarnings({ eventName, locationGroupId, eventDate, endDate, st
   return Array.from(new Set(warnings));
 }
 
-function detectRelativeWeekdayDate(text = "") {
+function detectRelativeWeekdayDate(text, calendar) {
   const raw = String(text || "").toLowerCase();
   const match = raw.match(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
   if (!match) return "";
   const names = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
   const target = names.indexOf(String(match[2] || "").toLowerCase());
   if (target < 0) return "";
-  const now = new Date();
-  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
-  let delta = (target - base.getDay() + 7) % 7;
-  if (delta === 0 || match[1]) delta = delta || 7;
-  base.setDate(base.getDate() + delta);
-  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+  const base = new Date(calendar.today + "T12:00:00Z");
+  const delta = (target - base.getUTCDay() + 7) % 7 || 7;
+  base.setUTCDate(base.getUTCDate() + delta);
+  calendar.inferred = true;
+  return base.toISOString().slice(0, 10);
 }
 
 function detectApproxTimeRange(text = "") {
@@ -1439,14 +1429,15 @@ function detectApproxTimeRange(text = "") {
   return null;
 }
 
-function parseOneEventText(rawText, locationGroups, index = 0, eventVenues = [], eventDefaults = []) {
+function parseOneEventText(rawText, locationGroups, index, eventVenues, eventDefaults, today) {
+  const calendar = { today, inferred: false };
   const normalizedText = normalizeIntakeText(rawText);
   const labels = parseLabelMap(normalizedText);
   const eventNameFromLabel = firstLabelValue(labels, ["Event Name", "Event", "Name", "Title", "Event Title"]);
   const areaFromLabel = firstLabelValue(labels, ["Event Area", "Location Group", "Area", "Location", "Venue"]);
   const dateFromLabel = firstLabelValue(labels, ["Event Date", "Start Date", "Date"]) || extractLooseLabelValue(normalizedText, ["Event Date", "Start Date", "Date"]);
   const endDateLabel = firstLabelValue(labels, ["Event End Date", "End Date"]) || extractLooseLabelValue(normalizedText, ["Event End Date", "End Date"]);
-  const endDate = normalizePossibleDate(endDateLabel);
+  const endDate = normalizePossibleDate(endDateLabel, calendar);
   if(endDateLabel&&!endDate)throw new Error("Explicit End Date could not be parsed; correct that source field before importing.");
   const startFromLabel = firstLabelValue(labels, ["Start Time", "Time", "Start", "Begin Time", "Begin"]) || extractLooseLabelValue(normalizedText, ["Start Time", "Time", "Start", "Begin Time", "Begin"]);
   const endFromLabel = firstLabelValue(labels, ["End Time", "Ends", "End", "Stop Time", "Stop"]) || extractLooseLabelValue(normalizedText, ["End Time", "Ends", "End", "Stop Time", "Stop"]);
@@ -1463,7 +1454,7 @@ function parseOneEventText(rawText, locationGroups, index = 0, eventVenues = [],
       ? { ...normalizeTimePair(startFromLabel, endFromLabel), matched_text: `${startFromLabel} ${endFromLabel}` }
       : detectTimeRange(normalizedText, { hasSeparateKnownDate }))
     || detectApproxTimeRange(normalizedText);
-  const eventDate = normalizePossibleDate(dateFromLabel) || detectEventDateFromText(normalizedText) || detectRelativeWeekdayDate(normalizedText) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
+  const eventDate = normalizePossibleDate(dateFromLabel, calendar) || detectEventDateFromText(normalizedText, calendar) || detectRelativeWeekdayDate(normalizedText, calendar) || normalizePossibleDate(endFromLabel, calendar) || normalizePossibleDate(normalizedText, calendar);
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(rawText) ?? detectAttendeeCount(normalizedText);
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const ambiguousAreaName = extractAmbiguousAreaEventName(normalizedText);
@@ -1488,6 +1479,7 @@ function parseOneEventText(rawText, locationGroups, index = 0, eventVenues = [],
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
   const warnings = buildParseWarnings({ eventName, locationGroupId: locationSemantics.location_group_id || "", eventDate, endDate, startTime, endTime, areaCandidates, rawText: normalizedText, notes: baseNotes });
+  if (calendar.inferred) warnings.push("ambiguous_date");
   if (locationSemantics.needs_review) warnings.push("event_location_needs_review");
   if (locationSemantics.event_scope === "UNKNOWN") warnings.push("missing_event_scope");
   const operational_profile = inferEventProfile({ eventName, notes: baseNotes || normalizedText, attendeeCount, startTime, endTime });
@@ -1516,7 +1508,7 @@ function parseOneEventText(rawText, locationGroups, index = 0, eventVenues = [],
     attendee_count: attendeeCount,
     notes: baseNotes,
     created_by: "Input Console Parse",
-    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
+    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "ambiguous_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
     review_notes: warnings.length ? warnings.join(", ") : null,
     warnings,
     area_candidates: compactAreaCandidates(areaCandidates),
@@ -1577,7 +1569,7 @@ function recomputeRowMetadata(row = {}, locationGroups = []) {
     ...row,
     warnings,
     review_notes: warnings.length ? warnings.join(", ") : null,
-    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
+    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "ambiguous_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
     field_confidence: buildFieldConfidence({
       eventName: row.event_name || "",
       locationGroupId: row.location_group_id || "",
@@ -1603,8 +1595,9 @@ function decorateLocalRow(row, { providerFallback = false } = {}) {
 
 
 // Owner-requested deterministic intake: no AI, provider credentials, or calls.
-export function parseManualEventTexts({texts,locationGroups=[],eventVenues=[],eventDefaults=[]}) {
+export function parseManualEventTexts({texts,locationGroups=[],eventVenues=[],eventDefaults=[],now=new Date()}) {
  if(!Array.isArray(texts)||texts.length<1||texts.length>200||texts.some(t=>typeof t!=='string'||!t.trim()||t.length>40000)
   ||texts.reduce((n,t)=>n+Buffer.byteLength(t,'utf8'),0)>1048576) throw new Error('Provide 1 to 200 nonempty event rows, at most 40000 characters each and 1 MiB total.');
- return texts.map((text,index)=>decorateLocalRow(parseOneEventText(text,locationGroups,index,eventVenues,eventDefaults)));
+ const today = chicagoServiceDate(now);
+ return texts.map((text,index)=>decorateLocalRow(parseOneEventText(text,locationGroups,index,eventVenues,eventDefaults,today)));
 }

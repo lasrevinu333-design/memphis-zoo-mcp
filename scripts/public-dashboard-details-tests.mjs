@@ -73,7 +73,9 @@ test('public and manager MOD use the same Central-date rota without exposing cre
  for(const [instant,name] of [['2026-11-14T05:59:59Z','Haley Lejman'],['2026-11-14T06:00:00Z','Josh Fortney'],['2026-11-15T06:00:00Z','Eric Operle']]){
   const at=new Date(instant),publicFeed=publicOperationsDetails(events,mail,at);let body,times=0;
   const res={setHeader(){},status(code){assert.equal(code,200);return this;},json(value){body=value;}};
-  await makeOperationsBoardHandler({readEvents:async()=>events,now:()=>{times++;return at;}})({memphisAuth:{role:'ops_manager',manager_id:'fixture',credential_id:'fixture'}},res);
+  await makeOperationsBoardHandler({requireOpsManagerAuth:(_req,_res,next)=>next(),readEvents:async()=>events,now:()=>{times++;return at;}})(
+    {memphisAuth:{role:'ops_manager',manager_id:'ed850029-f278-420c-9ad0-ffd0a1df7825',credential_id:'fixture',
+      device_id:'device',token:'fixture',expires_at:'2099-12-31T00:00:00Z'}},res);
   assert.equal(times,1);assert.deepEqual(body.data.manager_on_duty,publicFeed.manager_on_duty);
   assert.equal(publicFeed.manager_on_duty.name,name);assert.equal(publicFeed.manager_on_duty.service_date,instant.slice(0,10)==='2026-11-14'&&name==='Haley Lejman'?'2026-11-13':instant.slice(0,10));
   assert.deepEqual(Object.keys(publicFeed.manager_on_duty).sort(),['schema','service_date','state','manager_id','name'].sort());

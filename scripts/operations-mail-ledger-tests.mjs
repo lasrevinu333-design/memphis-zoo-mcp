@@ -151,10 +151,24 @@ test('binding corruption, wrong status and duplicate records fail closed',async(
  assert.throws(()=>projectOperationsMailRows([row,row]),/duplicate/);
 });
 test('named manager only: unauthorized requests never read mail; projection failure does not hide Events',async()=>{
- let reads=0;const handler=makeOperationsBoardHandler({readEvents:async()=>[],readMail:async()=>{reads++;throw Error('PRIVATE');}});
- const response=()=>({status(n){this.code=n;return this;},setHeader(){},json(data){this.body=data;return this;}});
+ const manager={role:'ops_manager',manager_id:'ed850029-f278-420c-9ad0-ffd0a1df7825',credential_id:'c',device_id:'d',token:'fixture',expires_at:'2099-12-31T00:00:00Z'};
+ let reads=0;
+ const requireOpsManagerAuth=(req,res,next)=>req.memphisAuth?.role==='ops_manager'?next():res.status(403).json({});
+ const handler=makeOperationsBoardHandler({requireOpsManagerAuth,readEvents:async()=>[],readMail:async()=>{reads++;throw Error('PRIVATE');}});
+ const response=()=>({status(n){this.code=n;return this;},setHeader(){},json(data){this.body=data;this.headersSent=true;return this;}});
  const denied=response();await handler({memphisAuth:{role:'employee'}},denied);assert.equal(denied.code,403);assert.equal(reads,0);
- const ok=response();await handler({memphisAuth:{role:'ops_manager',manager_id:'m',credential_id:'c'}},ok);assert.equal(ok.code,200);assert.equal(reads,1);assert.equal(ok.body.data.schools.state,'unavailable');assert.equal(ok.body.data.school_departure_policy,null);assert.doesNotMatch(JSON.stringify(ok.body),/PRIVATE/);
+ const ok=response();await handler({memphisAuth:manager},ok);assert.equal(ok.code,200);assert.equal(reads,1);assert.equal(ok.body.data.schools.state,'unavailable');assert.equal(ok.body.data.school_departure_policy,null);assert.doesNotMatch(JSON.stringify(ok.body),/PRIVATE/);
+ for(const boundary of ['events','mail','city']){
+  let active=true;
+  const next=makeOperationsBoardHandler({
+    requireOpsManagerAuth:(req,res,advance)=>active?advance():res.status(403).json({error:'PRIVATE'}),
+    readEvents:async()=>{if(boundary==='events')active=false;return [{id:'fixture',event_name:'PRIVATE'}];},
+    readMail:async()=>{if(boundary==='mail')active=false;},
+    readCity:async()=>{if(boundary==='city')active=false;},
+  });
+  const late=response();await next({memphisAuth:manager},late);assert.equal(late.code,403);
+  assert.deepEqual(late.body,{ok:false,error:'Current named-manager access required.'});
+ }
 });
 test('bootstrap uses the existing service client and manager gate; no new ingestion route or grant',()=>{
  const index=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');assert.match(index,/app\.get\("\/dashboard-api\/operations", requireOpsManagerAuth,[\s\S]{0,220}readMail: \(\) => readOperationsMailLedger\(\{client:supabaseAdmin\}\)/);

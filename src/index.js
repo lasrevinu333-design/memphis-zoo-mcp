@@ -3105,7 +3105,7 @@ app.get("/dashboard-api/events-feed", requireOpsManagerAuth, makeSharedManagerEv
 installBoundManagerHeldReviewRoute(app, { client: supabaseAdmin, requireOpsManagerAuth });
 installManagerHeldEventCorrectionRoutes(app, { client: supabaseAdmin, requireOpsManagerWrite });
 const readCityWorkOrders=makeCityWorkOrderReader();
-app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql), readMail: () => readOperationsMailLedger({client:supabaseAdmin}),readCity:readCityWorkOrders}));
+app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql), readMail: () => readOperationsMailLedger({client:supabaseAdmin}),readCity:readCityWorkOrders,requireOpsManagerAuth}));
 installPublicDashboardDetails(app, {readSummary:runPublicDashboardSummary,
   readEvents:()=>listSharedEvents(runReadOnlySql),readMail:()=>readOperationsMailLedger({client:supabaseAdmin}),readCity:readCityWorkOrders,runReadOnlySql});
 installGpsMapContextRoute(app, {

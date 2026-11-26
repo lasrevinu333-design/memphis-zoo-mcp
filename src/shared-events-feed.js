@@ -103,33 +103,37 @@ function managerBinding(session) {
     session.token, session.expires_at, session.auth_mode, session.read_only]);
 }
 
+export function bindCurrentNamedManagerRead(req, res, requireOpsManagerAuth) {
+  let binding = null;
+  return async () => {
+    let accepted = false, code = 503;
+    const response = {
+      get headersSent() { return res.headersSent; },
+      get writableEnded() { return res.writableEnded; },
+      setHeader(name, value) { res.setHeader(name, value); },
+      status(value) { code = [401, 403, 503].includes(value) ? value : 503; return this; },
+      json() { return res.status(code).json({ ok: false, error: 'Current named-manager access required.' }); },
+    };
+    try { await requireOpsManagerAuth(req, response, () => { accepted = true; }); }
+    catch { if (!res.headersSent && !res.writableEnded) response.status(503).json(); }
+    if (!accepted || res.headersSent || res.writableEnded) return false;
+    const next = managerBinding(req?.memphisAuth);
+    if (!next || (binding !== null && next !== binding)) {
+      res.status(403).json({ ok: false, error: 'Current named-manager access required.' });
+      return false;
+    }
+    binding = next;
+    return true;
+  };
+}
+
 export function makeSharedManagerEventsHandler({ readEvents, readSyncStatus = null, readSchools = null, requireOpsManagerAuth, now = () => new Date() }) {
   if (typeof readEvents !== 'function') throw new Error('shared_event_reader_required');
   if (typeof requireOpsManagerAuth !== 'function') throw new Error('shared_event_manager_middleware_required');
   return async (req, res) => {
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Vary', 'Authorization, Cookie, X-Device-Id');
-    let binding = null;
-    const currentManager = async () => {
-      let accepted = false, code = 503;
-      const response = {
-        get headersSent() { return res.headersSent; },
-        get writableEnded() { return res.writableEnded; },
-        setHeader(name, value) { res.setHeader(name, value); },
-        status(value) { code = [401, 403, 503].includes(value) ? value : 503; return this; },
-        json() { return res.status(code).json({ ok: false, error: 'Current named-manager access required.' }); },
-      };
-      try { await requireOpsManagerAuth(req, response, () => { accepted = true; }); }
-      catch { if (!res.headersSent && !res.writableEnded) response.status(503).json(); }
-      if (!accepted || res.headersSent || res.writableEnded) return false;
-      const next = managerBinding(req?.memphisAuth);
-      if (!next || (binding !== null && next !== binding)) {
-        res.status(403).json({ ok: false, error: 'Current named-manager access required.' });
-        return false;
-      }
-      binding = next;
-      return true;
-    };
+    const currentManager = bindCurrentNamedManagerRead(req, res, requireOpsManagerAuth);
     if (!await currentManager()) return;
     const manager = Object.freeze({ manager_id: req.memphisAuth.manager_id, credential_id: req.memphisAuth.credential_id });
     try {

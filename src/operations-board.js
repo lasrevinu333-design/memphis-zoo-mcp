@@ -1,4 +1,5 @@
 import {managerOnDuty,chicagoServiceDate} from './manager-on-duty.js';
+import {bindCurrentNamedManagerRead} from './shared-events-feed.js';
 // Manager-only display projection. Never returns source mail, generic event
 // notes, recipients, credentials or raw GPS payloads. No mutation endpoint.
 const text = (v, max = 1000) => typeof v === 'string' ? v.trim().slice(0, max) : null;
@@ -28,18 +29,20 @@ export function projectOperationsEvents(rows) {
   }));
 }
 
-export function makeOperationsBoardHandler({readEvents, readMail = null, readCity = null, now = () => new Date()} = {}) {
+export function makeOperationsBoardHandler({readEvents, readMail = null, readCity = null, requireOpsManagerAuth, now = () => new Date()} = {}) {
   if (typeof readEvents !== 'function') throw new Error('operations_event_reader_required');
+  if (typeof requireOpsManagerAuth !== 'function') throw new Error('operations_manager_middleware_required');
   return async function operationsBoard(req, res) {
-    // Route middleware remains the authority; this additionally prevents an
-    // accidentally unguarded mounting from exposing the manager projection.
-    if (req?.memphisAuth?.role !== 'ops_manager' || !req.memphisAuth.manager_id
-      || !req.memphisAuth.credential_id) return res.status(403).json({ok:false,error:'Named manager required.'});
     res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Vary', 'Authorization, Cookie, X-Device-Id');
+    const currentManager = bindCurrentNamedManagerRead(req, res, requireOpsManagerAuth);
+    if (!await currentManager()) return;
     try {
       const events = projectOperationsEvents(await readEvents());
+      if (!await currentManager()) return;
       const safe=async reader=>{try{return typeof reader==='function'?await reader():null;}catch{return null;}};
       const [mail,city]=await Promise.all([safe(readMail),safe(readCity)]);
+      if (!await currentManager()) return;
       const generatedAt=now();
       return res.status(200).json({ok:true,data:{schema:'custodial.operations-board.v1',
         generated_at:generatedAt.toISOString(),timezone:'America/Chicago',events,
@@ -55,7 +58,7 @@ export function makeOperationsBoardHandler({readEvents, readMail = null, readCit
         school_departure_policy:null,
       }});
     } catch {
-      return res.status(503).json({ok:false,error:'Operations event source unavailable.'});
+      if (!res.headersSent && !res.writableEnded) return res.status(503).json({ok:false,error:'Operations event source unavailable.'});
     }
   };
 }
