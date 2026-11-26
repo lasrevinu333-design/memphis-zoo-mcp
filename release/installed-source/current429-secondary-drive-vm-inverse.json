@@ -1,0 +1,167 @@
+{
+  "format": "custodial.current429-secondary-drive-vm-source-inverse.v1",
+  "files": {
+    ".github/workflows/production-backup-migration-rehearsal.yml": {
+      "previous_sha256": "4f8241ff5238fdf25f0b45c658c06d3ddabde3c2bee2980a6d8a77a04a927cc3",
+      "current_sha256": "f4fd29f43440d50c29fb6fe53aa95aa332f61b8e6dce65325b9c760a75fd0093",
+      "reverse_hunks": [
+        {
+          "start": 1558,
+          "end": 1742,
+          "current": "      use_secondary_drive_vm:\n        description: Run the exact 429 rehearsal on the isolated secondary-drive VM\n        required: false\n        type: boolean\n        default: false\n\n",
+          "previous": ""
+        },
+        {
+          "start": 2333,
+          "end": 3319,
+          "current": "    if: >-\n      ${{ !inputs.use_secondary_drive_vm ||\n      (github.repository == 'lasrevinu333-design/memphis-zoo-mcp' &&\n       github.actor == 'lasrevinu333-design' && github.triggering_actor == github.actor &&\n       github.ref == 'refs/heads/codex/custodial-429-rehearsal-preparation' &&\n       github.run_attempt == '1' && inputs.backup_run_id == '45645963579' &&\n       inputs.current429_candidate_commit == github.sha && inputs.rehearsal_scope == 'backup_only' &&\n       inputs.official_local_storage_provider && inputs.private_current429_forward_capture &&\n       !inputs.private_current428_forward_capture && !inputs.private_context_cost_diagnostic_only) }}\n    runs-on: ${{ inputs.use_secondary_drive_vm && 'custodial-foundation-isolated' || 'ubuntu-24.04' }}\n    timeout-minutes: ${{ inputs.use_secondary_drive_vm && 1140 || (inputs.rehearsal_scope == 'backup_only' && inputs.official_local_storage_provider && !inputs.private_context_cost_diagnostic_only && 350 || 45) }}\n",
+          "previous": "    runs-on: ubuntu-24.04\n    timeout-minutes: ${{ inputs.rehearsal_scope == 'backup_only' && inputs.official_local_storage_provider && !inputs.private_context_cost_diagnostic_only && 350 || 45 }}\n"
+        },
+        {
+          "start": 3450,
+          "end": 3487,
+          "current": "          persist-credentials: false\n",
+          "previous": ""
+        },
+        {
+          "start": 6640,
+          "end": 6719,
+          "current": "          PRIVATE_REHEARSAL_SECONDARY_VM: ${{ inputs.use_secondary_drive_vm }}\n",
+          "previous": ""
+        },
+        {
+          "start": 7225,
+          "end": 7767,
+          "current": "          REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.CUSTODIAL_BACKEND_PROOF_SECRET || '' }}\n          REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET || '' }}\n          REHEARSAL_DEVICE_CREDENTIAL_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.DEVICE_CREDENTIAL_SECRET || '' }}\n          REHEARSAL_OPS_MANAGER_SESSION_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.OPS_MANAGER_SESSION_SECRET || '' }}\n",
+          "previous": "          REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET: ${{ secrets.CUSTODIAL_BACKEND_PROOF_SECRET }}\n          REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET: ${{ secrets.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET }}\n          REHEARSAL_DEVICE_CREDENTIAL_SECRET: ${{ secrets.DEVICE_CREDENTIAL_SECRET }}\n          REHEARSAL_OPS_MANAGER_SESSION_SECRET: ${{ secrets.OPS_MANAGER_SESSION_SECRET }}\n"
+        },
+        {
+          "start": 7864,
+          "end": 7884,
+          "current": "          umask 077\n",
+          "previous": ""
+        },
+        {
+          "start": 8740,
+          "end": 8824,
+          "current": "          encrypted=\"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\"\n",
+          "previous": ""
+        },
+        {
+          "start": 9315,
+          "end": 9315,
+          "current": "",
+          "previous": "            encrypted=\"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\"\n"
+        },
+        {
+          "start": 9523,
+          "end": 10170,
+          "current": "          if test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" = true; then\n            test \"$PRIVATE_CURRENT429_FORWARD_CAPTURE\" = true\n            test \"$private_route_active\" = true\n            test \"$GITHUB_ACTOR\" = lasrevinu333-design\n            test \"$GITHUB_REF\" = refs/heads/codex/custodial-429-rehearsal-preparation\n            source scripts/current429-vm-scratch.sh\n          else\n            test -n \"$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET\"\n            test -n \"$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET\"\n            test -n \"$REHEARSAL_DEVICE_CREDENTIAL_SECRET\"\n            test -n \"$REHEARSAL_OPS_MANAGER_SESSION_SECRET\"\n          fi\n",
+          "previous": "          test -n \"$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET\"\n          test -n \"$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET\"\n          test -n \"$REHEARSAL_DEVICE_CREDENTIAL_SECRET\"\n          test -n \"$REHEARSAL_OPS_MANAGER_SESSION_SECRET\"\n"
+        },
+        {
+          "start": 10573,
+          "end": 10611,
+          "current": "          receipt_root=\"$RUNNER_TEMP\"\n",
+          "previous": "          backup_dir=\"${RUNNER_TEMP}/production-backup\"\n          receipt=\"${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl\"\n          postgres_log=\"${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log\"\n"
+        },
+        {
+          "start": 10655,
+          "end": 11492,
+          "current": "            if test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" = true; then\n              if test \"$RUNNER_TEMP\" != \"$receipt_root\"; then\n                for name in production-backup-migration-rehearsal.jsonl private-backup-only-rehearsal.json official-local-storage-provider-evidence; do\n                  if test -e \"$RUNNER_TEMP/$name\"; then cp -PR -- \"$RUNNER_TEMP/$name\" \"$receipt_root/\" || status=1; fi\n                done\n              fi\n              if close_current429_vm_scratch; then\n                printf '{\"encrypted_scratch_closed\":true,\"runner_restored\":true}\\n' > \"$receipt_root/current429-vm-cleanup.json\"\n              else\n                printf '%s\\n' 'The rehearsal VM scratch cleanup was not verified.' >&2\n                status=1\n              fi\n              trap - EXIT\n              exit \"$status\"\n            fi\n",
+          "previous": ""
+        },
+        {
+          "start": 12512,
+          "end": 12953,
+          "current": "          if test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" = true; then\n            open_current429_vm_scratch\n            printf '%s\\n' 'Verified encrypted scratch and Docker data on the VM secondary drive.'\n          fi\n          backup_dir=\"${RUNNER_TEMP}/production-backup\"\n          receipt=\"${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl\"\n          postgres_log=\"${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log\"\n",
+          "previous": ""
+        },
+        {
+          "start": 13087,
+          "end": 13295,
+          "current": "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"$encrypted\" -out \"${RUNNER_TEMP}/memphis-zoo-backup.tar.gz\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n          unset BACKUP_ENCRYPTION_PASSPHRASE\n",
+          "previous": "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\" -out \"${RUNNER_TEMP}/memphis-zoo-backup.tar.gz\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n"
+        },
+        {
+          "start": 14637,
+          "end": 14694,
+          "current": "          test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" != true\n",
+          "previous": ""
+        },
+        {
+          "start": 33619,
+          "end": 33757,
+          "current": "        if: \"!inputs.use_secondary_drive_vm && (inputs.rehearsal_scope == 'full_candidate' || inputs.private_current429_forward_capture)\"\n",
+          "previous": "        if: inputs.rehearsal_scope == 'full_candidate' || inputs.private_current429_forward_capture\n"
+        },
+        {
+          "start": 34612,
+          "end": 34763,
+          "current": "          name: ${{ inputs.use_secondary_drive_vm && 'vm-unsigned-backup-rehearsal' || 'production-backup-migration-rehearsal' }}-${{ github.run_id }}\n",
+          "previous": "          name: production-backup-migration-rehearsal-${{ github.run_id }}\n"
+        },
+        {
+          "start": 34920,
+          "end": 34978,
+          "current": "            ${{ runner.temp }}/current429-vm-cleanup.json\n",
+          "previous": ""
+        },
+        {
+          "start": 36064,
+          "end": 38185,
+          "current": "  sign_current429_vm:\n    needs: rehearse\n    if: inputs.use_secondary_drive_vm\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ github.sha }}\n          persist-credentials: false\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with:\n          node-version: '22.23.4'\n          cache: npm\n      - run: npm ci --ignore-scripts\n      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0\n        with:\n          name: vm-unsigned-backup-rehearsal-${{ github.run_id }}\n          path: ${{ runner.temp }}/current429-vm-receipt\n      - name: Verify the VM receipt and sign on the hosted runner\n        env:\n          RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}\n          RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}\n          RELEASE_MIGRATION_REHEARSAL_RECEIPT: ${{ runner.temp }}/current429-vm-receipt/production-backup-migration-rehearsal.jsonl\n        run: |\n          set -euo pipefail\n          receipt_dir=\"$RUNNER_TEMP/current429-vm-receipt\"\n          jq -e '. == {encrypted_scratch_closed:true,runner_restored:true}' \"$receipt_dir/current429-vm-cleanup.json\" >/dev/null\n          node scripts/verify-current429-rehearsal.mjs\n          npm run --silent release:migrations:attest-rehearsal > \"$receipt_dir/production-backup-migration-rehearsal-attestation.json\"\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1\n        with:\n          name: production-backup-migration-rehearsal-${{ github.run_id }}\n          path: |\n            ${{ runner.temp }}/current429-vm-receipt/production-backup-migration-rehearsal.jsonl\n            ${{ runner.temp }}/current429-vm-receipt/production-backup-migration-rehearsal-attestation.json\n            ${{ runner.temp }}/current429-vm-receipt/current429-vm-cleanup.json\n          if-no-files-found: error\n          retention-days: 30\n",
+          "previous": ""
+        },
+        {
+          "start": 38206,
+          "end": 38504,
+          "current": "    needs: [rehearse, sign_current429_vm]\n    if: >-\n      ${{ !cancelled() && needs.rehearse.result == 'success' &&\n      (!inputs.use_secondary_drive_vm || needs.sign_current429_vm.result == 'success') &&\n      inputs.private_current429_forward_capture && inputs.deploy_current429_if_verified }}\n",
+          "previous": "    needs: rehearse\n    if: inputs.private_current429_forward_capture && inputs.deploy_current429_if_verified\n"
+        }
+      ]
+    },
+    "scripts/run-private-backup-only-rehearsal.mjs": {
+      "previous_sha256": "591e153728d79d10155300b8f585031381be5ed46e2b03b201ead58a6d241ff7",
+      "current_sha256": "93bc0d51678ab8096b3899bafd125591655fc0e444c00006491f76c1508fc3ea",
+      "reverse_hunks": [
+        {
+          "start": 459,
+          "end": 552,
+          "current": "import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync,statSync} from 'node:fs';\n",
+          "previous": "import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync} from 'node:fs';\n"
+        },
+        {
+          "start": 1360,
+          "end": 1626,
+          "current": "import {closeOwnedRelay,storageResult,pinnedPgMemory,privateScratchVolumeName,assertPrivateScratchMount,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile,secondaryVmIntentMs} from './run-official-local-storage-rehearsal.mjs';\n",
+          "previous": "import {closeOwnedRelay,storageResult,pinnedPgMemory,privateScratchVolumeName,assertPrivateScratchMount,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';\n"
+        },
+        {
+          "start": 10887,
+          "end": 11104,
+          "current": "  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===6*60*60*1000 ||\n    (lifetimeMs===secondaryVmIntentMs && binding.archive_digest===current429.archiveDigest),'Closed disposable rehearsal intent lifetime required');\n",
+          "previous": "  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===6*60*60*1000,'Closed disposable rehearsal intent lifetime required');\n"
+        },
+        {
+          "start": 22118,
+          "end": 23228,
+          "current": "  const tmp=realpathSync(process.env.RUNNER_TEMP);\n  const secondaryVm=process.env.PRIVATE_REHEARSAL_SECONDARY_VM==='true';\n  if(secondaryVm){\n    assert.equal(current429Capture,true);\n    assert.equal(process.env.RUNNER_ENVIRONMENT,'self-hosted');\n    assert.equal(process.env.RUNNER_NAME,'custodial-foundation-zorin');\n    assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');\n    const mount=dirname(tmp);\n    const prefix='/mnt/actions-runner/.signed-current429.'+process.env.GITHUB_RUN_ID+'.';\n    assert.ok(mount.startsWith(prefix)&&/^[a-zA-Z0-9]{8}\\/encrypted$/.test(mount.slice(prefix.length)));\n    assert.equal(tmp,resolve(mount,'work'));\n    assert.equal(realpathSync(process.env.TMPDIR),resolve(mount,'process-tmp'));\n    const scratchDevice=statSync(tmp).dev;\n    assert.equal(statSync(process.env.TMPDIR).dev,scratchDevice);\n    assert.equal(statSync('/mnt/docker').dev,scratchDevice);\n    assert.equal(statSync('/var/lib/containerd').dev,scratchDevice);\n    assert.notEqual(statSync('/mnt/actions-runner').dev,scratchDevice);\n  }\n  const owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));\n",
+          "previous": "  const tmp=realpathSync(process.env.RUNNER_TEMP),owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));\n"
+        },
+        {
+          "start": 24768,
+          "end": 24952,
+          "current": "  const baseEnv=Object.fromEntries(['PATH','HOME','RUNNER_TEMP',...(secondaryVm?['TMPDIR','PRIVATE_REHEARSAL_SECONDARY_VM']:[])].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));\n",
+          "previous": "  const baseEnv=Object.fromEntries(['PATH','HOME','RUNNER_TEMP'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));\n"
+        },
+        {
+          "start": 32686,
+          "end": 33002,
+          "current": "    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres',secondaryVm).work_ms+100000;\n    const lifetimeMs=secondaryVm?secondaryVmIntentMs:(currentFullRestore?6*60*60*1000:60*60*1000);\n    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),lifetimeMs);\n",
+          "previous": "    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres').work_ms+100000;\n    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?6*60*60*1000:60*60*1000);\n"
+        }
+      ]
+    }
+  }
+}

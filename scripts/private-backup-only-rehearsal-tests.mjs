@@ -12,6 +12,7 @@ import {PG_IMAGE,privatePostgresProcessDiagnostic,selectPrivateProfile,freshInte
 import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,assertPinnedPgResources,pinnedPgMemory,pinnedPgRestoreMemory,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
+import {diskScratchArchiveDigest,secondaryVmIntentMs} from './run-official-local-storage-rehearsal.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
 const binding={archive_digest:'a'.repeat(64),source_identity_sha256:'b'.repeat(64),project_ref:'a'.repeat(20),
   source_identity:{migration_head:'20261111161430',release:{release_id:'original-release',backend_commit:'c'.repeat(40),
@@ -53,6 +54,10 @@ test('fresh intent preserves separate runtime and schema identities; no retry or
   assert.equal(long.intent.expires_at,'2026-11-21T06:00:00.000Z');
   assert.equal(long.intent.resume_after_verification,false);
   assert.throws(()=>freshIntentEnvelope(binding,key,keyId,issued,5*60*60*1000),/Closed disposable rehearsal intent lifetime/);
+  assert.throws(()=>freshIntentEnvelope(binding,key,keyId,issued,secondaryVmIntentMs),/Closed disposable rehearsal intent lifetime/);
+  const vmEnvelope=freshIntentEnvelope({...binding,archive_digest:diskScratchArchiveDigest},key,keyId,issued,secondaryVmIntentMs);
+  assert.equal(vmEnvelope.intent.expires_at,'2026-11-21T20:00:00.000Z');
+  assert.equal(vmEnvelope.intent.resume_after_verification,false);
 });
 test('intent signature rejects tampering and wrong key',()=>{
   for(const field of ['archive_digest','target_project_ref','target_migration_head','authority_generation','resume_after_verification']){
@@ -116,6 +121,21 @@ test('workflow dispatches authenticated private selection before native target a
   assert.doesNotMatch(w,/tar -C \"\$backup_dir\" -xzf/);
   assert.ok(branch.indexOf('test "$status" = 3')<branch.indexOf('private_route_active=false'));
 });
+test('the secondary VM verification precedes decryption, with hosted signing and SQL apply',()=>{
+  const workflow=readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8');
+  const [vmJob,hostedJobs]=workflow.split('\n  sign_current429_vm:');
+  const [signJob,applyJob]=hostedJobs.split('\n  apply_current429:');
+  assert.match(vmJob,/github\.run_attempt == '1' && inputs\.backup_run_id == '45645963579'/);
+  assert.match(vmJob,/inputs\.current429_candidate_commit == github\.sha/);
+  const prepare=vmJob.indexOf('open_current429_vm_scratch');
+  assert.ok(prepare>0&&prepare<vmJob.indexOf('openssl enc -d'));
+  assert.match(vmJob,/if: "!inputs\.use_secondary_drive_vm && \(inputs\.rehearsal_scope/);
+  assert.match(signJob,/runs-on: ubuntu-24\.04/);
+  assert.ok(signJob.indexOf('current429-vm-cleanup.json"')<signJob.indexOf('release:migrations:attest-rehearsal'));
+  assert.match(applyJob,/runs-on: ubuntu-24\.04/);
+  assert.match(applyJob,/needs\.sign_current429_vm\.result == 'success'/);
+  assert.doesNotMatch(vmJob,/SUPABASE_MIGRATION_DB_URL/);
+});
 test('new runner has no hydration, legacy intent producer or migration invocation',()=>{
   const s=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   assert.doesNotMatch(s,/['"](?:--publish|-p|restore:prepare-isolated|restore:intent|release:migrations:apply)['"]/);
@@ -175,6 +195,11 @@ test('Storage worker exact owner contracts reject relabeling and arbitrary role 
   assert.equal(storageWorkerActor('immutable-private-fresh-supabase-admin',legacy),'supabase_admin');
   assert.equal(storageWorkerActor('immutable-private-fresh-postgres',current),'postgres');
   assert.equal(resourceProfile('immutable-private-fresh-postgres').work_ms,19800000);
+  const vm=resourceProfile('immutable-private-fresh-postgres',true);
+  assert.equal(vm.work_ms,18*60*60*1000);
+  assert.ok(vm.work_ms+60*60*1000<secondaryVmIntentMs);
+  assert.throws(()=>resourceProfile('immutable-private-fresh-supabase-admin',true));
+  assert.throws(()=>resourceProfile('immutable-private-fresh-postgres','true'));
   assert.equal(resourceProfile('immutable-private-fresh-supabase-admin').work_ms,1800000);
   for(const [profile,owner] of [
     ['native-text-v4-fresh-supabase-admin',current],['immutable-private-fresh-supabase-admin',current],

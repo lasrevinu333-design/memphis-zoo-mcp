@@ -29,7 +29,14 @@ export function supportedOfficialStartupMigration(rows,profile){
     'Authenticated names/IDs/hashes differ from exact official prefix/source tail.');
   return 'object-versioning-core';
 }
-export function resourceProfile(profile){
+export const secondaryVmIntentMs = 20 * 60 * 60 * 1000;
+
+export function resourceProfile(profile, secondaryVm = false){
+  insist(typeof secondaryVm === 'boolean', 'Closed rehearsal runtime required.');
+  if (secondaryVm) {
+    insist(profile === 'immutable-private-fresh-postgres', 'Secondary VM requires the current PostgreSQL profile.');
+    return Object.freeze({work_ms:18 * 60 * 60 * 1000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
+  }
   if(profile==='native-text-v4-fresh-supabase-admin')return Object.freeze({work_ms:900000,node_heap_mib:256,cpus:1,cleanup_ms:45000});
   if(profile==='immutable-private-fresh-supabase-admin')return Object.freeze({work_ms:1800000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
   // The signed run reached legacy completion rows after 4h50m. Allow for the
@@ -646,7 +653,9 @@ async function host(){
     mark('BIND_ARCHIVE_SOURCE');api.assertVerifiedArchiveIndependentIntentKey(archive,process.env.RESTORE_INTENT_VERIFY_KEY);
     const a=storage.freshLocalStorageArchiveBinding(archive),s=a.sourceBinding;
     privacy.privateData=Boolean(a.owner_profile);
-    const budget=resourceProfile(a.source_profile);deadline=started+budget.work_ms;
+    const secondaryVm=process.env.PRIVATE_REHEARSAL_SECONDARY_VM==='true';
+    if(secondaryVm)insist(s.archive_digest===diskScratchArchiveDigest,'Secondary VM requires the exact authorized signed archive.');
+    const budget=resourceProfile(a.source_profile,secondaryVm);deadline=started+budget.work_ms;
     mark('VERIFY_INTENT_SOURCE');insist(intent.archive_digest===s.archive_digest && intent.source_identity_sha256===s.source_identity_sha256 && intent.source_project_ref===s.project_ref,'Original intent source mismatch.');
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')insist(a.bucket_count===3 && a.object_count===1,'Production G31 original requires authenticated three buckets and one object.');
     else insist(storageWorkerActor(a.source_profile,a.owner_profile)===a.expected_session_user && a.bucket_count>0 && a.object_count>0 && a.bucket_count<=65536 && a.object_count<=65536,'Private original requires bounded genuine nonempty Storage.');

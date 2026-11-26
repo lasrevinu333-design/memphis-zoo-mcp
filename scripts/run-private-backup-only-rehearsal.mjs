@@ -6,7 +6,7 @@ import {isProxy} from 'node:util/types';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer,createConnection,isIP} from 'node:net';
-import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync,statSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import pg from 'pg';
@@ -16,7 +16,7 @@ import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fr
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
-import {closeOwnedRelay,storageResult,pinnedPgMemory,privateScratchVolumeName,assertPrivateScratchMount,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';
+import {closeOwnedRelay,storageResult,pinnedPgMemory,privateScratchVolumeName,assertPrivateScratchMount,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile,secondaryVmIntentMs} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';
@@ -141,7 +141,8 @@ export function selectPrivateProfile(source){
 // Signed DATA construction only. Caller must authenticate the archive and invoke
 // captureVerifiedImmutableFreshRestoreIntent before any target is created.
 export function freshIntentEnvelope(binding,key,keyId,now=new Date(),lifetimeMs=60*60*1000){
-  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===6*60*60*1000,'Closed disposable rehearsal intent lifetime required');
+  assert.ok(lifetimeMs===60*60*1000 || lifetimeMs===6*60*60*1000 ||
+    (lifetimeMs===secondaryVmIntentMs && binding.archive_digest===current429.archiveDigest),'Closed disposable rehearsal intent lifetime required');
   requireSigningKey(key,'Independent rehearsal intent key');
   assert.match(keyId,/^[a-zA-Z0-9._:-]{1,120}$/);
   const release=Object.fromEntries(['release_id','backend_commit','frontend_commit','migration_head','migration_manifest_sha256']
@@ -283,7 +284,25 @@ export async function runPrivate(){
   const current429Capture=current429CaptureRequested();
   assert.match(process.env.GITHUB_RUN_ID||'',/^[1-9][0-9]*$/);
   assert.match(process.env.BACKUP_RUN_ID||'',/^[1-9][0-9]*$/);
-  const tmp=realpathSync(process.env.RUNNER_TEMP),owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));
+  const tmp=realpathSync(process.env.RUNNER_TEMP);
+  const secondaryVm=process.env.PRIVATE_REHEARSAL_SECONDARY_VM==='true';
+  if(secondaryVm){
+    assert.equal(current429Capture,true);
+    assert.equal(process.env.RUNNER_ENVIRONMENT,'self-hosted');
+    assert.equal(process.env.RUNNER_NAME,'custodial-foundation-zorin');
+    assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
+    const mount=dirname(tmp);
+    const prefix='/mnt/actions-runner/.signed-current429.'+process.env.GITHUB_RUN_ID+'.';
+    assert.ok(mount.startsWith(prefix)&&/^[a-zA-Z0-9]{8}\/encrypted$/.test(mount.slice(prefix.length)));
+    assert.equal(tmp,resolve(mount,'work'));
+    assert.equal(realpathSync(process.env.TMPDIR),resolve(mount,'process-tmp'));
+    const scratchDevice=statSync(tmp).dev;
+    assert.equal(statSync(process.env.TMPDIR).dev,scratchDevice);
+    assert.equal(statSync('/mnt/docker').dev,scratchDevice);
+    assert.equal(statSync('/var/lib/containerd').dev,scratchDevice);
+    assert.notEqual(statSync('/mnt/actions-runner').dev,scratchDevice);
+  }
+  const owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));
   const owner=randomBytes(16).toString('hex'),name='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
   const networkName=name+'_private_'+owner, database=name;
   const scratchName=process.env.BACKUP_RUN_ID===current429.runId?privateScratchVolumeName(name,owner):null;
@@ -298,7 +317,7 @@ export async function runPrivate(){
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
-  const baseEnv=Object.fromEntries(['PATH','HOME','RUNNER_TEMP'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
+  const baseEnv=Object.fromEntries(['PATH','HOME','RUNNER_TEMP',...(secondaryVm?['TMPDIR','PRIVATE_REHEARSAL_SECONDARY_VM']:[])].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
   const run=(command,args,{input,env=baseEnv,timeout=60000,cleanup=false,abortSignal=null,diagnosticOperation=null}={})=>new Promise((yes,no)=>{
     if(stopping&&!cleanup || abortSignal?.aborted)return no(new Error('Cancelled'));
     const child=spawn(command,args,{cwd:root,env,detached:true,stdio:['pipe','pipe','pipe']});
@@ -389,8 +408,9 @@ export async function runPrivate(){
       assert.deepEqual(current,ownerProfile);return current;};
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
     const currentFullRestore=!contextDiagnosticOnly&&ownerProfile.id==='immutable-private-current-postgres';
-    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres').work_ms+100000;
-    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),currentFullRestore?6*60*60*1000:60*60*1000);
+    if(currentFullRestore)restoreTimeoutMs=resourceProfile('immutable-private-fresh-postgres',secondaryVm).work_ms+100000;
+    const lifetimeMs=secondaryVm?secondaryVmIntentMs:(currentFullRestore?6*60*60*1000:60*60*1000);
+    const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId,new Date(),lifetimeMs);
     captureVerifiedImmutableFreshRestoreIntent({verifiedArchive:archive,originalIntentEnvelope:envelope,intentVerifyKey:key,intentVerifyKeyId:keyId});
     const secretEnv={...baseEnv,REHEARSAL_SCOPE:'backup_only',OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',
       GITHUB_ACTIONS:process.env.GITHUB_ACTIONS,GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,RESTORE_SOURCE_DIR:archive.directory,

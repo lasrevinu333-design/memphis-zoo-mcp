@@ -53,9 +53,17 @@ export function removeRehearsalRevisions(name,source){
 }
 
 export function removeCurrent429Qualification(name,source){
+ const vmRaw=readFileSync(new URL('../release/installed-source/current429-secondary-drive-vm-inverse.json',import.meta.url),'utf8');
+ assert.equal(sha(vmRaw),'9f1d186d4d58a618c3ec7e2d5910eaed0d03d91f9eccf76a4173fd67b564ffe7');
+ const vm=JSON.parse(vmRaw);
+ assert.equal(vm.format,'custodial.current429-secondary-drive-vm-source-inverse.v1');
+ source=reverseExactFile(vm.files[name],source);
  const raw=readFileSync(new URL('../release/installed-source/current429-rehearsal-inverse.json',import.meta.url),'utf8');
  assert.equal(sha(raw),'8b403792a86a7148680406a3b4de259d81185a3ba5691c6b310679fc076db60d');
- const revision=JSON.parse(raw).files[name];
+ return reverseExactFile(JSON.parse(raw).files[name],source);
+}
+
+function reverseExactFile(revision,source){
  if(!revision||sha(source)!==revision.current_sha256)return source;
  for(const edit of [...revision.reverse_hunks].reverse()){
   assert.equal(source.slice(edit.start,edit.end),edit.current);
