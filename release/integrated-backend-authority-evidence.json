@@ -3835,7 +3835,7 @@
       {
         "path": "scripts/apply-current429-forward-plan.mjs",
         "mode": "100644",
-        "object_id": "9b5d38e48e8028bbc3dce87ff370f770af4726de"
+        "object_id": "487547cd7d8baedef1771eee96437453bc79d593"
       },
       {
         "path": "scripts/apply-production-restore-reconciliation.mjs",
@@ -4100,7 +4100,7 @@
       {
         "path": "scripts/backup-ledger-binding-v2.mjs",
         "mode": "100644",
-        "object_id": "f99ec0fa296cb6061ae0a7d9ddecb56f111aa265"
+        "object_id": "c61f9caf0b098640e7ee7ba8ffd4205b2ed1917e"
       },
       {
         "path": "scripts/backup-private-namespace-compatibility-tests.mjs",
