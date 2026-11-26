@@ -3,7 +3,7 @@
   "files": {
     ".github/workflows/production-backup-migration-rehearsal.yml": {
       "previous_sha256": "4f8241ff5238fdf25f0b45c658c06d3ddabde3c2bee2980a6d8a77a04a927cc3",
-      "current_sha256": "f4fd29f43440d50c29fb6fe53aa95aa332f61b8e6dce65325b9c760a75fd0093",
+      "current_sha256": "b12d1bc1db6d430a6634e00d19908afd963425c7934df89a597e21d1fbf81651",
       "reverse_hunks": [
         {
           "start": 1558,
@@ -24,98 +24,104 @@
           "previous": ""
         },
         {
-          "start": 6640,
-          "end": 6719,
+          "start": 5705,
+          "end": 6166,
+          "current": "      - name: Require the Storage verifier's memory floor before opening the backup\n        if: inputs.use_secondary_drive_vm\n        run: |\n          node --input-type=module <<'NODE'\n          import {requirePinnedPgRestoreMemory} from './scripts/run-official-local-storage-rehearsal.mjs';\n          requirePinnedPgRestoreMemory('immutable-private-fresh-postgres', observed => {\n            console.log(JSON.stringify(observed));\n          });\n          NODE\n",
+          "previous": ""
+        },
+        {
+          "start": 7101,
+          "end": 7180,
           "current": "          PRIVATE_REHEARSAL_SECONDARY_VM: ${{ inputs.use_secondary_drive_vm }}\n",
           "previous": ""
         },
         {
-          "start": 7225,
-          "end": 7767,
+          "start": 7686,
+          "end": 8228,
           "current": "          REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.CUSTODIAL_BACKEND_PROOF_SECRET || '' }}\n          REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET || '' }}\n          REHEARSAL_DEVICE_CREDENTIAL_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.DEVICE_CREDENTIAL_SECRET || '' }}\n          REHEARSAL_OPS_MANAGER_SESSION_SECRET: ${{ !inputs.use_secondary_drive_vm && secrets.OPS_MANAGER_SESSION_SECRET || '' }}\n",
           "previous": "          REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET: ${{ secrets.CUSTODIAL_BACKEND_PROOF_SECRET }}\n          REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET: ${{ secrets.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET }}\n          REHEARSAL_DEVICE_CREDENTIAL_SECRET: ${{ secrets.DEVICE_CREDENTIAL_SECRET }}\n          REHEARSAL_OPS_MANAGER_SESSION_SECRET: ${{ secrets.OPS_MANAGER_SESSION_SECRET }}\n"
         },
         {
-          "start": 7864,
-          "end": 7884,
+          "start": 8325,
+          "end": 8345,
           "current": "          umask 077\n",
           "previous": ""
         },
         {
-          "start": 8740,
-          "end": 8824,
+          "start": 9201,
+          "end": 9285,
           "current": "          encrypted=\"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\"\n",
           "previous": ""
         },
         {
-          "start": 9315,
-          "end": 9315,
+          "start": 9776,
+          "end": 9776,
           "current": "",
           "previous": "            encrypted=\"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\"\n"
         },
         {
-          "start": 9523,
-          "end": 10170,
+          "start": 9984,
+          "end": 10631,
           "current": "          if test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" = true; then\n            test \"$PRIVATE_CURRENT429_FORWARD_CAPTURE\" = true\n            test \"$private_route_active\" = true\n            test \"$GITHUB_ACTOR\" = lasrevinu333-design\n            test \"$GITHUB_REF\" = refs/heads/codex/custodial-429-rehearsal-preparation\n            source scripts/current429-vm-scratch.sh\n          else\n            test -n \"$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET\"\n            test -n \"$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET\"\n            test -n \"$REHEARSAL_DEVICE_CREDENTIAL_SECRET\"\n            test -n \"$REHEARSAL_OPS_MANAGER_SESSION_SECRET\"\n          fi\n",
           "previous": "          test -n \"$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET\"\n          test -n \"$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET\"\n          test -n \"$REHEARSAL_DEVICE_CREDENTIAL_SECRET\"\n          test -n \"$REHEARSAL_OPS_MANAGER_SESSION_SECRET\"\n"
         },
         {
-          "start": 10573,
-          "end": 10611,
+          "start": 11034,
+          "end": 11072,
           "current": "          receipt_root=\"$RUNNER_TEMP\"\n",
           "previous": "          backup_dir=\"${RUNNER_TEMP}/production-backup\"\n          receipt=\"${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl\"\n          postgres_log=\"${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log\"\n"
         },
         {
-          "start": 10655,
-          "end": 11492,
+          "start": 11116,
+          "end": 11953,
           "current": "            if test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" = true; then\n              if test \"$RUNNER_TEMP\" != \"$receipt_root\"; then\n                for name in production-backup-migration-rehearsal.jsonl private-backup-only-rehearsal.json official-local-storage-provider-evidence; do\n                  if test -e \"$RUNNER_TEMP/$name\"; then cp -PR -- \"$RUNNER_TEMP/$name\" \"$receipt_root/\" || status=1; fi\n                done\n              fi\n              if close_current429_vm_scratch; then\n                printf '{\"encrypted_scratch_closed\":true,\"runner_restored\":true}\\n' > \"$receipt_root/current429-vm-cleanup.json\"\n              else\n                printf '%s\\n' 'The rehearsal VM scratch cleanup was not verified.' >&2\n                status=1\n              fi\n              trap - EXIT\n              exit \"$status\"\n            fi\n",
           "previous": ""
         },
         {
-          "start": 12512,
-          "end": 12953,
+          "start": 12973,
+          "end": 13414,
           "current": "          if test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" = true; then\n            open_current429_vm_scratch\n            printf '%s\\n' 'Verified encrypted scratch and Docker data on the VM secondary drive.'\n          fi\n          backup_dir=\"${RUNNER_TEMP}/production-backup\"\n          receipt=\"${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl\"\n          postgres_log=\"${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log\"\n",
           "previous": ""
         },
         {
-          "start": 13087,
-          "end": 13295,
+          "start": 13548,
+          "end": 13756,
           "current": "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"$encrypted\" -out \"${RUNNER_TEMP}/memphis-zoo-backup.tar.gz\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n          unset BACKUP_ENCRYPTION_PASSPHRASE\n",
           "previous": "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\" -out \"${RUNNER_TEMP}/memphis-zoo-backup.tar.gz\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n"
         },
         {
-          "start": 14637,
-          "end": 14694,
+          "start": 15098,
+          "end": 15155,
           "current": "          test \"$PRIVATE_REHEARSAL_SECONDARY_VM\" != true\n",
           "previous": ""
         },
         {
-          "start": 33619,
-          "end": 33757,
+          "start": 34080,
+          "end": 34218,
           "current": "        if: \"!inputs.use_secondary_drive_vm && (inputs.rehearsal_scope == 'full_candidate' || inputs.private_current429_forward_capture)\"\n",
           "previous": "        if: inputs.rehearsal_scope == 'full_candidate' || inputs.private_current429_forward_capture\n"
         },
         {
-          "start": 34612,
-          "end": 34763,
+          "start": 35073,
+          "end": 35224,
           "current": "          name: ${{ inputs.use_secondary_drive_vm && 'vm-unsigned-backup-rehearsal' || 'production-backup-migration-rehearsal' }}-${{ github.run_id }}\n",
           "previous": "          name: production-backup-migration-rehearsal-${{ github.run_id }}\n"
         },
         {
-          "start": 34920,
-          "end": 34978,
+          "start": 35381,
+          "end": 35439,
           "current": "            ${{ runner.temp }}/current429-vm-cleanup.json\n",
           "previous": ""
         },
         {
-          "start": 36064,
-          "end": 38185,
+          "start": 36525,
+          "end": 38646,
           "current": "  sign_current429_vm:\n    needs: rehearse\n    if: inputs.use_secondary_drive_vm\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ github.sha }}\n          persist-credentials: false\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with:\n          node-version: '22.23.4'\n          cache: npm\n      - run: npm ci --ignore-scripts\n      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0\n        with:\n          name: vm-unsigned-backup-rehearsal-${{ github.run_id }}\n          path: ${{ runner.temp }}/current429-vm-receipt\n      - name: Verify the VM receipt and sign on the hosted runner\n        env:\n          RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}\n          RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}\n          RELEASE_MIGRATION_REHEARSAL_RECEIPT: ${{ runner.temp }}/current429-vm-receipt/production-backup-migration-rehearsal.jsonl\n        run: |\n          set -euo pipefail\n          receipt_dir=\"$RUNNER_TEMP/current429-vm-receipt\"\n          jq -e '. == {encrypted_scratch_closed:true,runner_restored:true}' \"$receipt_dir/current429-vm-cleanup.json\" >/dev/null\n          node scripts/verify-current429-rehearsal.mjs\n          npm run --silent release:migrations:attest-rehearsal > \"$receipt_dir/production-backup-migration-rehearsal-attestation.json\"\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1\n        with:\n          name: production-backup-migration-rehearsal-${{ github.run_id }}\n          path: |\n            ${{ runner.temp }}/current429-vm-receipt/production-backup-migration-rehearsal.jsonl\n            ${{ runner.temp }}/current429-vm-receipt/production-backup-migration-rehearsal-attestation.json\n            ${{ runner.temp }}/current429-vm-receipt/current429-vm-cleanup.json\n          if-no-files-found: error\n          retention-days: 30\n",
           "previous": ""
         },
         {
-          "start": 38206,
-          "end": 38504,
+          "start": 38667,
+          "end": 38965,
           "current": "    needs: [rehearse, sign_current429_vm]\n    if: >-\n      ${{ !cancelled() && needs.rehearse.result == 'success' &&\n      (!inputs.use_secondary_drive_vm || needs.sign_current429_vm.result == 'success') &&\n      inputs.private_current429_forward_capture && inputs.deploy_current429_if_verified }}\n",
           "previous": "    needs: rehearse\n    if: inputs.private_current429_forward_capture && inputs.deploy_current429_if_verified\n"
         }

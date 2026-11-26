@@ -54,7 +54,7 @@ export function removeRehearsalRevisions(name,source){
 
 export function removeCurrent429Qualification(name,source){
  const vmRaw=readFileSync(new URL('../release/installed-source/current429-secondary-drive-vm-inverse.json',import.meta.url),'utf8');
- assert.equal(sha(vmRaw),'9f1d186d4d58a618c3ec7e2d5910eaed0d03d91f9eccf76a4173fd67b564ffe7');
+ assert.equal(sha(vmRaw),'5b28a606028ee9aab6f939eb68a1e12d31e1eaf8baa01a2fc5b2bacba527140a');
  const vm=JSON.parse(vmRaw);
  assert.equal(vm.format,'custodial.current429-secondary-drive-vm-source-inverse.v1');
  source=reverseExactFile(vm.files[name],source);

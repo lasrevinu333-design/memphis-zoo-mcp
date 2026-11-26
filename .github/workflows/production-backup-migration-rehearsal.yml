@@ -108,6 +108,15 @@ jobs:
           node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-safe-ordinary-set-only --safe-ordinary-set-case=portable
           node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-row-aware-fk-only --row-aware-fk-case=portable
           node scripts/immutable-private-source-bootstrap-tests.mjs --immutable-text-columns-import-only
+      - name: Require the Storage verifier's memory floor before opening the backup
+        if: inputs.use_secondary_drive_vm
+        run: |
+          node --input-type=module <<'NODE'
+          import {requirePinnedPgRestoreMemory} from './scripts/run-official-local-storage-rehearsal.mjs';
+          requirePinnedPgRestoreMemory('immutable-private-fresh-postgres', observed => {
+            console.log(JSON.stringify(observed));
+          });
+          NODE
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: memphis-zoo-disaster-recovery-${{ inputs.backup_run_id }}

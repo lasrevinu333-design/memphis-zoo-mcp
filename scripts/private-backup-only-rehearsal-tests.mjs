@@ -129,6 +129,8 @@ test('the secondary VM verification precedes decryption, with hosted signing and
   assert.match(vmJob,/inputs\.current429_candidate_commit == github\.sha/);
   const prepare=vmJob.indexOf('open_current429_vm_scratch');
   assert.ok(prepare>0&&prepare<vmJob.indexOf('openssl enc -d'));
+  const memoryProbe=vmJob.indexOf("requirePinnedPgRestoreMemory('immutable-private-fresh-postgres'");
+  assert.ok(memoryProbe>0&&memoryProbe<vmJob.indexOf('actions/download-artifact@'));
   assert.match(vmJob,/if: "!inputs\.use_secondary_drive_vm && \(inputs\.rehearsal_scope/);
   assert.match(signJob,/runs-on: ubuntu-24\.04/);
   assert.ok(signJob.indexOf('current429-vm-cleanup.json"')<signJob.indexOf('release:migrations:attest-rehearsal'));
@@ -565,7 +567,7 @@ test('exact host startup flow reports early failures before custody without targ
   const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
   const begin=source.indexOf('  const startup=ownedHostStartupRecorder(process.env.RUNNER_TEMP)'),end=source.indexOf('  const started=Date.now();',begin);
   assert.ok(begin>0&&end>begin);
-  const memoryBegin=source.indexOf('function memoryFloor('),memoryEnd=source.indexOf('const hostStartupPhases=',memoryBegin);
+  const memoryBegin=source.indexOf('function memoryFloor('),memoryEnd=source.indexOf('export function requirePinnedPgRestoreMemory',memoryBegin);
   const memoryFactory=new Function('ports',`const {hostMemoryAvailability,readFileSync,insist}=ports;${source.slice(memoryBegin,memoryEnd)}return memoryFloor;`);
   const factory=new Function('ports',`const {root,process,ownedHostStartupRecorder,selectedMode,pathToFileURL,resolve,loadModule,memoryFloor,mkdtempSync}=ports;
     return async()=>{${source.slice(begin,end).replaceAll('await import(','await loadModule(')}return {intent,custody};};`);
@@ -935,8 +937,10 @@ test('the current original-owner PostgreSQL fixture has 6GiB restore memory and 
 
 test('actual rehearsal host binds the same closed PostgreSQL memory allowance it verifies',async()=>{
  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+ const helperStart=source.indexOf('function requirePinnedPgRestoreMemory('),helperEnd=source.indexOf('const hostStartupPhases=',helperStart);
+ assert.ok(helperStart>0&&helperEnd>helperStart);
  const start=source.indexOf("    mark('BOUND_OWNED_POSTGRES');"),end=source.indexOf('    const pgPorts=',start);assert.ok(start>0&&end>start);
- const runBlock=new Function('ports',`const {mark,pinnedPgRestoreMemory,a,memoryFloor,run,pgid,pgName,inspectFormat,assertPinnedPgResources,s,diskScratchArchiveDigest}=ports;return(async()=>{${source.slice(start,end)}})();`);
+ const runBlock=new Function('ports',`const {mark,pinnedPgRestoreMemory,a,memoryFloor,run,pgid,pgName,inspectFormat,assertPinnedPgResources,s,diskScratchArchiveDigest}=ports;${source.slice(helperStart,helperEnd)}return(async()=>{${source.slice(start,end)}})();`);
  for(const [profile,expectedHostGiB] of [['native-text-v4-fresh-supabase-admin',4],['immutable-private-fresh-supabase-admin',0],['immutable-private-fresh-postgres',8]]){
   const expected=pinnedPgRestoreMemory(profile),cid='a'.repeat(64),name='unit_owned',commands=[],floors=[];
   const fixture={Id:cid,Name:'/'+name,Config:{Image:PG_IMAGE},HostConfig:{Memory:parseInt(expected)*1024**3,MemorySwap:parseInt(expected)*1024**3,NanoCpus:1e9,PidsLimit:256,Tmpfs:{'/var/lib/postgresql/data':'rw,size='+pinnedPgMemory(profile)}}};

@@ -209,6 +209,11 @@ function memoryFloor(bytes,observe=null){
   const memory=hostMemoryAvailability(readFileSync('/proc/meminfo','utf8'),bytes);
   if(observe)observe(memory);insist(memory.floor_met,'Insufficient available memory.');
 }
+export function requirePinnedPgRestoreMemory(profile,observe=null){
+  const pgMemory=pinnedPgRestoreMemory(profile);
+  if(pgMemory!=='1g')memoryFloor((parseInt(pgMemory,10)+2)*1024**3,observe);
+  return pgMemory;
+}
 const hostStartupPhases=new Set(['SELECT_MODE','IMPORT_ARCHIVE','IMPORT_STORAGE','IMPORT_POSTGRES_CLIENT',
   'CHECK_MEMORY_FLOOR','PARSE_ORIGINAL_INTENT','IMPORT_CRYPTO','CAPTURE_ORIGINAL_INTENT','CREATE_CUSTODY','HOST_STARTUP_READY']);
 export function hostStartupDiagnostic(phase,memory,error=null){
@@ -703,8 +708,7 @@ async function host(){
       privateNetwork=Object.freeze({networkId,networkName:network,owner:pg.Config.Labels['custodial.private-backup-rehearsal'],pgid,pgName,address:endpoint.IPAddress});
       assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
     }
-    mark('BOUND_OWNED_POSTGRES');const pgMemory=pinnedPgRestoreMemory(a.source_profile);
-    if(pgMemory!=='1g')memoryFloor((parseInt(pgMemory,10)+2)*1024**3);
+    mark('BOUND_OWNED_POSTGRES');const pgMemory=requirePinnedPgRestoreMemory(a.source_profile);
     await run(['docker','update','--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',pgid]);
     const boundedPg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgid]));
     assertPinnedPgResources(boundedPg,pgid,pgName,a.source_profile,{diskScratch:s.archive_digest===diskScratchArchiveDigest});
