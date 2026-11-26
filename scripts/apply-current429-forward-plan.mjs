@@ -13,6 +13,7 @@ import {ledgerMetadataDigest} from './backup-ledger-binding-v2.mjs';
 import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';
 import {current429,readCurrent429Plan} from './current429-forward-qualification-source.mjs';
 import {assertCurrent429CatalogDelta,readCurrent429Registry} from './current429-forward-readback.mjs';
+import {readCurrentWeek} from './current428-rollback-target.mjs';
 import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -65,6 +66,28 @@ function verifyTarget(snapshot, target, plan){
   assert.deepEqual(Object.fromEntries(Object.entries(snapshot.catalog).map(([name,rows])=>[name,rows.length])),target.catalog.counts);
 }
 
+// Session locks precede BEGIN so the snapshot cannot miss a lease that
+// completed while this connection waited for exclusive admission.
+export async function beginCurrent429ApplyTransaction(query){
+  await query("set lock_timeout='5s'");
+  await query("set statement_timeout='180s'");
+  for(const name of ['memphis-zoo-release-migration-plan','memphis-zoo-application-mutation-admission','memphis-zoo-application-mutation-fence'])
+    await query('select pg_advisory_lock(hashtextextended($1,0))',[name]);
+  await query('begin isolation level serializable');
+}
+
+async function readScheduleDay(query){
+  const result=await query(`with day as (select public.sch_service_date(now()) as service_date), readback as (
+    select service_date, public.custodial_memphis_schedule_day(service_date)::jsonb as data from day
+  ) select service_date::text,data->>'status' as status,jsonb_array_length(data->'rows') as roster_rows,
+    data->>'publication_id' is not null as published,data->>'projection_id' is not null as projection_bound from readback`);
+  assert.equal(result.rowCount,1);
+  const schedule=result.rows[0];
+  assert.ok(schedule.status==='current'&&schedule.published&&schedule.projection_bound
+    &&Number.isSafeInteger(schedule.roster_rows)&&schedule.roster_rows>0,'Usable published service day required');
+  return schedule;
+}
+
 async function apply(){
   let stage='authorization',db,transaction=false,committed=false,commitRequested=false;
   try{
@@ -99,13 +122,9 @@ async function apply(){
     await assertProductionDatabaseIdentity(db,{migrationAuthority:true});
     const query=(statement,params)=>db.query(statement,params);
     stage='locked_production_baseline';
-    await query('begin isolation level serializable');
+    await beginCurrent429ApplyTransaction(query);
     transaction=true;
     await configureSnapshot(query);
-    await query("set local lock_timeout='5s'");
-    await query("set local statement_timeout='180s'");
-    await query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-release-migration-plan',0))");
-    await query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-fence',0))");
     await query('lock table supabase_migrations.schema_migrations in access exclusive mode');
     const tables=await query(`select format('%I.%I',n.nspname,c.relname) name from pg_class c
       join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') order by n.nspname,c.relname`);
@@ -126,6 +145,9 @@ async function apply(){
     assert.equal(before.catalogHash,current429.sourceCatalog);
     const registryBefore=await readCurrent429Registry(query,'before');
     assert.equal(registryBefore.event_guard_sha256,target.event_guard_sha256);
+    const weekBefore=await readCurrentWeek(query);
+    assert.equal(weekBefore.coverage.working_coverage,true,'Production Chicago week unavailable before apply');
+    const scheduleBefore=await readScheduleDay(query);
     stage='execute_four_reviewed_migrations';
     for(const migration of plan.pending){
       await query(migration.body);
@@ -140,6 +162,10 @@ async function apply(){
     assert.deepEqual(after.ledger.slice(0,current429.sourceCount),before.ledger);
     assertCurrent429CatalogDelta(before.catalog,after.catalog);
     assert.deepEqual(await readCurrent429Registry(query,'after'),registryBefore);
+    const weekAfter=await readCurrentWeek(query);
+    assert.equal(weekAfter.coverage.working_coverage,true,'Production Chicago week unavailable after apply');
+    assert.deepEqual(weekAfter,weekBefore);
+    assert.deepEqual(await readScheduleDay(query),scheduleBefore);
     stage='commit';
     commitRequested=true;
     assert.equal((await query('commit')).command,'COMMIT');
@@ -151,19 +177,18 @@ async function apply(){
     await configureSnapshot(query);
     verifyTarget(await readSnapshot(query,db),target,plan);
     assert.deepEqual(await readCurrent429Registry(query,'after'),registryBefore);
-    const schedule=(await query(`with day as (select public.sch_service_date(now()) as service_date), readback as (
-      select service_date, public.custodial_memphis_schedule_day(service_date)::jsonb as data from day
-    ) select service_date::text,data->>'status' as status,jsonb_array_length(data->'rows') as roster_rows,
-      data->>'publication_id' is not null as published,data->>'projection_id' is not null as projection_bound from readback`)).rows[0];
+    const schedule=await readScheduleDay(query);
+    const week=await readCurrentWeek(query);
+    assert.equal(week.coverage.working_coverage,true,'Production Chicago week unavailable on commit readback');
     const response=await fetch('https://memphis-zoo-mcp.onrender.com/schedule-api/health',{redirect:'error',signal:AbortSignal.timeout(15000)});
     const healthy=response.ok&&(await response.json()).ok===true;
     await query('rollback');
     transaction=false;
-    const scheduleReady=healthy&&schedule?.status==='current'&&schedule.published&&schedule.projection_bound;
+    const scheduleReady=healthy;
     console.log(JSON.stringify({ok:scheduleReady,production_committed:true,production_target_verified:true,
       run_id:process.env.GITHUB_RUN_ID,backup_run_id:current429.runId,plan_sha256:plan.plan_sha256,
       target_ledger_count:target.ledger_count,target_ledger_head:target.ledger_head,
-      target_catalog_fingerprint:target.catalog.fingerprint,schedule_api_http:response.status,schedule}));
+      target_catalog_fingerprint:target.catalog.fingerprint,schedule_api_http:response.status,schedule,week:week.coverage}));
     if(!scheduleReady)process.exitCode=1;
   }catch(error){
     if(transaction&&!committed)await db.query('rollback').catch(()=>{});

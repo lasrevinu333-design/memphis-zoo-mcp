@@ -16,7 +16,7 @@ import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fr
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
-import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';
+import {closeOwnedRelay,storageResult,pinnedPgMemory,privateScratchVolumeName,assertPrivateScratchMount,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';
 import {projectCronSetupFailure} from './seed-isolated-current-postgres-cron.mjs';
 import {withIsolatedCurrentVendorPrivileges,projectIsolatedVendorPrivilegeStatus} from './isolated-current-vendor-privileges.mjs';
 import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStatus} from './isolated-current-catalog-privileges.mjs';
@@ -155,7 +155,7 @@ export function freshIntentEnvelope(binding,key,keyId,now=new Date(),lifetimeMs=
     intent,signature:signBinding(restoreIntentBinding(intent),key)};
 }
 const targetCreationOperations=new Set(['CHECK_TARGET_ABSENCE','PULL_PINNED_POSTGRES_IMAGE','CREATE_OWNED_NETWORK',
-  'CHECK_NETWORK_ID_SHAPE','START_OWNED_POSTGRES','CHECK_CONTAINER_ID_SHAPE','INSPECT_OWNED_POSTGRES','VERIFY_OWNED_POSTGRES',
+  'CHECK_NETWORK_ID_SHAPE','CREATE_OWNED_PGDATA','START_OWNED_POSTGRES','CHECK_CONTAINER_ID_SHAPE','INSPECT_OWNED_POSTGRES','VERIFY_OWNED_POSTGRES',
   'INSPECT_OWNED_NETWORK','VERIFY_OWNED_NETWORK']);
 export function targetCreationOperation(value){return targetCreationOperations.has(value)?value:null;}
 const privateSubprocessOperations=new Set(['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE',
@@ -207,10 +207,11 @@ export function targetCreationMetadata(kind,value,expected){
   }
   return null;
 }
-export function assertOwnedPg(value,{id,name,owner,networkId,networkName,ownerProfile}){
+export function assertOwnedPg(value,{id,name,owner,networkId,networkName,ownerProfile,diskScratch=false}){
   assert.equal(value.Id,id);assert.equal(value.Name,'/'+name);assert.equal(value.Config.Image,PG_IMAGE);
   assert.equal(value.Config.Labels[label],owner);assert.equal(value.State.Running,true);
   assertPrivatePgOwnerProfile(value,ownerProfile);
+  if(diskScratch)assertPrivateScratchMount(value,name,owner);
   assert.ok(Object.values(value.NetworkSettings.Ports||{}).every(p=>p===null||Array.isArray(p)&&p.length===0),
     'Private PostgreSQL must have no published ports');
   // The private provider borrows this sole network. Extra attachments are
@@ -251,6 +252,30 @@ function authenticate(){
     archiveVerifyKeyId:process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID,supportedFormats:['memphis-zoo-disaster-recovery.v4'],requiredEntries:required});
 }
 
+const scratchPaths=['/var/lib/postgresql/data','/var/lib/postgresql/data/pg_wal','/tmp'];
+const scratchKinds=['pgdata','wal','process_tmp'];
+const minimumScratchBytes=12*1024**3;
+const minimumScratchInodes=64*1024;
+export function parseRehearsalScratchCapacity(space,inodes,filesystems){
+  const rows=raw=>{
+    const lines=raw.trim().split('\n').slice(1);
+    assert.equal(lines.length,scratchPaths.length);
+    return lines.map(line=>{
+      const match=/^\S+\s+(\d+)\s+\d+\s+(\d+)\s+\d+%\s+.+$/.exec(line.trim());
+      assert.ok(match,'Unrecognized owned volume stat');
+      return match.slice(1).map(Number);
+    });
+  };
+  const blocks=rows(space),counts=rows(inodes),types=filesystems.trim().split('\n');
+  assert.equal(types.length,scratchPaths.length);
+  return Object.fromEntries(scratchKinds.map((kind,i)=>{
+    const [total,free]=blocks[i].map(blocks=>blocks*1024),[totalInodes,freeInodes]=counts[i],type=types[i];
+    assert.ok([total,free,totalInodes,freeInodes].every(n=>Number.isSafeInteger(n)&&n>=0)
+      &&free<=total&&freeInodes<=totalInodes&&/^[A-Za-z0-9_/-]{1,24}$/.test(type));
+    return [kind,{filesystem_type:type,total_bytes:total,free_bytes:free,total_inodes:totalInodes,free_inodes:freeInodes}];
+  }));
+}
+
 export async function runPrivate(){
   assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
   const contextDiagnosticOnly=selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER);
@@ -261,6 +286,10 @@ export async function runPrivate(){
   const tmp=realpathSync(process.env.RUNNER_TEMP),owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));
   const owner=randomBytes(16).toString('hex'),name='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
   const networkName=name+'_private_'+owner, database=name;
+  const scratchName=process.env.BACKUP_RUN_ID===current429.runId?privateScratchVolumeName(name,owner):null;
+  let scratchAttempted=false,scratchAbsent=!scratchName,scratchTimer,scratchSample;
+  const scratch=scratchName?{layout:'owned_local_volume',minimum_bytes:minimumScratchBytes,
+    minimum_inodes:minimumScratchInodes,samples:0,sampling_failures:0,admission:null,final:null,minimum:null}:null;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
   let relaySocketTimeouts=0,finalPostgresProcess=null,finalFunctionStats=null,current428Baseline=null;
@@ -315,10 +344,36 @@ export async function runPrivate(){
   const docker=(args,options)=>run('docker',args,options);
   const inspect=async(cleanup=false,options={})=>JSON.parse(await docker(['inspect',cid],{cleanup,...options}))[0];
   const receiptPath=resolve(tmp,'private-backup-only-rehearsal.json');
+  const requireScratchVolume=async (cleanup=false)=>{
+    const volumes=JSON.parse(await docker(['volume','inspect',scratchName],{cleanup,timeout:10000}));
+    assert.equal(volumes.length,1);
+    const volume=volumes[0];
+    assert.equal(volume.Name,scratchName);
+    assert.equal(volume.Driver,'local');
+    assert.equal(volume.Scope,'local');
+    assert.equal(volume.Labels?.[label],owner);
+    assert.equal(Object.keys(volume.Options??{}).length,0);
+  };
+  const sampleScratch=async (milestone,cleanup=false)=>{
+    const options={cleanup,timeout:10000};
+    const args=(...command)=>docker(['exec',cid,...command,...scratchPaths],options);
+    const capacity=parseRehearsalScratchCapacity(await args('df','-kP'),await args('df','-Pi'),await args('stat','-f','-c','%T'));
+    scratch.samples++;
+    if(milestone)scratch[milestone]=capacity;
+    scratch.minimum??=structuredClone(capacity);
+    for(const kind of scratchKinds){
+      const lowest=scratch.minimum[kind],point=capacity[kind];
+      assert.equal(point.filesystem_type,lowest.filesystem_type);
+      lowest.free_bytes=Math.min(lowest.free_bytes,point.free_bytes);
+      lowest.free_inodes=Math.min(lowest.free_inodes,point.free_inodes);
+    }
+    return capacity;
+  };
   let restoreTimeoutMs=privateRestoreWorkTimeoutMs;
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
     if(current428Capture)assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);
+    if(scratchName)assert.equal(source.sourceBinding.archive_digest,current429.archiveDigest);
     if(current429Capture)readVerifiedCurrent429ForwardQualificationSource(archive);
     sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
     ownerMetadata=originalOwnerMetadataDiagnostics(readVerifiedImmutableBootstrapInventory(archive).inventory);
@@ -328,6 +383,8 @@ export async function runPrivate(){
     if(contextDiagnosticOnly)assert.deepEqual(ownerProfile,{id:'immutable-private-current-postgres',actor:'postgres'});
     // Same pinned 2GiB allowance already used by the populated native-text rehearsal.
     const pgMemory=pinnedPgMemory(ownerProfile.id==='immutable-private-current-postgres'?'immutable-private-fresh-postgres':'immutable-private-fresh-supabase-admin');
+    const pgDataMount=scratchName?['--mount','type=volume,source='+scratchName+',target='+scratchPaths[0]]
+      :['--tmpfs',scratchPaths[0]+':rw,size='+pgMemory];
     const requireOwnerProfile=()=>{const current=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
       assert.deepEqual(current,ownerProfile);return current;};
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
@@ -350,16 +407,22 @@ export async function runPrivate(){
     networkId=await docker(['network','create','--internal','--label',label+'='+owner,networkName]);
     creationOperation='CHECK_NETWORK_ID_SHAPE';
     assert.match(networkId,/^[0-9a-f]{64}$/);
+    if(scratchName){
+      creationOperation='CREATE_OWNED_PGDATA';
+      scratchAttempted=true;
+      assert.equal(await docker(['volume','create','--driver','local','--label',label+'='+owner,scratchName]),scratchName);
+      await requireScratchVolume();
+    }
     creationOperation='START_OWNED_POSTGRES';
     cid=await docker(['run','-d','--name',name,'--label',label+'='+owner,'--label','custodial.private-owner-profile='+ownerProfile.id,
       '--label','custodial.private-owner-actor='+ownerProfile.actor,'--network',networkName,
-      '--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size='+pgMemory,
+      '--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',...pgDataMount,
       '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',PG_IMAGE,'postgres','-D','/etc/postgresql',
       '-c',"listen_addresses=*",'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
       '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off',...privateFunctionStatsArguments(requireOwnerProfile())]);
     creationOperation='CHECK_CONTAINER_ID_SHAPE';
     assert.match(cid,/^[0-9a-f]{64}$/);
-    const identity={id:cid,name,owner,networkId,networkName,ownerProfile};
+    const identity={id:cid,name,owner,networkId,networkName,ownerProfile,diskScratch:Boolean(scratchName)};
     creationOperation='INSPECT_OWNED_POSTGRES';
     const initial=await inspect();creationPostgres=targetCreationMetadata('POSTGRES',initial,identity);
     creationOperation='VERIFY_OWNED_POSTGRES';
@@ -383,6 +446,22 @@ export async function runPrivate(){
       if(healthy)break;await new Promise(r=>setTimeout(r,1000));
     }
     assert.equal(healthy,true);await new Promise(r=>setTimeout(r,10000));
+    if(scratchName){
+      phase='verify_restore_scratch';
+      const capacity=await sampleScratch('admission');
+      for(const kind of ['pgdata','wal']){
+        assert.ok(!['tmpfs','ramfs'].includes(capacity[kind].filesystem_type));
+        assert.ok(capacity[kind].free_bytes>=minimumScratchBytes&&capacity[kind].free_inodes>=minimumScratchInodes,
+          'The private PostgreSQL volume lacks initial restore capacity');
+      }
+      assert.equal(await docker(['exec',cid,'psql','-X','-At','-U','supabase_admin','-d','postgres','-c',
+        "select current_setting('data_directory'), current_setting('temp_tablespaces'), (select count(*) from pg_tablespace where spcname not in ('pg_default','pg_global'))"]),
+        scratchPaths[0]+'||0','Unexpected PostgreSQL scratch routing');
+      scratchTimer=setInterval(()=>{
+        if(!scratchSample&&!closing&&!stopping)scratchSample=sampleScratch().catch(()=>{scratch.sampling_failures++}).finally(()=>{scratchSample=null;});
+      },60000);
+      scratchTimer.unref();
+    }
     phase='prepare_schema_only';
     await docker(['exec','-i',cid,'psql','-X','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],
       {input:readFileSync(resolve(root,'supabase/canonical/production-source-role-catalog.sql'),'utf8'),diagnosticOperation:'REPLAY_FIXED_ROLE_CATALOG'});
@@ -519,6 +598,8 @@ export async function runPrivate(){
   }
   finally{
     phase=failure?phase:'cleanup';closing=true;inspectionController.abort();
+    clearInterval(scratchTimer);
+    await scratchSample;
     try{if(relay){await closeOwnedRelay(relay,sockets,Date.now()+15000);relayClosed=true;}
       await Promise.allSettled([...pendingConnections]);}catch(e){failure??=e;}
     try{
@@ -529,12 +610,24 @@ export async function runPrivate(){
         try{memoryEvents=await docker(['exec',cid,'cat','/sys/fs/cgroup/memory.events'],{cleanup:true,timeout:5000});}catch{}
         try{logs=await docker(['logs','--tail','100',cid],{cleanup:true,timeout:5000});}catch{}
         finalPostgresProcess=privatePostgresProcessDiagnostic(value.State,memoryEvents,logs);
+        if(scratchName&&value.State.Running===true){
+          try{await sampleScratch('final',true);}catch{scratch.sampling_failures++;}
+        }
         if(privateFunctionStatsArguments(ownerProfile).length&&value.State?.Running===true){
           try{finalFunctionStats=readPrivateFunctionStats(await docker(['exec',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',
             '-U','supabase_admin','-d',database,'-c',PRIVATE_FUNCTION_STATS_SQL],{cleanup:true,timeout:5000}));}catch{}
         }
         await docker(['rm','-f',cid],{cleanup:true});assert.equal(await docker(['ps','-aq','--filter','id='+cid],{cleanup:true}),'');}
       pgAbsent=true;
+      if(scratchAttempted){
+        const matching=()=>docker(['volume','ls','-q','--filter','name=^'+scratchName+'$'],{cleanup:true,timeout:10000});
+        if(await matching()){
+          await requireScratchVolume(true);
+          await docker(['volume','rm',scratchName],{cleanup:true,timeout:10000});
+        }
+        assert.equal(await matching(),'');
+        scratchAbsent=true;
+      }else scratchAbsent=true;
       const networks=(await docker(['network','ls','--no-trunc','-q','--filter','label='+label+'='+owner],{cleanup:true})).split('\n').filter(Boolean);assert.ok(networks.length<=1);
       if(networks.length){const n=JSON.parse(await docker(['network','inspect',networks[0]],{cleanup:true}))[0];
         assert.equal(n.Name,networkName);assert.equal(n.Labels[label],owner);assert.deepEqual(Object.keys(n.Containers),[]);
@@ -548,7 +641,8 @@ export async function runPrivate(){
       archive_digest:source?.sourceBinding.archive_digest??null,
       disposable_database_restore_outcome:contextDiagnosticOnly?'NOT_ATTEMPTED':result?'RESULT_RETURNED':'NOT_ESTABLISHED',production_restore_performed:false,
       production_provider_verified:false,forward_migrations_applied:false,runtime_admission:false,
-      mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent,
+      mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent&&scratchAbsent,
+      ...(scratch?{scratch:{...scratch,volume_removed:scratchAbsent}}:{}),
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       current428_baseline:current428Baseline,

@@ -5,7 +5,10 @@ import assert from 'node:assert/strict';
 import {assertCurrent429ForwardMetadata,current429,readCurrent429Plan,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';
 import {assertCurrent429CatalogDelta} from './current429-forward-readback.mjs';
 import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
-import {verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
+import {parseRehearsalScratchCapacity} from './run-private-backup-only-rehearsal.mjs';
+import {privateScratchVolumeName,assertPrivateScratchMount} from './run-official-local-storage-rehearsal.mjs';
+import {summarizeCurrentWeekCoverage} from './current428-rollback-target.mjs';
+import {beginCurrent429ApplyTransaction,verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
 import {stableJson,signBinding,releaseMigrationRehearsalAttestationBinding} from './disaster-recovery-crypto.mjs';
 import {compileCurrent429RecurringReceiptSource,readVerifiedCurrent429RecurringReceiptSource,recurringReceiptIdentity} from './immutable-current429-recurring-receipt-source.mjs';
 import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
@@ -84,9 +87,45 @@ test('only the four exact routine additions and their intended grants may surviv
   }
 });
 
+test('scratch capacity is bounded to owned PostgreSQL paths and exact local mount',()=>{
+  const data='Filesystem 1024-blocks Used Available Capacity Mounted on\n';
+  const row='/dev/fake 20000000 4000000 16000000 20% /fixture\n';
+  const paths=data+row.repeat(3);
+  const result=parseRehearsalScratchCapacity(paths,paths,'ext2/ext3\next2/ext3\noverlayfs');
+  assert.deepEqual(Object.keys(result),['pgdata','wal','process_tmp']);
+  assert.equal(result.pgdata.free_bytes,16_000_000*1024);
+  assert.equal(result.pgdata.free_inodes,16_000_000);
+  assert.throws(()=>parseRehearsalScratchCapacity(data+row,paths,'ext2/ext3\next2/ext3\noverlayfs'));
+  const owner='a'.repeat(32),name='mz_schema_rebuild_1234',destination='/var/lib/postgresql/data';
+  const volume=privateScratchVolumeName(name,owner);
+  const inspect={Config:{Labels:{'custodial.private-backup-rehearsal':owner}},HostConfig:{Tmpfs:{}},
+    Mounts:[{Type:'volume',Name:volume,Driver:'local',Destination:destination,RW:true}]};
+  assert.equal(assertPrivateScratchMount(inspect,name,owner),true);
+  inspect.Mounts[0].Name+='wrong';
+  assert.throws(()=>assertPrivateScratchMount(inspect,name,owner));
+});
+
+test('apply obtains all session locks before transaction snapshot',async()=>{
+  const commands=[];
+  await beginCurrent429ApplyTransaction(async(sql,args)=>commands.push([sql,args]));
+  assert.deepEqual(commands.slice(2,5).map(([sql,args])=>[sql,args[0]]),[
+    ['select pg_advisory_lock(hashtextextended($1,0))','memphis-zoo-release-migration-plan'],
+    ['select pg_advisory_lock(hashtextextended($1,0))','memphis-zoo-application-mutation-admission'],
+    ['select pg_advisory_lock(hashtextextended($1,0))','memphis-zoo-application-mutation-fence'],
+  ]);
+  assert.equal(commands.at(-1)[0],'begin isolation level serializable');
+});
+
 test('signing requires the successful scoped result, checked catalog and verified rollback',()=>{
   const plan=readCurrent429Plan(),candidate='a'.repeat(40),tree='b'.repeat(40),runId='246';
-  const result={source_commit:candidate,source_tree:tree,qualification_run_id:runId,backup_run_id:current429.runId,
+  const week=Array.from({length:7},(_,index)=>({today:'2026-11-25',service_date:'2026-11-'+(23+index),
+    governed:true,projection_status:'current',roster_employees:2,current_employees:2,normal_assignments:3,
+    assignment_differences:0,employees_missing_assignments:0,lunch_coverage_current:true,employee_days_sha256:'e'.repeat(64),reader_execute:true}));
+  const capacity={filesystem_type:'ext2/ext3',free_bytes:14*1024**3,free_inodes:80*1024};
+  const phase={pgdata:capacity,wal:capacity};
+  const scratch={layout:'owned_local_volume',volume_removed:true,samples:2,minimum_bytes:12*1024**3,
+    minimum_inodes:64*1024,admission:phase,final:phase,minimum:phase};
+  const result={scratch,source_commit:candidate,source_tree:tree,qualification_run_id:runId,backup_run_id:current429.runId,
     archive_digest:current429.archiveDigest,ok:true,disposable_database_restore_outcome:'RESULT_RETURNED',
     provider_verified:true,isolated_reconciliation_observed:true,cleanup_checked:true,production_restore_performed:false,
     completed_at:'2026-11-25T20:30:00Z',current429_target_capture:{
@@ -94,7 +133,7 @@ test('signing requires the successful scoped result, checked catalog and verifie
       candidate_tree:tree,plan_sha256:plan.plan_sha256,rollback_verified:true,production_written:false,
       target:{checked_routine_and_grant_delta:true,recovery_inventory_exact:true,event_guards_preserved:true,event_guard_sha256:'f'.repeat(64),
         ledger_count:433,ledger_head:plan.expected_target_ledger_head,ledger_sha256:'c'.repeat(64),
-        catalog:{fingerprint:'d'.repeat(64)}},
+        catalog:{fingerprint:'d'.repeat(64)},current_chicago_week:week,current_chicago_week_coverage:summarizeCurrentWeekCoverage(week)},
     }};
   const verify=result=>verifyCurrent429Result({receipt:JSON.stringify(result),candidate,tree,runId});
   assert.deepEqual(verify(result),result);
@@ -118,6 +157,13 @@ test('signing requires the successful scoped result, checked catalog and verifie
     result=>result.source_commit='e'.repeat(40),
     result=>result.backup_run_id='1',
     result=>result.cleanup_checked=false,
+    result=>result.scratch.volume_removed=false,
+    result=>result.scratch.final.pgdata.filesystem_type='tmpfs',
+    result=>{
+      const target=result.current429_target_capture.target;
+      target.current_chicago_week[3].projection_status='unavailable';
+      target.current_chicago_week_coverage=summarizeCurrentWeekCoverage(target.current_chicago_week);
+    },
     result=>result.current429_target_capture.rollback_verified=false,
     result=>result.current429_target_capture.target.event_guards_preserved=false,
     result=>result.current429_target_capture.target.ledger_count=432,

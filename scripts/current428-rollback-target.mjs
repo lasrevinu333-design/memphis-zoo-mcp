@@ -271,6 +271,7 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
     source.assertCurrent();
     stage = 'VERIFY_CURRENT_WEEK';
     const weekBefore = await readCurrentWeek(query);
+    if(is429)assert.equal(weekBefore.coverage.working_coverage,true,'The restored current week must be usable before qualification');
     const registryBefore=is429?await readCurrent429Registry(query,'before'):null;
 
     stage = 'APPLY_FORWARD';

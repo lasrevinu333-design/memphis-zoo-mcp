@@ -56,60 +56,156 @@
       ]
     },
     "scripts/run-private-backup-only-rehearsal.mjs": {
-      "current_sha256": "417335dccd4f3b13873d4847132a2a5a2f0f7881c0b379da77752954b2b23d06",
+      "current_sha256": "591e153728d79d10155300b8f585031381be5ed46e2b03b201ead58a6d241ff7",
       "previous_sha256": "02b16f5e6319ba5c485f76137b21a1d5fd19bc2201ac1bf445f9637eb9bfe337",
       "reverse_hunks": [
         {
-          "start": 2265,
-          "end": 2388,
+          "start": 1351,
+          "end": 1597,
+          "current": "import {closeOwnedRelay,storageResult,pinnedPgMemory,privateScratchVolumeName,assertPrivateScratchMount,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';\n",
+          "previous": "import {closeOwnedRelay,storageResult,pinnedPgMemory,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation,resourceProfile} from './run-official-local-storage-rehearsal.mjs';\n"
+        },
+        {
+          "start": 2316,
+          "end": 2439,
           "current": "import {current429,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';\n",
           "previous": ""
         },
         {
-          "start": 3950,
-          "end": 4521,
+          "start": 4001,
+          "end": 4572,
           "current": "  }\n  return flag==='true';\n}\nfunction current429CaptureRequested(){\n  const flag=process.env.PRIVATE_CURRENT429_FORWARD_CAPTURE;\n  assert.ok(flag===undefined||flag===''||flag==='false'||flag==='true');\n  if(flag==='true'){\n    assert.equal(process.env.BACKUP_RUN_ID,current429.runId);\n    assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');\n    assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');\n    assert.notEqual(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,'true');\n    assert.notEqual(process.env.PRIVATE_CURRENT428_FORWARD_CAPTURE,'true');\n",
           "previous": ""
         },
         {
-          "start": 20423,
-          "end": 20479,
+          "start": 12111,
+          "end": 12260,
+          "current": "  'CHECK_NETWORK_ID_SHAPE','CREATE_OWNED_PGDATA','START_OWNED_POSTGRES','CHECK_CONTAINER_ID_SHAPE','INSPECT_OWNED_POSTGRES','VERIFY_OWNED_POSTGRES',\n",
+          "previous": "  'CHECK_NETWORK_ID_SHAPE','START_OWNED_POSTGRES','CHECK_CONTAINER_ID_SHAPE','INSPECT_OWNED_POSTGRES','VERIFY_OWNED_POSTGRES',\n"
+        },
+        {
+          "start": 17012,
+          "end": 17119,
+          "current": "export function assertOwnedPg(value,{id,name,owner,networkId,networkName,ownerProfile,diskScratch=false}){\n",
+          "previous": "export function assertOwnedPg(value,{id,name,owner,networkId,networkName,ownerProfile}){\n"
+        },
+        {
+          "start": 17364,
+          "end": 17426,
+          "current": "  if(diskScratch)assertPrivateScratchMount(value,name,owner);\n",
+          "previous": ""
+        },
+        {
+          "start": 20178,
+          "end": 21414,
+          "current": "const scratchPaths=['/var/lib/postgresql/data','/var/lib/postgresql/data/pg_wal','/tmp'];\nconst scratchKinds=['pgdata','wal','process_tmp'];\nconst minimumScratchBytes=12*1024**3;\nconst minimumScratchInodes=64*1024;\nexport function parseRehearsalScratchCapacity(space,inodes,filesystems){\n  const rows=raw=>{\n    const lines=raw.trim().split('\\n').slice(1);\n    assert.equal(lines.length,scratchPaths.length);\n    return lines.map(line=>{\n      const match=/^\\S+\\s+(\\d+)\\s+\\d+\\s+(\\d+)\\s+\\d+%\\s+.+$/.exec(line.trim());\n      assert.ok(match,'Unrecognized owned volume stat');\n      return match.slice(1).map(Number);\n    });\n  };\n  const blocks=rows(space),counts=rows(inodes),types=filesystems.trim().split('\\n');\n  assert.equal(types.length,scratchPaths.length);\n  return Object.fromEntries(scratchKinds.map((kind,i)=>{\n    const [total,free]=blocks[i].map(blocks=>blocks*1024),[totalInodes,freeInodes]=counts[i],type=types[i];\n    assert.ok([total,free,totalInodes,freeInodes].every(n=>Number.isSafeInteger(n)&&n>=0)\n      &&free<=total&&freeInodes<=totalInodes&&/^[A-Za-z0-9_/-]{1,24}$/.test(type));\n    return [kind,{filesystem_type:type,total_bytes:total,free_bytes:free,total_inodes:totalInodes,free_inodes:freeInodes}];\n  }));\n}\n\n",
+          "previous": ""
+        },
+        {
+          "start": 21812,
+          "end": 21868,
           "current": "  const current429Capture=current429CaptureRequested();\n",
           "previous": ""
         },
         {
-          "start": 26881,
-          "end": 26965,
-          "current": "    if(current429Capture)readVerifiedCurrent429ForwardQualificationSource(archive);\n",
+          "start": 22263,
+          "end": 22663,
+          "current": "  const scratchName=process.env.BACKUP_RUN_ID===current429.runId?privateScratchVolumeName(name,owner):null;\n  let scratchAttempted=false,scratchAbsent=!scratchName,scratchTimer,scratchSample;\n  const scratch=scratchName?{layout:'owned_local_volume',minimum_bytes:minimumScratchBytes,\n    minimum_inodes:minimumScratchInodes,samples:0,sampling_failures:0,admission:null,final:null,minimum:null}:null;\n",
           "previous": ""
         },
         {
-          "start": 38105,
-          "end": 38207,
+          "start": 28380,
+          "end": 29614,
+          "current": "  const requireScratchVolume=async (cleanup=false)=>{\n    const volumes=JSON.parse(await docker(['volume','inspect',scratchName],{cleanup,timeout:10000}));\n    assert.equal(volumes.length,1);\n    const volume=volumes[0];\n    assert.equal(volume.Name,scratchName);\n    assert.equal(volume.Driver,'local');\n    assert.equal(volume.Scope,'local');\n    assert.equal(volume.Labels?.[label],owner);\n    assert.equal(Object.keys(volume.Options??{}).length,0);\n  };\n  const sampleScratch=async (milestone,cleanup=false)=>{\n    const options={cleanup,timeout:10000};\n    const args=(...command)=>docker(['exec',cid,...command,...scratchPaths],options);\n    const capacity=parseRehearsalScratchCapacity(await args('df','-kP'),await args('df','-Pi'),await args('stat','-f','-c','%T'));\n    scratch.samples++;\n    if(milestone)scratch[milestone]=capacity;\n    scratch.minimum??=structuredClone(capacity);\n    for(const kind of scratchKinds){\n      const lowest=scratch.minimum[kind],point=capacity[kind];\n      assert.equal(point.filesystem_type,lowest.filesystem_type);\n      lowest.free_bytes=Math.min(lowest.free_bytes,point.free_bytes);\n      lowest.free_inodes=Math.min(lowest.free_inodes,point.free_inodes);\n    }\n    return capacity;\n  };\n",
+          "previous": ""
+        },
+        {
+          "start": 29904,
+          "end": 30083,
+          "current": "    if(scratchName)assert.equal(source.sourceBinding.archive_digest,current429.archiveDigest);\n    if(current429Capture)readVerifiedCurrent429ForwardQualificationSource(archive);\n",
+          "previous": ""
+        },
+        {
+          "start": 30945,
+          "end": 31109,
+          "current": "    const pgDataMount=scratchName?['--mount','type=volume,source='+scratchName+',target='+scratchPaths[0]]\n      :['--tmpfs',scratchPaths[0]+':rw,size='+pgMemory];\n",
+          "previous": ""
+        },
+        {
+          "start": 33193,
+          "end": 33456,
+          "current": "    if(scratchName){\n      creationOperation='CREATE_OWNED_PGDATA';\n      scratchAttempted=true;\n      assert.equal(await docker(['volume','create','--driver','local','--label',label+'='+owner,scratchName]),scratchName);\n      await requireScratchVolume();\n    }\n",
+          "previous": ""
+        },
+        {
+          "start": 33730,
+          "end": 33831,
+          "current": "      '--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',...pgDataMount,\n",
+          "previous": "      '--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size='+pgMemory,\n"
+        },
+        {
+          "start": 34267,
+          "end": 34375,
+          "current": "    const identity={id:cid,name,owner,networkId,networkName,ownerProfile,diskScratch:Boolean(scratchName)};\n",
+          "previous": "    const identity={id:cid,name,owner,networkId,networkName,ownerProfile};\n"
+        },
+        {
+          "start": 35784,
+          "end": 36816,
+          "current": "    if(scratchName){\n      phase='verify_restore_scratch';\n      const capacity=await sampleScratch('admission');\n      for(const kind of ['pgdata','wal']){\n        assert.ok(!['tmpfs','ramfs'].includes(capacity[kind].filesystem_type));\n        assert.ok(capacity[kind].free_bytes>=minimumScratchBytes&&capacity[kind].free_inodes>=minimumScratchInodes,\n          'The private PostgreSQL volume lacks initial restore capacity');\n      }\n      assert.equal(await docker(['exec',cid,'psql','-X','-At','-U','supabase_admin','-d','postgres','-c',\n        \"select current_setting('data_directory'), current_setting('temp_tablespaces'), (select count(*) from pg_tablespace where spcname not in ('pg_default','pg_global'))\"]),\n        scratchPaths[0]+'||0','Unexpected PostgreSQL scratch routing');\n      scratchTimer=setInterval(()=>{\n        if(!scratchSample&&!closing&&!stopping)scratchSample=sampleScratch().catch(()=>{scratch.sampling_failures++}).finally(()=>{scratchSample=null;});\n      },60000);\n      scratchTimer.unref();\n    }\n",
+          "previous": ""
+        },
+        {
+          "start": 42675,
+          "end": 42777,
           "current": "    if(result&&(source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST||current429Capture)){\n",
           "previous": "    if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST){\n"
         },
         {
-          "start": 39422,
-          "end": 39587,
+          "start": 43992,
+          "end": 44157,
           "current": "    if(current428Capture||current429Capture){\n      phase=current429Capture?'current429_signed_isolated_reconciliation':'current428_signed_isolated_reconciliation';\n",
           "previous": "    if(current428Capture){\n      phase='current428_signed_isolated_reconciliation';\n"
         },
         {
-          "start": 41793,
-          "end": 41882,
+          "start": 46363,
+          "end": 46452,
           "current": "      phase=current429Capture?'current429_rollback_target':'current428_rollback_target';\n",
           "previous": "      phase='current428_rollback_target';\n"
         },
         {
-          "start": 46183,
-          "end": 46569,
+          "start": 47392,
+          "end": 47450,
+          "current": "    clearInterval(scratchTimer);\n    await scratchSample;\n",
+          "previous": ""
+        },
+        {
+          "start": 48480,
+          "end": 48628,
+          "current": "        if(scratchName&&value.State.Running===true){\n          try{await sampleScratch('final',true);}catch{scratch.sampling_failures++;}\n        }\n",
+          "previous": ""
+        },
+        {
+          "start": 49133,
+          "end": 49552,
+          "current": "      if(scratchAttempted){\n        const matching=()=>docker(['volume','ls','-q','--filter','name=^'+scratchName+'$'],{cleanup:true,timeout:10000});\n        if(await matching()){\n          await requireScratchVolume(true);\n          await docker(['volume','rm',scratchName],{cleanup:true,timeout:10000});\n        }\n        assert.equal(await matching(),'');\n        scratchAbsent=true;\n      }else scratchAbsent=true;\n",
+          "previous": ""
+        },
+        {
+          "start": 51060,
+          "end": 51234,
+          "current": "      mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent&&scratchAbsent,\n      ...(scratch?{scratch:{...scratch,volume_removed:scratchAbsent}}:{}),\n",
+          "previous": "      mutations_resumed:false,cleanup_checked:relayClosed&&pgAbsent&&networkAbsent,\n"
+        },
+        {
+          "start": 51468,
+          "end": 51854,
           "current": "      current428_target_capture:!current429Capture&&!failure&&!stopping?current428Target:null,\n      ...(current429Capture?{\n        current429_target_capture:!failure&&!stopping?current428Target:null,\n        source_commit:current428Target?.candidate_commit??null,\n        source_tree:current428Target?.candidate_tree??null,\n        completed_at:new Date().toISOString(),\n      }:{}),\n",
           "previous": "      current428_target_capture:!failure&&!stopping?current428Target:null,\n"
         },
         {
-          "start": 49351,
-          "end": 49515,
+          "start": 54636,
+          "end": 54800,
           "current": "        if(current429CaptureRequested()){\n          assert.equal(profile,'private');\n          readVerifiedCurrent429ForwardQualificationSource(archive);\n        }\n",
           "previous": ""
         }

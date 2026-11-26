@@ -111,12 +111,30 @@ export function pinnedPgRestoreMemory(profile){
   // the native verification sorts for the current original's large relation.
   return profile==='immutable-private-fresh-postgres'?'6g':pinnedPgMemory(profile);
 }
-export function assertPinnedPgResources(value,cid,name,profile){
+const privatePgDataPath='/var/lib/postgresql/data';
+const privateRehearsalLabel='custodial.private-backup-rehearsal';
+export const diskScratchArchiveDigest='f305655a56e2538b41a21293f76750c752ec063196cac452ad11d9fe9865c489';
+export function privateScratchVolumeName(name,owner){
+  insist(/^mz_schema_rebuild_[1-9][0-9]*$/.test(name)&&/^[0-9a-f]{32}$/.test(owner),'Exact private scratch owner required.');
+  return name+'_pgdata_'+owner;
+}
+export function assertPrivateScratchMount(value,name,owner){
+  const volume=privateScratchVolumeName(name,owner);
+  const mounts=value.Mounts.filter(mount=>mount.Destination===privatePgDataPath);
+  insist(value.Config.Labels[privateRehearsalLabel]===owner&&mounts.length===1
+    &&mounts[0].Type==='volume'&&mounts[0].Name===volume&&mounts[0].Driver==='local'&&mounts[0].RW===true
+    &&!value.HostConfig.Tmpfs?.[privatePgDataPath],'Exact disk-backed private PGDATA required.');
+  return true;
+}
+export function assertPinnedPgResources(value,cid,name,profile,{diskScratch=false}={}){
   const memory=Number(pinnedPgRestoreMemory(profile).slice(0,-1))*1024**3;
   insist(value.Id===cid && value.Name==='/'+name && value.Config.Image===PG_IMAGE
     && value.HostConfig.Memory===memory && value.HostConfig.MemorySwap===memory
     && value.HostConfig.NanoCpus===1e9 && value.HostConfig.PidsLimit===256,'Provider-only PG resource pin refused.');
-  if(profile!=='immutable-private-fresh-supabase-admin')insist(
+  if(diskScratch){
+    insist(profile==='immutable-private-fresh-postgres','Disk scratch requires the current private owner.');
+    assertPrivateScratchMount(value,name,value.Config.Labels[privateRehearsalLabel]);
+  }else if(profile!=='immutable-private-fresh-supabase-admin')insist(
     value.HostConfig.Tmpfs?.['/var/lib/postgresql/data']==='rw,size='+pinnedPgMemory(profile),'Exact profile-specific private PGDATA tmpfs required.');
   return true;
 }
@@ -140,7 +158,7 @@ export async function closeOwnedRelay(relay,sockets,deadline){
 }
 let stopping=false;const liveGroups=new Set();
 function stop(){stopping=true;for(const pid of liveGroups)try{process.kill(-pid,'SIGKILL');}catch{}}
-const inspectFormat='{"Id":{{json .Id}},"ImageId":{{json .Image}},"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}},"Labels":{{json .Config.Labels}},"ExposedPorts":{{json (index .Config "ExposedPorts")}}},"HostConfig":{"PortBindings":{{json .HostConfig.PortBindings}},"PublishAllPorts":{{json .HostConfig.PublishAllPorts}},"NetworkMode":{{json .HostConfig.NetworkMode}},"Memory":{{json .HostConfig.Memory}},"MemorySwap":{{json .HostConfig.MemorySwap}},"Tmpfs":{{json .HostConfig.Tmpfs}},"NanoCpus":{{json .HostConfig.NanoCpus}},"ReadonlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"PidsLimit":{{json .HostConfig.PidsLimit}}},"State":{{json .State}},"NetworkSettings":{"Ports":{{json .NetworkSettings.Ports}},"Networks":{{json .NetworkSettings.Networks}}}}';
+const inspectFormat='{"Id":{{json .Id}},"ImageId":{{json .Image}},"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}},"Labels":{{json .Config.Labels}},"ExposedPorts":{{json (index .Config "ExposedPorts")}}},"HostConfig":{"PortBindings":{{json .HostConfig.PortBindings}},"PublishAllPorts":{{json .HostConfig.PublishAllPorts}},"NetworkMode":{{json .HostConfig.NetworkMode}},"Memory":{{json .HostConfig.Memory}},"MemorySwap":{{json .HostConfig.MemorySwap}},"Tmpfs":{{json .HostConfig.Tmpfs}},"NanoCpus":{{json .HostConfig.NanoCpus}},"ReadonlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"PidsLimit":{{json .HostConfig.PidsLimit}}},"State":{{json .State}},"Mounts":{{json .Mounts}},"NetworkSettings":{"Ports":{{json .NetworkSettings.Ports}},"Networks":{{json .NetworkSettings.Networks}}}}';
 const hash = value => createHash('sha256').update(value).digest('hex');
 export const stable = value => JSON.stringify(value,(_,v)=>v && typeof v==='object' && !Array.isArray(v)
   ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])) : v);
@@ -680,7 +698,7 @@ async function host(){
     if(pgMemory!=='1g')memoryFloor((parseInt(pgMemory,10)+2)*1024**3);
     await run(['docker','update','--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',pgid]);
     const boundedPg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgid]));
-    assertPinnedPgResources(boundedPg,pgid,pgName,a.source_profile);
+    assertPinnedPgResources(boundedPg,pgid,pgName,a.source_profile,{diskScratch:s.archive_digest===diskScratchArchiveDigest});
     const pgPorts=boundedPg.NetworkSettings.Ports['5432/tcp'];
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')
       insist(pgPorts?.length===1 && pgPorts[0].HostIp==='127.0.0.1' && Number(pgPorts[0].HostPort)===Number(u.port),'Exact owned PG loopback port mismatch.');

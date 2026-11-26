@@ -54,7 +54,7 @@ export function removeRehearsalRevisions(name,source){
 
 export function removeCurrent429Qualification(name,source){
  const raw=readFileSync(new URL('../release/installed-source/current429-rehearsal-inverse.json',import.meta.url),'utf8');
- assert.equal(sha(raw),'857c54bd7fdfa95e66d83bec9d8ee4a9e9b67e50ac9cc92450134df31b12428d');
+ assert.equal(sha(raw),'8b403792a86a7148680406a3b4de259d81185a3ba5691c6b310679fc076db60d');
  const revision=JSON.parse(raw).files[name];
  if(!revision||sha(source)!==revision.current_sha256)return source;
  for(const edit of [...revision.reverse_hunks].reverse()){

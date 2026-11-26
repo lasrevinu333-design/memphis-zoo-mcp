@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {parseJsonValueStream} from './json-value-stream.mjs';
+import {summarizeCurrentWeekCoverage} from './current428-rollback-target.mjs';
 import {current429,readCurrent429Plan} from './current429-forward-qualification-source.mjs';
 
 const hash=/^[a-f0-9]{64}$/;
@@ -23,6 +24,24 @@ export function verifyCurrent429Result({receipt, candidate, tree, runId}) {
   assert.equal(result.provider_verified,true);
   assert.equal(result.isolated_reconciliation_observed,true);
   assert.equal(result.cleanup_checked,true);
+  const scratch=result.scratch;
+  assert.equal(scratch?.layout,'owned_local_volume');
+  assert.equal(scratch.volume_removed,true);
+  assert.ok(Number.isSafeInteger(scratch.samples)&&scratch.samples>=2);
+  assert.ok(Number.isSafeInteger(scratch.minimum_bytes)&&scratch.minimum_bytes>=12*1024**3);
+  assert.ok(Number.isSafeInteger(scratch.minimum_inodes)&&scratch.minimum_inodes>=64*1024);
+  for(const kind of ['pgdata','wal']){
+    const first=scratch.admission?.[kind],last=scratch.final?.[kind],lowest=scratch.minimum?.[kind];
+    assert.ok(first&&last&&lowest&&/^[A-Za-z0-9_/-]{1,24}$/.test(first.filesystem_type)
+      &&!['tmpfs','ramfs'].includes(first.filesystem_type));
+    assert.equal(last.filesystem_type,first.filesystem_type);
+    assert.equal(lowest.filesystem_type,first.filesystem_type);
+    assert.ok([first.free_bytes,last.free_bytes,lowest.free_bytes,first.free_inodes,last.free_inodes,lowest.free_inodes]
+      .every(n=>Number.isSafeInteger(n)&&n>0));
+    assert.ok(first.free_bytes>=scratch.minimum_bytes&&first.free_inodes>=scratch.minimum_inodes);
+    assert.ok(lowest.free_bytes<=Math.min(first.free_bytes,last.free_bytes)
+      &&lowest.free_inodes<=Math.min(first.free_inodes,last.free_inodes));
+  }
   assert.equal(result.production_restore_performed,false);
   const capture=result.current429_target_capture;
   assert.equal(capture.scope,'isolated_current429_rollback_target');
@@ -41,6 +60,9 @@ export function verifyCurrent429Result({receipt, candidate, tree, runId}) {
   assert.match(capture.target.ledger_sha256,hash);
   assert.match(capture.target.catalog.fingerprint,hash);
   assert.notEqual(capture.target.catalog.fingerprint,current429.sourceCatalog);
+  const schedule=summarizeCurrentWeekCoverage(capture.target.current_chicago_week);
+  assert.deepEqual(capture.target.current_chicago_week_coverage,schedule);
+  assert.equal(schedule.working_coverage,true,'Usable signed Chicago week required');
   assert.match(result.completed_at,/^\d{4}-\d\d-\d\dT/);
   return result;
 }
