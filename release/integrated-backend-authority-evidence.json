@@ -2720,7 +2720,7 @@
       {
         "path": "release/installed-source/current429-rehearsal-inverse.json",
         "mode": "100644",
-        "object_id": "b7b3f2eeec68d14c15d9fa087f8c8cc2e8a17e7d"
+        "object_id": "a72279428346f2469af94c8dcadc56037ac9f63f"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -3835,7 +3835,7 @@
       {
         "path": "scripts/apply-current429-forward-plan.mjs",
         "mode": "100644",
-        "object_id": "001268059cce559975f1129b4aa08c957468c304"
+        "object_id": "8a9e7a5e44d2e8a075a45dd9db6e0b0d6e9064e1"
       },
       {
         "path": "scripts/apply-production-restore-reconciliation.mjs",
@@ -4550,7 +4550,7 @@
       {
         "path": "scripts/current428-rollback-target.mjs",
         "mode": "100644",
-        "object_id": "15f742ba88cc4f5a77deb25f27e0b6275d21b3ec"
+        "object_id": "c2f3fe74a0381ab123990b09785acec9b7b5798b"
       },
       {
         "path": "scripts/current429-forward-qualification-source.mjs",
@@ -4565,7 +4565,7 @@
       {
         "path": "scripts/current429-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "bbf1e6213ea16624b759ebeb5c80491c6310edbd"
+        "object_id": "82a992ddcad003e18eed1c7ce800b3c9e2f14a6a"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -4940,7 +4940,7 @@
       {
         "path": "scripts/events-chicago-time-tests.mjs",
         "mode": "100644",
-        "object_id": "dab67b08a9371ff067fe75c234e69bbc9872f2e8"
+        "object_id": "8ca55a4391b28b4091434fdc35ea3546aca58618"
       },
       {
         "path": "scripts/exact-git-blob-batch-tests.mjs",
@@ -8345,7 +8345,7 @@
       {
         "path": "scripts/operations-mail-ledger-tests.mjs",
         "mode": "100644",
-        "object_id": "7ee21f0278fd3f07afd6ff1dcaafb4d5d305c9c0"
+        "object_id": "7270f9aeab8710ba64d98224755697f1072200db"
       },
       {
         "path": "scripts/operations-mail-sync-adapter-tests.mjs",
@@ -8500,7 +8500,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "21dd80604477d8c0de40f772fe23a0154db80297"
+        "object_id": "09ea024228340d0a8da93d55a33096057cf1c84e"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8530,7 +8530,7 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "8a0c027a62e51e107b3461d7960c2d428ab3145b"
+        "object_id": "d7b72da89b65be7c2952e7c514ac145db060bd4b"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
@@ -8790,7 +8790,7 @@
       {
         "path": "scripts/public-dashboard-details-tests.mjs",
         "mode": "100644",
-        "object_id": "d8d29f1383f2f07b5116856de174a97138a28186"
+        "object_id": "177fc7286654579e30412ea83ae6efb6711f837e"
       },
       {
         "path": "scripts/public-operations-viewer-tests.mjs",
@@ -9145,12 +9145,12 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "649149dbab59738d4ba5395d910201fb66f5e35f"
+        "object_id": "de105f7ee475e4d995d610fa5823cd1c6f80cec2"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "fc6750c5c2932cabeeed70e476e5c04a7a3da933"
+        "object_id": "65d133550b9169a5bad42d4f62416069b382ca99"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
@@ -10580,7 +10580,7 @@
       {
         "path": "scripts/verify-current429-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "4bc4d9cdb147f78131ce6e1edfc709668f12ecd2"
+        "object_id": "4a4d9b4897e45e25231e1837b20cf4d78e6f51b0"
       },
       {
         "path": "scripts/verify-encrypted-backup-readback.py",
@@ -11335,7 +11335,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "00fe7007b3d916475231b0f62e6bcf8250084145"
+        "object_id": "f2a1ae9eb640fc95de244c6edc0f49cfe1dbfc63"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -11395,7 +11395,7 @@
       {
         "path": "src/manual-events-parser.js",
         "mode": "100644",
-        "object_id": "82f306d57cdfb54e9a7745ebce3fcf6144fe3ed7"
+        "object_id": "3095b8298a2f40ef94199a6e4253c863ac451613"
       },
       {
         "path": "src/manual-events-router.js",
@@ -11775,7 +11775,7 @@
       {
         "path": "src/operations-board.js",
         "mode": "100644",
-        "object_id": "64e720037558ae341ded72c2deb5cff839c3e66c"
+        "object_id": "4b292bf7427a85a9b1fc6e78d566aaab6259c5a1"
       },
       {
         "path": "src/operations-mail-contract.js",
@@ -12035,7 +12035,7 @@
       {
         "path": "src/shared-events-feed.js",
         "mode": "100644",
-        "object_id": "955224b0850e9adf2de3ea38919f05126cfb975c"
+        "object_id": "68f967fd57827effc8d1606d02147321df766907"
       },
       {
         "path": "src/static-weekly-approved-initial-request.js",
