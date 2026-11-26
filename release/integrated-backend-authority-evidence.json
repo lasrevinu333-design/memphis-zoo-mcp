@@ -205,7 +205,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "d74ac77fff116dd4466ddf6f74459d296806ddf1"
+        "object_id": "fd22829a418cf145a0201a41b8db7037877ec8c5"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -2723,6 +2723,11 @@
         "object_id": "a72279428346f2469af94c8dcadc56037ac9f63f"
       },
       {
+        "path": "release/installed-source/current429-secondary-drive-vm-inverse.json",
+        "mode": "100644",
+        "object_id": "8a9373c1e084684bc76f534c86bb9ce7b45a9b05"
+      },
+      {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
@@ -4566,6 +4571,11 @@
         "path": "scripts/current429-rehearsal-tests.mjs",
         "mode": "100644",
         "object_id": "313933a08f7e038a61dd850c723dde608483985a"
+      },
+      {
+        "path": "scripts/current429-vm-scratch.sh",
+        "mode": "100644",
+        "object_id": "47aec3169913c4789c6ed3ac9dd119ec845feb56"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -8500,7 +8510,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "09ea024228340d0a8da93d55a33096057cf1c84e"
+        "object_id": "9da40665b38f05d54d1b8fd54a8223429abd7802"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8530,7 +8540,7 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "d7b72da89b65be7c2952e7c514ac145db060bd4b"
+        "object_id": "9156b07efa47757f95d8a27e15f88422b2ca4f93"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
@@ -9145,12 +9155,12 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "8eae73c8dc7bc6b846ea2f9bf4448e9f61a85ac6"
+        "object_id": "ee27f332f9d0fd7542d3e7c000d88630c8e39c94"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "65d133550b9169a5bad42d4f62416069b382ca99"
+        "object_id": "78f085652e86e31167f26c8c81d88d3b9468c09b"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
@@ -14648,7 +14658,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2904,
+    "authority_path_count": 2906,
     "migration_path_count": 322,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
