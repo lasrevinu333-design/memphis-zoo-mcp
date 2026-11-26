@@ -40,7 +40,7 @@ test('exact current source files and historical235 target gate remain separately
 });
 
 test('classifies the full 322-file checkout with exact installed statement aliases', () => {
- const active=JSON.parse(readFileSync(new URL('../release/production-backup-source-extension-v2.active.json',import.meta.url)));
+ const active=JSON.parse(readFileSync(new URL('../release/production-backup-source-extension-v2.native428.active.json',import.meta.url)));
  const inventory=readCurrent428SourceInventory(active);
  assert.equal(inventory.source_files,322);
  assert.equal(inventory.historical_files,311);

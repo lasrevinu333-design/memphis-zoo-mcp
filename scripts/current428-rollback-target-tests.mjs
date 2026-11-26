@@ -92,7 +92,7 @@ function fixture(options = {}) {
   }
   const execute = new Function('assert', 'pg', 'stableJsonFileSha256', 'NATIVE_TEXT_PRESERVATION_SETTINGS',
     'captureCatalogFromSnapshot', 'fingerprintSchemaCatalog', 'readCurrent428PreservedRows',
-    'readCurrent428RecoveryDefinitions', 'readVerifiedCurrent428ForwardQualificationSource',
+    'readCurrent428RecoveryDefinitions', 'readPrivateForwardQualificationSource', 'current429',
     'assertVerifiedImmutableBootstrapSource', 'process', sourceText + '\nreturn captureCurrent428RollbackTarget;')(
     assert, { Client }, stableJsonFileSha256, [['row_security','off']],
     async client => ({ cron_jobs: [], footprint: [client.changes ? 'target' : client.normal ? options.original ?? 'original' : 'restored'] }),
@@ -103,7 +103,7 @@ function fixture(options = {}) {
       assert.equal(client.normal, state === 'original');
       return originalProof;
     },
-    () => source, () => {}, { env: { GITHUB_ACTIONS:'true', GITHUB_RUN_ID:'1234', OFFICIAL_LOCAL_STORAGE_PROVIDER:'true', REHEARSAL_SCOPE:'backup_only' } });
+    () => source, {archiveDigest:'9'.repeat(64)}, () => {}, { env: { GITHUB_ACTIONS:'true', GITHUB_RUN_ID:'1234', OFFICIAL_LOCAL_STORAGE_PROVIDER:'true', REHEARSAL_SCOPE:'backup_only' } });
   const client = new Client();
   return { calls, client, run: () => execute({
     client, archive: {}, bootstrapSource: { recipes: [{ before:'fixture before' }], registryRows: [], registrySource: {} },
@@ -189,13 +189,13 @@ test('mid-batch SQL refusal and changed data take the same rollback and independ
 
 test('the existing disposable runner uses the original signed reconciler once, only for an exact empty discrepancy set', async () => {
   const runner = readFileSync(new URL('./run-private-backup-only-rehearsal.mjs', import.meta.url), 'utf8');
-  const from = runner.indexOf("    if(current428Capture){\n      phase='current428_signed_isolated_reconciliation';");
+  const from = runner.indexOf("    if(current428Capture||current429Capture){");
   const to = runner.indexOf("    phase='verified_waiting_cleanup';", from);
   assert.ok(from > 0 && to > from);
   const body = new Function('ports', `const { assert, pg, source, secretEnv, baseEnv, run, verifyTarget,
    current428Baseline, result, randomBytes, process, archive, bootstrapSource,
    captureCurrent428RollbackTarget }=ports;
-   let current428Capture=true, current428Target=null, isolatedReconciliation=null, phase;
+   let current428Capture=true, current429Capture=false, current428Target=null, isolatedReconciliation=null, phase;
    return async()=>{${runner.slice(from,to)}return {current428Target,isolatedReconciliation,phase};};`);
   const commit = 'c'.repeat(40), tree = 'd'.repeat(40);
   for (const scenario of ['verified', 'open', 'manifest changed']) {

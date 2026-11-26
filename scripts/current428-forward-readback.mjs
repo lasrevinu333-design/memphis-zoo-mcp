@@ -9,7 +9,8 @@ import { readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection } f
 import { assertVerifiedImmutableBootstrapSource } from './immutable-private-source-bootstrap.mjs';
 import { nativeTextColumnProjection } from './isolated-release-data-preservation.mjs';
 import { quoteIdentifier } from './isolated-event-owner-schema.mjs';
-import { CURRENT428_ARCHIVE_DIGEST, readVerifiedCurrent428ForwardQualificationSource } from './current428-forward-qualification-source.mjs';
+import { CURRENT428_ARCHIVE_DIGEST } from './current428-forward-qualification-source.mjs';
+import { current429, readPrivateForwardQualificationSource } from './current429-forward-qualification-source.mjs';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -153,7 +154,7 @@ export async function readCurrent428RecoveryDefinitions({client, archive, bootst
 }
 
 export async function readCurrent428RestoredBaseline({ client, archive, bootstrapSource, restore }) {
-  const forward = readVerifiedCurrent428ForwardQualificationSource(archive);
+  const forward = readPrivateForwardQualificationSource(archive);
   const sourceCurrent = () => {
     assertVerifiedImmutableBootstrapSource(bootstrapSource, archive);
     forward.assertCurrent();
@@ -276,7 +277,7 @@ const preservedProfileSql = nativeProfileSql.replace('pg_current_snapshot()::tex
 // restore leases retire. The migrations verify their inventory changes.
 export async function readCurrent428PreservedRows({ client, archive }) {
   const binding = readVerifiedArchiveSourceBinding(archive);
-  assert.equal(binding.archive_digest, CURRENT428_ARCHIVE_DIGEST);
+  assert.ok([CURRENT428_ARCHIVE_DIGEST,current429.archiveDigest].includes(binding.archive_digest));
   const selection = readVerifiedRestoreTableSelection(archive, {databaseOnly: true});
   const { databaseName, query } = originalReadbackPort(client);
   const profile = one(await query(preservedProfileSql), 'one original preservation profile');

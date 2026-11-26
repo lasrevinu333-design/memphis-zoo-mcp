@@ -5,7 +5,8 @@ import { NATIVE_TEXT_PRESERVATION_SETTINGS } from './isolated-release-data-prese
 import { captureCatalogFromSnapshot } from './schema-catalog-readonly-client.mjs';
 import { fingerprintSchemaCatalog } from './schema-fingerprint-catalog.mjs';
 import { readCurrent428PreservedRows, readCurrent428RecoveryDefinitions } from './current428-forward-readback.mjs';
-import { readVerifiedCurrent428ForwardQualificationSource } from './current428-forward-qualification-source.mjs';
+import { current429, readPrivateForwardQualificationSource } from './current429-forward-qualification-source.mjs';
+import { assertCurrent429CatalogDelta, readCurrent429Registry } from './current429-forward-readback.mjs';
 import { assertVerifiedImmutableBootstrapSource } from './immutable-private-source-bootstrap.mjs';
 
 const { Client } = pg;
@@ -176,7 +177,8 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
   assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER, 'true');
   assert.equal(process.env.REHEARSAL_SCOPE, 'backup_only');
   const database = 'mz_schema_rebuild_' + process.env.GITHUB_RUN_ID;
-  const source = readVerifiedCurrent428ForwardQualificationSource(archive);
+  const source = readPrivateForwardQualificationSource(archive);
+  const is429=source.archive_digest===current429.archiveDigest;
   assertVerifiedImmutableBootstrapSource(bootstrapSource, archive);
   assert.equal(paused.scope, 'original_owner_paused_restore_readback');
   assert.equal(paused.archive_digest, source.archive_digest);
@@ -221,11 +223,12 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
       await query('select set_config($1,$2,true)', [name, setting]);
     }
   };
-  const catalog = async () => {
+  const catalog = async (includeSnapshot=false) => {
     const snapshot = await captureCatalogFromSnapshot(client);
     snapshot.cron_jobs = snapshot.cron_jobs.map(row => row.database === database ? {...row, database: 'postgres'} : row);
     return {
       fingerprint: fingerprintSchemaCatalog(snapshot).fingerprint,
+      ...(includeSnapshot?{snapshot}:{}),
       counts: Object.fromEntries(Object.entries(snapshot).map(([name, rows]) => [name, rows.length])),
     };
   };
@@ -262,11 +265,13 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
     const normal = await recovery('original');
     assert.deepEqual(normal, initial.recovery, 'Normalization must preserve native routine attributes and registry cardinality');
     stage = 'VERIFY_NORMALIZED_CATALOG';
-    assert.equal((await catalog()).fingerprint, source.source_catalog_fingerprint, 'Normalized source must equal the signed native catalog');
+    const normalized=await catalog(is429);
+    assert.equal(normalized.fingerprint, source.source_catalog_fingerprint, 'Normalized source must equal the signed native catalog');
     assert.deepEqual(await data(), initial.data);
     source.assertCurrent();
     stage = 'VERIFY_CURRENT_WEEK';
     const weekBefore = await readCurrentWeek(query);
+    const registryBefore=is429?await readCurrent429Registry(query,'before'):null;
 
     stage = 'APPLY_FORWARD';
     for (const migration of source.pending) {
@@ -274,7 +279,7 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
       await query(migration.body);
       await query(`insert into supabase_migrations.schema_migrations(version,statements,name,created_by,idempotency_key,rollback)
         values($1,$2::text[],$3,$4,null,null)`, [
-        migration.version, [migration.sql], migration.file.slice(15, -4), 'isolated-current428-target-capture',
+        migration.version, [migration.sql], migration.file.slice(15, -4), 'isolated-forward-target-capture',
       ]);
     }
     stage = 'VERIFY_TARGET';
@@ -291,8 +296,16 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
     stage = 'VERIFY_CURRENT_WEEK';
     const weekAfter = await readCurrentWeek(query);
     assert.deepEqual(weekAfter, weekBefore, 'Forward definitions changed an existing current-week employee read');
+    const catalogAfter=await catalog(is429);
+    if(is429){
+      assertCurrent429CatalogDelta(normalized.snapshot,catalogAfter.snapshot);
+      assert.deepEqual(await readCurrent429Registry(query,'after'),registryBefore);
+    }
+    delete catalogAfter.snapshot;
     target = {
-      catalog: await catalog(),
+      ...(is429?{checked_routine_and_grant_delta:true,recovery_inventory_exact:true,event_guards_preserved:true,
+        event_guard_sha256:registryBefore.event_guard_sha256}:{}),
+      catalog: catalogAfter,
       ledger_count: afterLedger.length,
       ledger_head: afterLedger.at(-1).version,
       ledger_sha256: stableJsonFileSha256(afterLedger),
@@ -331,7 +344,8 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
       migration:failure.version, rollback_readback_verified:rollbackVerified,
     });
   }
-  return Object.freeze({scope: 'isolated_current428_rollback_target', archive_digest: source.archive_digest,
+  return Object.freeze({scope: is429?'isolated_current429_rollback_target':'isolated_current428_rollback_target', archive_digest: source.archive_digest,
+    ...(is429?{plan_sha256:source.plan_sha256}:{}),
     target: Object.freeze(target), application_tables_preserved: initial.data.tables,
     rollback_verified: true, runtime_admission: false, production_written: false});
 }

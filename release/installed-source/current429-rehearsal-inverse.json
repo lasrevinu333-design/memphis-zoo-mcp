@@ -1,0 +1,119 @@
+{
+  "schema": "custodial.current429-rehearsal-inverse.v1",
+  "files": {
+    ".github/workflows/production-backup-migration-rehearsal.yml": {
+      "current_sha256": "4f8241ff5238fdf25f0b45c658c06d3ddabde3c2bee2980a6d8a77a04a927cc3",
+      "previous_sha256": "0b0555fb95b7c0ef01ae41dadcb59bb49495bca27785da9b2a72f25deaabaf78",
+      "reverse_hunks": [
+        {
+          "start": 911,
+          "end": 1488,
+          "current": "        required: false\n        type: boolean\n        default: false\n\n      private_current429_forward_capture:\n        description: Verify four exact SQL changes and rollback on signed backup 45645963579\n        required: false\n        type: boolean\n        default: false\n\n      current429_candidate_commit:\n        description: Exact candidate commit for the four-SQL rehearsal\n        required: false\n        type: string\n        default: \"\"\n\n      deploy_current429_if_verified:\n        description: Apply the four SQL changes only after a successful signed 429 rehearsal\n",
+          "previous": ""
+        },
+        {
+          "start": 2806,
+          "end": 2867,
+          "current": "          node --test scripts/current429-rehearsal-tests.mjs\n",
+          "previous": ""
+        },
+        {
+          "start": 5535,
+          "end": 5713,
+          "current": "          PRIVATE_CURRENT429_FORWARD_CAPTURE: ${{ inputs.private_current429_forward_capture }}\n          CURRENT429_EXPECTED_CANDIDATE: ${{ inputs.current429_candidate_commit }}\n",
+          "previous": ""
+        },
+        {
+          "start": 7471,
+          "end": 8256,
+          "current": "          if test \"$PRIVATE_CURRENT429_FORWARD_CAPTURE\" = true; then\n            test \"$BACKUP_RUN_ID\" = '45645963579'\n            [[ \"$CURRENT429_EXPECTED_CANDIDATE\" =~ ^[a-f0-9]{40}$ ]]\n            test \"$CURRENT429_EXPECTED_CANDIDATE\" = \"$GITHUB_SHA\"\n            test \"$REHEARSAL_SCOPE\" = backup_only\n            test \"$OFFICIAL_LOCAL_STORAGE_PROVIDER\" = true\n            test \"$PRIVATE_CURRENT428_FORWARD_CAPTURE\" != true\n            test \"$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY\" != true\n            encrypted=\"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\"\n            test \"$(stat -c '%s' \"$encrypted\")\" = '96961760'\n            printf '86e4a42617a7da2c9b6b28ef24a8d3cef9e0e64580fba77aa94666effb8cf3db  %s\\n' \"$encrypted\" | sha256sum --check --status\n          fi\n",
+          "previous": ""
+        },
+        {
+          "start": 30807,
+          "end": 30907,
+          "current": "        if: inputs.rehearsal_scope == 'full_candidate' || inputs.private_current429_forward_capture\n",
+          "previous": "        if: inputs.rehearsal_scope == 'full_candidate'\n"
+        },
+        {
+          "start": 30920,
+          "end": 31015,
+          "current": "          PRIVATE_CURRENT429_FORWARD_CAPTURE: ${{ inputs.private_current429_forward_capture }}\n",
+          "previous": ""
+        },
+        {
+          "start": 31348,
+          "end": 31639,
+          "current": "        run: |\n          if test \"$PRIVATE_CURRENT429_FORWARD_CAPTURE\" = true; then\n            node scripts/verify-current429-rehearsal.mjs\n          fi\n          npm run --silent release:migrations:attest-rehearsal > \"${RUNNER_TEMP}/production-backup-migration-rehearsal-attestation.json\"\n",
+          "previous": "        run: npm run --silent release:migrations:attest-rehearsal > \"${RUNNER_TEMP}/production-backup-migration-rehearsal-attestation.json\"\n"
+        },
+        {
+          "start": 33079,
+          "end": 35175,
+          "current": "\n\n  apply_current429:\n    needs: rehearse\n    if: inputs.private_current429_forward_capture && inputs.deploy_current429_if_verified\n    runs-on: ubuntu-24.04\n    timeout-minutes: 15\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ github.sha }}\n          persist-credentials: false\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with:\n          node-version: '22.23.4'\n          cache: npm\n      - run: npm ci --ignore-scripts\n      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0\n        with:\n          name: production-backup-migration-rehearsal-${{ github.run_id }}\n          path: ${{ runner.temp }}/current429-signed-rehearsal\n      - name: Verify signed rehearsal and apply the exact four SQL changes\n        shell: bash\n        env:\n          CURRENT429_PRODUCTION_APPLY: ${{ inputs.deploy_current429_if_verified }}\n          CURRENT429_EXPECTED_CANDIDATE: ${{ inputs.current429_candidate_commit }}\n          CURRENT429_PROJECT_CONFIRMATION: rqquvtjdmugpigbndmne\n          CURRENT429_SIGNED_REHEARSAL_DIR: ${{ runner.temp }}/current429-signed-rehearsal\n          SUPABASE_DB_URL: ${{ secrets.SUPABASE_MIGRATION_DB_URL }}\n          SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt\n          RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}\n          RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}\n        run: |\n          set -euo pipefail\n          node scripts/apply-current429-forward-plan.mjs 2>&1 | tee \"${RUNNER_TEMP}/current429-apply-receipt.jsonl\"\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1\n        if: always()\n        with:\n          name: current429-apply-receipt-${{ github.run_id }}-${{ github.run_attempt }}\n          path: ${{ runner.temp }}/current429-apply-receipt.jsonl\n          if-no-files-found: warn\n          retention-days: 30\n",
+          "previous": ""
+        }
+      ]
+    },
+    "scripts/run-private-backup-only-rehearsal.mjs": {
+      "current_sha256": "417335dccd4f3b13873d4847132a2a5a2f0f7881c0b379da77752954b2b23d06",
+      "previous_sha256": "02b16f5e6319ba5c485f76137b21a1d5fd19bc2201ac1bf445f9637eb9bfe337",
+      "reverse_hunks": [
+        {
+          "start": 2265,
+          "end": 2388,
+          "current": "import {current429,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';\n",
+          "previous": ""
+        },
+        {
+          "start": 3950,
+          "end": 4521,
+          "current": "  }\n  return flag==='true';\n}\nfunction current429CaptureRequested(){\n  const flag=process.env.PRIVATE_CURRENT429_FORWARD_CAPTURE;\n  assert.ok(flag===undefined||flag===''||flag==='false'||flag==='true');\n  if(flag==='true'){\n    assert.equal(process.env.BACKUP_RUN_ID,current429.runId);\n    assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');\n    assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');\n    assert.notEqual(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,'true');\n    assert.notEqual(process.env.PRIVATE_CURRENT428_FORWARD_CAPTURE,'true');\n",
+          "previous": ""
+        },
+        {
+          "start": 20423,
+          "end": 20479,
+          "current": "  const current429Capture=current429CaptureRequested();\n",
+          "previous": ""
+        },
+        {
+          "start": 26881,
+          "end": 26965,
+          "current": "    if(current429Capture)readVerifiedCurrent429ForwardQualificationSource(archive);\n",
+          "previous": ""
+        },
+        {
+          "start": 38105,
+          "end": 38207,
+          "current": "    if(result&&(source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST||current429Capture)){\n",
+          "previous": "    if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST){\n"
+        },
+        {
+          "start": 39422,
+          "end": 39587,
+          "current": "    if(current428Capture||current429Capture){\n      phase=current429Capture?'current429_signed_isolated_reconciliation':'current428_signed_isolated_reconciliation';\n",
+          "previous": "    if(current428Capture){\n      phase='current428_signed_isolated_reconciliation';\n"
+        },
+        {
+          "start": 41793,
+          "end": 41882,
+          "current": "      phase=current429Capture?'current429_rollback_target':'current428_rollback_target';\n",
+          "previous": "      phase='current428_rollback_target';\n"
+        },
+        {
+          "start": 46183,
+          "end": 46569,
+          "current": "      current428_target_capture:!current429Capture&&!failure&&!stopping?current428Target:null,\n      ...(current429Capture?{\n        current429_target_capture:!failure&&!stopping?current428Target:null,\n        source_commit:current428Target?.candidate_commit??null,\n        source_tree:current428Target?.candidate_tree??null,\n        completed_at:new Date().toISOString(),\n      }:{}),\n",
+          "previous": "      current428_target_capture:!failure&&!stopping?current428Target:null,\n"
+        },
+        {
+          "start": 49351,
+          "end": 49515,
+          "current": "        if(current429CaptureRequested()){\n          assert.equal(profile,'private');\n          readVerifiedCurrent429ForwardQualificationSource(archive);\n        }\n",
+          "previous": ""
+        }
+      ]
+    }
+  }
+}

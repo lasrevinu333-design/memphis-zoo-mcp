@@ -23,6 +23,7 @@ import {withIsolatedCurrentCatalogPrivileges,projectIsolatedCatalogPrivilegeStat
 import {privateFunctionStatsArguments,PRIVATE_FUNCTION_STATS_SQL,readPrivateFunctionStats} from './private-restore-function-diagnostic.mjs';
 import {selectPrivateContextCostMode,projectPrivateContextCost,projectPrivateContextCostFailure} from './private-context-cost-observer.mjs';
 import {CURRENT428_ARCHIVE_DIGEST} from './current428-forward-qualification-source.mjs';
+import {current429,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';
 import {readCurrent428PreservedRows,readCurrent428RestoredBaseline} from './current428-forward-readback.mjs';
 import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';
 import {captureCurrent428RollbackTarget,current428CaptureRefusal} from './current428-rollback-target.mjs';
@@ -43,6 +44,18 @@ function current428CaptureRequested(){
     assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
     assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
     assert.notEqual(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,'true');
+  }
+  return flag==='true';
+}
+function current429CaptureRequested(){
+  const flag=process.env.PRIVATE_CURRENT429_FORWARD_CAPTURE;
+  assert.ok(flag===undefined||flag===''||flag==='false'||flag==='true');
+  if(flag==='true'){
+    assert.equal(process.env.BACKUP_RUN_ID,current429.runId);
+    assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
+    assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
+    assert.notEqual(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,'true');
+    assert.notEqual(process.env.PRIVATE_CURRENT428_FORWARD_CAPTURE,'true');
   }
   return flag==='true';
 }
@@ -242,6 +255,7 @@ export async function runPrivate(){
   assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');assert.equal(process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER,'true');
   const contextDiagnosticOnly=selectPrivateContextCostMode(process.env.PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY,process.env.REHEARSAL_SCOPE,process.env.OFFICIAL_LOCAL_STORAGE_PROVIDER);
   const current428Capture=current428CaptureRequested();
+  const current429Capture=current429CaptureRequested();
   assert.match(process.env.GITHUB_RUN_ID||'',/^[1-9][0-9]*$/);
   assert.match(process.env.BACKUP_RUN_ID||'',/^[1-9][0-9]*$/);
   const tmp=realpathSync(process.env.RUNNER_TEMP),owned=mkdtempSync(resolve(tmp,'private-backup-rehearsal-'));
@@ -305,6 +319,7 @@ export async function runPrivate(){
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
     if(current428Capture)assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);
+    if(current429Capture)readVerifiedCurrent429ForwardQualificationSource(archive);
     sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
     ownerMetadata=originalOwnerMetadataDiagnostics(readVerifiedImmutableBootstrapInventory(archive).inventory);
     // Fail on absent source/ACL/guard recipes before resources are created.
@@ -434,7 +449,7 @@ export async function runPrivate(){
       const qualified=await withIsolatedCurrentVendorPrivileges({verifiedArchive:archive,source:bootstrapSource,connectionString:schemaDatabaseUrl,runId:process.env.GITHUB_RUN_ID,verifyTarget},restoreWithCatalogLease);
       vendorPrivileges=qualified.receipt;assert.equal(vendorPrivileges.retirement_verified,true);result=qualified.value;
     }else result=await restoreOriginal();
-    if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST){
+    if(result&&(source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST||current429Capture)){
       phase='current428_post_restore_readback';
       assert.equal(vendorPrivileges?.retirement_verified,true);
       assert.equal(catalogPrivileges?.retirement_verified,true);
@@ -454,8 +469,8 @@ export async function runPrivate(){
       }finally{await reader.end();}
       await verifyTarget();
     }
-    if(current428Capture){
-      phase='current428_signed_isolated_reconciliation';
+    if(current428Capture||current429Capture){
+      phase=current429Capture?'current429_signed_isolated_reconciliation':'current428_signed_isolated_reconciliation';
       assert.ok(current428Baseline);
       assert.equal(result.resume_eligible,true);
       assert.deepEqual(current428Baseline.open_discrepancies,[]);
@@ -487,7 +502,7 @@ export async function runPrivate(){
           RESTORE_RECONCILIATION_VERIFY_KEY:reconciliationKey,RESTORE_RECONCILIATION_VERIFY_KEY_ID:reconciliationKeyId,
           RESTORE_RECONCILIATION_JSON:JSON.stringify(signed)},
       }));
-      phase='current428_rollback_target';
+      phase=current429Capture?'current429_rollback_target':'current428_rollback_target';
       await verifyTarget();
       const ownerClient=new pg.Client({connectionString:secretEnv.SUPABASE_DB_URL,
         connectionTimeoutMillis:10000,application_name:'custodial-current428-rollback-qualification'});
@@ -537,7 +552,13 @@ export async function runPrivate(){
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       current428_baseline:current428Baseline,
-      current428_target_capture:!failure&&!stopping?current428Target:null,
+      current428_target_capture:!current429Capture&&!failure&&!stopping?current428Target:null,
+      ...(current429Capture?{
+        current429_target_capture:!failure&&!stopping?current428Target:null,
+        source_commit:current428Target?.candidate_commit??null,
+        source_tree:current428Target?.candidate_tree??null,
+        completed_at:new Date().toISOString(),
+      }:{}),
       current428_target_refusal:current428CaptureRefusal(failure),
       isolated_reconciliation_observed:isolatedReconciliation?.ok===true&&isolatedReconciliation.resumed===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
@@ -572,6 +593,10 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       try{
         const source=readVerifiedPrivateImportSource(archive);
         profile=selectPrivateProfile(source);
+        if(current429CaptureRequested()){
+          assert.equal(profile,'private');
+          readVerifiedCurrent429ForwardQualificationSource(archive);
+        }
         if(current428CaptureRequested()){
           assert.equal(profile,'private');
           assert.equal(source.sourceBinding.archive_digest,CURRENT428_ARCHIVE_DIGEST);

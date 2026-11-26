@@ -93,7 +93,7 @@ function fixture(options = {}) {
   ] };
   const binding = { archive_digest: archiveDigest };
   const ports = new Function('assert', 'createHash', 'pg', 'stableJson', 'stableJsonFileSha256', 'assertVerifiedImmutableBootstrapSource',
-    'readVerifiedCurrent428ForwardQualificationSource', 'process', 'CURRENT428_ARCHIVE_DIGEST',
+    'readPrivateForwardQualificationSource', 'process', 'CURRENT428_ARCHIVE_DIGEST', 'current429',
     'readVerifiedArchiveSourceBinding', 'readVerifiedRestoreTableSelection', 'nativeTextColumnProjection', 'quoteIdentifier',
     source + '\nreturn { readCurrent428RestoredBaseline, readCurrent428PreservedRows };')(
     assert, createHash, { Client }, stableJson, stableJsonFileSha256,
@@ -109,7 +109,7 @@ function fixture(options = {}) {
         source_ledger_head: ledger.at(-1).version, source_ledger_file_sha256: stableJsonFileSha256(ledger),
         source_inventory: sourceInventory,
       };
-    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } }, archiveDigest,
+    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } }, archiveDigest, {archiveDigest:'a'.repeat(64)},
     original => { assert.equal(original, archive); return binding; },
     (original, scope) => { assert.equal(original, archive); assert.deepEqual(scope, { databaseOnly: true }); return selection; },
     nativeTextColumnProjection, quoteIdentifier);
@@ -180,7 +180,7 @@ test('rejects restore, registry, ledger, source and transaction drift without is
 
 test('the owning runner reads the exact archive only after its temporary privilege leases are retired', () => {
   const runner = readFileSync(new URL('./run-private-backup-only-rehearsal.mjs', import.meta.url), 'utf8');
-  const start = runner.indexOf('if(result&&source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST)');
+  const start = runner.indexOf('if(result&&(source.sourceBinding.archive_digest===CURRENT428_ARCHIVE_DIGEST||current429Capture))');
   const end = runner.indexOf("phase='verified_waiting_cleanup';", start);
   assert.ok(start > 0 && end > start);
   const readback = runner.slice(start, end);

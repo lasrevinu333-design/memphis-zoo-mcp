@@ -28,6 +28,24 @@ on:
         type: boolean
         default: false
 
+      private_current429_forward_capture:
+        description: Verify four exact SQL changes and rollback on signed backup 45645963579
+        required: false
+        type: boolean
+        default: false
+
+      current429_candidate_commit:
+        description: Exact candidate commit for the four-SQL rehearsal
+        required: false
+        type: string
+        default: ""
+
+      deploy_current429_if_verified:
+        description: Apply the four SQL changes only after a successful signed 429 rehearsal
+        required: false
+        type: boolean
+        default: false
+
       private_context_cost_diagnostic_only:
         description: Finite current-schema context timing with complete rollback; does not qualify DATA restore
         required: false
@@ -64,6 +82,7 @@ jobs:
       - name: Check isolated private rehearsal contracts
         run: |
           node scripts/build-immutable-postgres-program.mjs --check
+          node --test scripts/current429-rehearsal-tests.mjs
           node --test scripts/private-context-cost-tests.mjs scripts/private-context-cost-lifetime-tests.mjs scripts/current428-forward-qualification-source-tests.mjs scripts/current428-forward-readback-tests.mjs scripts/current428-rollback-target-tests.mjs
           node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-current-restore-guard-cohort-tests.mjs scripts/immutable-current-cyclic-cohort-tests.mjs scripts/immutable-postgres-acl-qualification-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs scripts/private-restore-function-diagnostic-tests.mjs scripts/immutable-current-bounded-stage-tests.mjs scripts/immutable-ordinary-progress-tests.mjs scripts/immutable-current-catalog-stability-tests.mjs scripts/immutable-current-live-data-tests.mjs scripts/isolated-current-catalog-privileges-tests.mjs scripts/private-catalog-lease-runner-tests.mjs
           node scripts/disaster-recovery-archive-tests.mjs --native-text-columns-archive-only --text-archive-case=bootstrap
@@ -87,6 +106,8 @@ jobs:
           OFFICIAL_LOCAL_STORAGE_PROVIDER: ${{ inputs.official_local_storage_provider }}
           PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY: ${{ inputs.private_context_cost_diagnostic_only }}
           PRIVATE_CURRENT428_FORWARD_CAPTURE: ${{ inputs.private_current428_forward_capture }}
+          PRIVATE_CURRENT429_FORWARD_CAPTURE: ${{ inputs.private_current429_forward_capture }}
+          CURRENT429_EXPECTED_CANDIDATE: ${{ inputs.current429_candidate_commit }}
           BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
           REVIEWED_DISPOSITION_SHA256: ${{ inputs.reviewed_disposition_sha256 }}
           GH_TOKEN: ${{ github.token }}
@@ -112,6 +133,18 @@ jobs:
             test "$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY" = false
           fi
           [[ "$BACKUP_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          if test "$PRIVATE_CURRENT429_FORWARD_CAPTURE" = true; then
+            test "$BACKUP_RUN_ID" = '45645963579'
+            [[ "$CURRENT429_EXPECTED_CANDIDATE" =~ ^[a-f0-9]{40}$ ]]
+            test "$CURRENT429_EXPECTED_CANDIDATE" = "$GITHUB_SHA"
+            test "$REHEARSAL_SCOPE" = backup_only
+            test "$OFFICIAL_LOCAL_STORAGE_PROVIDER" = true
+            test "$PRIVATE_CURRENT428_FORWARD_CAPTURE" != true
+            test "$PRIVATE_CONTEXT_COST_DIAGNOSTIC_ONLY" != true
+            encrypted="${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc"
+            test "$(stat -c '%s' "$encrypted")" = '96961760'
+            printf '86e4a42617a7da2c9b6b28ef24a8d3cef9e0e64580fba77aa94666effb8cf3db  %s\n' "$encrypted" | sha256sum --check --status
+          fi
           test -n "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET"
           test -n "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"
           test -n "$REHEARSAL_DEVICE_CREDENTIAL_SECRET"
@@ -317,12 +350,17 @@ jobs:
           completed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           printf '{"ok":true,"backup_run_id":"%s","archive_digest":"%s","source_commit":"%s","source_tree":"%s","source_migration_head":"%s","source_migration_count":%s,"source_migration_ledger_sha256":"%s","source_catalog_fingerprint":"%s","target_migration_head":"%s","target_migration_count":%s,"target_catalog_fingerprint":"%s","active_mutation_leases":0,"expired_mutation_leases":0,"authority_health":true,"direct_dml_denied":true,"live_production_reads":0,"completed_at":"%s"}\n' "$BACKUP_RUN_ID" "$archive_digest" "$source_commit" "$source_tree" "$migration_head" "$source_migration_count" "$source_migration_ledger_sha256" "$source_catalog_fingerprint" "$target_migration_head" "$target_migration_count" "$target_fingerprint" "$completed_at" >> "$receipt"
       - name: Sign exact rehearsal run provenance
-        if: inputs.rehearsal_scope == 'full_candidate'
+        if: inputs.rehearsal_scope == 'full_candidate' || inputs.private_current429_forward_capture
         env:
+          PRIVATE_CURRENT429_FORWARD_CAPTURE: ${{ inputs.private_current429_forward_capture }}
           RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}
           RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}
           RELEASE_MIGRATION_REHEARSAL_RECEIPT: ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
-        run: npm run --silent release:migrations:attest-rehearsal > "${RUNNER_TEMP}/production-backup-migration-rehearsal-attestation.json"
+        run: |
+          if test "$PRIVATE_CURRENT429_FORWARD_CAPTURE" = true; then
+            node scripts/verify-current429-rehearsal.mjs
+          fi
+          npm run --silent release:migrations:attest-rehearsal > "${RUNNER_TEMP}/production-backup-migration-rehearsal-attestation.json"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -343,5 +381,47 @@ jobs:
             ${{ runner.temp }}/production-backup-rehearsal-supabase-rest-proxy.log
             ${{ runner.temp }}/production-backup-rehearsal-feedback-first.json
             ${{ runner.temp }}/production-backup-rehearsal-feedback-replay.json
+          if-no-files-found: warn
+          retention-days: 30
+
+
+  apply_current429:
+    needs: rehearse
+    if: inputs.private_current429_forward_capture && inputs.deploy_current429_if_verified
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-backup-migration-rehearsal-${{ github.run_id }}
+          path: ${{ runner.temp }}/current429-signed-rehearsal
+      - name: Verify signed rehearsal and apply the exact four SQL changes
+        shell: bash
+        env:
+          CURRENT429_PRODUCTION_APPLY: ${{ inputs.deploy_current429_if_verified }}
+          CURRENT429_EXPECTED_CANDIDATE: ${{ inputs.current429_candidate_commit }}
+          CURRENT429_PROJECT_CONFIRMATION: rqquvtjdmugpigbndmne
+          CURRENT429_SIGNED_REHEARSAL_DIR: ${{ runner.temp }}/current429-signed-rehearsal
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_MIGRATION_DB_URL }}
+          SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+          RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}
+          RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          node scripts/apply-current429-forward-plan.mjs 2>&1 | tee "${RUNNER_TEMP}/current429-apply-receipt.jsonl"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: current429-apply-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/current429-apply-receipt.jsonl
           if-no-files-found: warn
           retention-days: 30
