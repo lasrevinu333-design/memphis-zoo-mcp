@@ -205,7 +205,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "fd22829a418cf145a0201a41b8db7037877ec8c5"
+        "object_id": "69b97a7c74da50119fc3a523caf8b82a9fd3e622"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -2725,7 +2725,7 @@
       {
         "path": "release/installed-source/current429-secondary-drive-vm-inverse.json",
         "mode": "100644",
-        "object_id": "8a9373c1e084684bc76f534c86bb9ce7b45a9b05"
+        "object_id": "393fb363daa9ce05bb17c6b2d30d3fed1e502e32"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -8510,7 +8510,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "9da40665b38f05d54d1b8fd54a8223429abd7802"
+        "object_id": "4a8e49d1bf2511de05e4ae039ebe03ca739a059a"
       },
       {
         "path": "scripts/private-catalog-lease-runner-source.mjs",
@@ -8540,7 +8540,7 @@
       {
         "path": "scripts/private-context-cost-source-proof.mjs",
         "mode": "100644",
-        "object_id": "9156b07efa47757f95d8a27e15f88422b2ca4f93"
+        "object_id": "d128337192586d8d470d90b59ee2e49cbd8fbe48"
       },
       {
         "path": "scripts/private-context-cost-tests.mjs",
@@ -9155,7 +9155,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "ee27f332f9d0fd7542d3e7c000d88630c8e39c94"
+        "object_id": "2fbdaf2df1642c3e9ce0e36f7f234ffe6e212ab7"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
