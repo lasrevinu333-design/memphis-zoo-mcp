@@ -150,7 +150,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "c581f63a74ff513c3fc808460af67c8b65998619"
+        "object_id": "4fe489906d7297559e1268d1c45b2eae61e1f418"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -165,7 +165,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "3ca276cbcc2b0fb697442cea0bc1478f182aa801"
+        "object_id": "03be2b62e833361a9d8de704cb92c86094da1ff3"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -780,12 +780,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "358eae0dbbaf91c800f6b0856ac05db19143d9a5"
+        "object_id": "7e9256cecdd45999ad12b0e3f15e4c4c7dc4e8e2"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "23ef398dff053c2fc61923ca336a22362a513594"
+        "object_id": "c9ee08f743cd34eb7a228eb89e0e2d0a1eec87d8"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -7420,7 +7420,7 @@
       {
         "path": "scripts/manager-scheduler-http-tests.mjs",
         "mode": "100644",
-        "object_id": "e3494a6cbd61a3e7eaf9cd15f5691367a5a87abb"
+        "object_id": "74584c0c30ff8b4a21f746403ac9c8270d968270"
       },
       {
         "path": "scripts/manual-period-boundary-tests.mjs",
@@ -8280,7 +8280,7 @@
       {
         "path": "scripts/oc24-coverall-print-tests.mjs",
         "mode": "100644",
-        "object_id": "a69a24b17ab88d7d6795f66704714e9dd8afb2a0"
+        "object_id": "7f7ce168b65b9b3b242ea07bc8f39dec73d01b02"
       },
       {
         "path": "scripts/oc24-gregory-lunch-analysis.mjs",
@@ -11168,6 +11168,21 @@
         "object_id": "0e3a392b3225a5a582632a11d29943fdf8f6d23c"
       },
       {
+        "path": "src/coverall-fonts/DroidSansFallbackFull.ttf",
+        "mode": "100644",
+        "object_id": "89959f52fd0f487c2cb772fcfd30152546cd44b3"
+      },
+      {
+        "path": "src/coverall-fonts/LICENSE-Apache-2.0.txt",
+        "mode": "100644",
+        "object_id": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+      },
+      {
+        "path": "src/coverall-fonts/NOTICE.txt",
+        "mode": "100644",
+        "object_id": "1eace1d1ab04799e55998ed7e2ee86e4f27b1d0e"
+      },
+      {
         "path": "src/coverall-language.js",
         "mode": "100644",
         "object_id": "4d274e02121948d210b0169003dff857662611ac"
@@ -12055,7 +12070,7 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "b50246bb15ddf26fc1388be7c8ba4ecc4b02729c"
+        "object_id": "b7a561ee41994e5a8ac60bc1083237ab442c2b75"
       },
       {
         "path": "src/static-weekly-control-plane.js",
@@ -12065,12 +12080,12 @@
       {
         "path": "src/static-weekly-coverall-access.js",
         "mode": "100644",
-        "object_id": "cf62db5ed71fa7e5cebcc7309f1d047dfb707ad7"
+        "object_id": "356b1c05d0586b7aa822062c44b8347342097260"
       },
       {
         "path": "src/static-weekly-coverall-print.js",
         "mode": "100644",
-        "object_id": "a0d93d768ce33bfea82c2c768fdba7c3f8289410"
+        "object_id": "75968c0a1b9b0755f7478589ddc28f7a193bbdb5"
       },
       {
         "path": "src/static-weekly-dated-transition-manager-router.js",
@@ -14633,7 +14648,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2901,
+    "authority_path_count": 2904,
     "migration_path_count": 322,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
