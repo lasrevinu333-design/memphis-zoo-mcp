@@ -120,8 +120,9 @@ async function apply(){
     assert.equal(git('status','--porcelain'),'');
     const tree=git('rev-parse','HEAD^{tree}');
     const folder=resolve(process.env.CURRENT429_SIGNED_REHEARSAL_DIR);
+    const rehearsalReceipt=readFileSync(resolve(folder,'production-backup-migration-rehearsal.jsonl'),'utf8');
     const target=verifySignedCurrent429Receipt({
-      receipt:readFileSync(resolve(folder,'production-backup-migration-rehearsal.jsonl'),'utf8'),
+      receipt:rehearsalReceipt,
       envelope:JSON.parse(readFileSync(resolve(folder,'production-backup-migration-rehearsal-attestation.json'),'utf8')),
       key:requireSigningKey(process.env.RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY,'RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY'),
       keyId:process.env.RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY_ID,
@@ -212,9 +213,12 @@ async function apply(){
     const response=await fetch('https://memphis-zoo-mcp.onrender.com/schedule-api/health',{redirect:'error',signal:AbortSignal.timeout(15000)});
     const healthy=response.ok&&(await response.json()).ok===true;
     console.log(JSON.stringify({ok:healthy,production_committed:true,production_target_verified:true,
-      run_id:process.env.GITHUB_RUN_ID,backup_run_id:current429.runId,plan_sha256:plan.plan_sha256,
+      run_id:process.env.GITHUB_RUN_ID,run_attempt:process.env.GITHUB_RUN_ATTEMPT,
+      candidate_commit:candidate,candidate_tree:tree,verified_rehearsal_receipt_sha256:sha(rehearsalReceipt),
+      backup_run_id:current429.runId,archive_digest:current429.archiveDigest,plan_sha256:plan.plan_sha256,
       target_ledger_count:target.ledger_count,target_ledger_head:target.ledger_head,
-      target_catalog_fingerprint:target.catalog.fingerprint,
+      target_catalog_fingerprint:target.catalog.fingerprint,target_catalog_counts:target.catalog.counts,
+      target_ledger_sha256:target.ledger_sha256,rollback_verified_in_rehearsal:true,
       sql_operational_day_0400_chicago:schedule,sql_employee_week_civil_chicago:week.coverage,
       schedule_api_liveness:{http_status:response.status,ok:healthy},protected_phone_schedule:'NOT_PROBED',
       elapsed_ms:Math.round(performance.now()-started)}));
