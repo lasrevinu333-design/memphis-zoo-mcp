@@ -7,8 +7,8 @@ import {assertCurrent429CatalogDelta} from './current429-forward-readback.mjs';
 import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
 import {parseRehearsalScratchCapacity} from './run-private-backup-only-rehearsal.mjs';
 import {privateScratchVolumeName,assertPrivateScratchMount} from './run-official-local-storage-rehearsal.mjs';
-import {summarizeCurrentWeekCoverage} from './current428-rollback-target.mjs';
-import {beginCurrent429ApplyTransaction,verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
+import {restoreCurrent429ProofBudgets,summarizeCurrentWeekCoverage} from './current428-rollback-target.mjs';
+import {beginCurrent429ApplyTransaction,releaseCurrent429ApplicationLocks,verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
 import {stableJson,signBinding,releaseMigrationRehearsalAttestationBinding} from './disaster-recovery-crypto.mjs';
 import {compileCurrent429RecurringReceiptSource,readVerifiedCurrent429RecurringReceiptSource,recurringReceiptIdentity} from './immutable-current429-recurring-receipt-source.mjs';
 import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
@@ -107,7 +107,12 @@ test('scratch capacity is bounded to owned PostgreSQL paths and exact local moun
 
 test('apply obtains all session locks before transaction snapshot',async()=>{
   const commands=[];
-  await beginCurrent429ApplyTransaction(async(sql,args)=>commands.push([sql,args]));
+  const tables=await beginCurrent429ApplyTransaction(async(sql,args)=>commands.push([sql,args]),async()=>{
+    commands.push(['enumerate outside transaction']);
+    return ['public.fixture'];
+  });
+  assert.deepEqual(tables,['public.fixture']);
+  assert.equal(commands.at(-2)[0],'enumerate outside transaction');
   assert.deepEqual(commands.slice(2,5).map(([sql,args])=>[sql,args[0]]),[
     ['select pg_advisory_lock(hashtextextended($1,0))','memphis-zoo-release-migration-plan'],
     ['select pg_advisory_lock(hashtextextended($1,0))','memphis-zoo-application-mutation-admission'],
@@ -116,11 +121,47 @@ test('apply obtains all session locks before transaction snapshot',async()=>{
   assert.equal(commands.at(-1)[0],'begin isolation level serializable');
 });
 
+function fixtureWeek() {
+  return Array.from({length:7},(_,index)=>({today:'2026-11-25',service_date:'2026-11-'+(23+index),
+    governed:true,projection_status:'current',roster_employees:2,current_employees:2,normal_assignments:3,
+    assignment_differences:0,employees_missing_assignments:0,lunch_coverage_current:true,employee_days_sha256:'e'.repeat(64),reader_execute:true,
+    coverage_version:2,capacity_rows:0,invalid_capacity_rows:0,explicit_off_day:false}));
+}
+
+test('explicit proof timeouts are restored and only the two application locks are released after commit',async()=>{
+  const commands=[];
+  await restoreCurrent429ProofBudgets(async(sql)=>commands.push(sql));
+  await releaseCurrent429ApplicationLocks(async(sql,args)=>{
+    commands.push([sql,args[0]]);
+    return {rows:[{unlocked:true}]};
+  });
+  assert.deepEqual(commands,[
+    "set local lock_timeout='5s'","set local statement_timeout='180s'",
+    ['select pg_advisory_unlock(hashtextextended($1,0)) unlocked','memphis-zoo-application-mutation-fence'],
+    ['select pg_advisory_unlock(hashtextextended($1,0)) unlocked','memphis-zoo-application-mutation-admission'],
+  ]);
+  await assert.rejects(releaseCurrent429ApplicationLocks(async()=>({rows:[{unlocked:false}]})),/Exact production mutation lock release required/);
+});
+
+test('current employee coverage accepts verified CoverAll and explicit off days, and rejects uncertain evidence',()=>{
+  const week=fixtureWeek();
+  week[2].capacity_rows=1;
+  Object.assign(week[3],{normal_assignments:0,explicit_off_day:true});
+  const summarize=()=>summarizeCurrentWeekCoverage(week,{requireVersion2:true});
+  assert.equal(summarize().working_coverage,true);
+  assert.deepEqual(summarize().explicit_off_days,['2026-11-26']);
+  week[2].invalid_capacity_rows=1;
+  assert.deepEqual(summarize().dates_missing_coverage,['2026-11-25']);
+  week[2].invalid_capacity_rows=0;
+  week[3].explicit_off_day=false;
+  assert.deepEqual(summarize().dates_missing_coverage,['2026-11-26']);
+  Object.assign(week[3],{explicit_off_day:true,roster_employees:0,current_employees:0});
+  assert.throws(summarize);
+});
+
 test('signing requires the successful scoped result, checked catalog and verified rollback',()=>{
   const plan=readCurrent429Plan(),candidate='a'.repeat(40),tree='b'.repeat(40),runId='246';
-  const week=Array.from({length:7},(_,index)=>({today:'2026-11-25',service_date:'2026-11-'+(23+index),
-    governed:true,projection_status:'current',roster_employees:2,current_employees:2,normal_assignments:3,
-    assignment_differences:0,employees_missing_assignments:0,lunch_coverage_current:true,employee_days_sha256:'e'.repeat(64),reader_execute:true}));
+  const week=fixtureWeek();
   const capacity={filesystem_type:'ext2/ext3',free_bytes:14*1024**3,free_inodes:80*1024};
   const phase={pgdata:capacity,wal:capacity};
   const scratch={layout:'owned_local_volume',volume_removed:true,samples:2,minimum_bytes:12*1024**3,
@@ -159,6 +200,11 @@ test('signing requires the successful scoped result, checked catalog and verifie
     result=>result.cleanup_checked=false,
     result=>result.scratch.volume_removed=false,
     result=>result.scratch.final.pgdata.filesystem_type='tmpfs',
+    result=>{
+      const target=result.current429_target_capture.target;
+      for(const day of target.current_chicago_week)delete day.coverage_version;
+      target.current_chicago_week_coverage=summarizeCurrentWeekCoverage(target.current_chicago_week);
+    },
     result=>{
       const target=result.current429_target_capture.target;
       target.current_chicago_week[3].projection_status='unavailable';

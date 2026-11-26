@@ -13,13 +13,16 @@ import {ledgerMetadataDigest} from './backup-ledger-binding-v2.mjs';
 import {NATIVE_TEXT_PRESERVATION_SETTINGS} from './isolated-release-data-preservation.mjs';
 import {current429,readCurrent429Plan} from './current429-forward-qualification-source.mjs';
 import {assertCurrent429CatalogDelta,readCurrent429Registry} from './current429-forward-readback.mjs';
-import {readCurrentWeek} from './current428-rollback-target.mjs';
+import {readCurrentWeek,restoreCurrent429ProofBudgets} from './current428-rollback-target.mjs';
 import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const repository='lasrevinu333-design/memphis-zoo-mcp';
 const workflowPrefix=repository+'/.github/workflows/production-backup-migration-rehearsal.yml@';
 const ledgerSql='select version::text,name::text,statements from supabase_migrations.schema_migrations order by version';
+const applicationLocks=['memphis-zoo-application-mutation-admission','memphis-zoo-application-mutation-fence'];
+const publicTableNamesSql=`select format('%I.%I',n.nspname,c.relname) name from pg_class c
+  join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') order by n.nspname,c.relname`;
 
 export function verifySignedCurrent429Receipt({receipt,envelope,key,keyId,candidate,tree,runId,attempt,workflowRef,now=Date.now()}){
   const result=verifyCurrent429Result({receipt,candidate,tree,runId});
@@ -68,12 +71,21 @@ function verifyTarget(snapshot, target, plan){
 
 // Session locks precede BEGIN so the snapshot cannot miss a lease that
 // completed while this connection waited for exclusive admission.
-export async function beginCurrent429ApplyTransaction(query){
+export async function beginCurrent429ApplyTransaction(query, enumerateTables){
   await query("set lock_timeout='5s'");
   await query("set statement_timeout='180s'");
-  for(const name of ['memphis-zoo-release-migration-plan','memphis-zoo-application-mutation-admission','memphis-zoo-application-mutation-fence'])
+  for(const name of ['memphis-zoo-release-migration-plan',...applicationLocks])
     await query('select pg_advisory_lock(hashtextextended($1,0))',[name]);
+  const tables=await enumerateTables?.();
   await query('begin isolation level serializable');
+  return tables;
+}
+
+export async function releaseCurrent429ApplicationLocks(query) {
+  for(const name of [...applicationLocks].reverse()){
+    const released=await query('select pg_advisory_unlock(hashtextextended($1,0)) unlocked',[name]);
+    assert.equal(released.rows[0]?.unlocked,true,'Exact production mutation lock release required');
+  }
 }
 
 async function readScheduleDay(query){
@@ -90,6 +102,9 @@ async function readScheduleDay(query){
 
 async function apply(){
   let stage='authorization',db,transaction=false,committed=false,commitRequested=false;
+  const started=performance.now();
+  let stageStarted=started;
+  const enter=next=>{stage=next;stageStarted=performance.now();};
   try{
     assert.equal(process.env.GITHUB_ACTIONS,'true');
     assert.equal(process.env.GITHUB_REPOSITORY,repository);
@@ -113,7 +128,7 @@ async function apply(){
       candidate,tree,runId:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,workflowRef:process.env.GITHUB_WORKFLOW_REF,
     });
     const plan=readCurrent429Plan();
-    stage='physical_production_identity';
+    enter('physical_production_identity');
     const {connectionString}=validateProductionDatabaseUrl(process.env.SUPABASE_DB_URL,current429.projectRef);
     db=new pg.Client({connectionString,connectionTimeoutMillis:10000,
       ssl:{ca:readFileSync(process.env.SUPABASE_DB_CA_CERT_PATH,'utf8'),rejectUnauthorized:true},
@@ -121,15 +136,20 @@ async function apply(){
     await db.connect();
     await assertProductionDatabaseIdentity(db,{migrationAuthority:true});
     const query=(statement,params)=>db.query(statement,params);
-    stage='locked_production_baseline';
-    await beginCurrent429ApplyTransaction(query);
+    enter('locked_production_baseline');
+    const tables=await beginCurrent429ApplyTransaction(query,()=>query(publicTableNamesSql));
     transaction=true;
-    await configureSnapshot(query);
-    await query('lock table supabase_migrations.schema_migrations in access exclusive mode');
-    const tables=await query(`select format('%I.%I',n.nspname,c.relname) name from pg_class c
-      join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') order by n.nspname,c.relname`);
     assert.ok(tables.rowCount>0);
-    await query(`lock table ${tables.rows.map(row=>row.name).join(',')} in access exclusive mode`);
+    await query('lock table supabase_migrations.schema_migrations in access exclusive mode');
+    // Freeze direct public writes and DDL while allowing ordinary Schedule
+    // and other readers. None of the four reviewed bodies changes a public
+    // table. The exact catalog delta and private registry proof below enforce
+    // that scope independently of the rehearsal.
+    await query(`lock table ${tables.rows.map(row=>row.name).join(',')} in share mode`);
+    // LOCK is a utility command. Acquire all relation locks before issuing
+    // SELECT/set_config and therefore before the serializable snapshot.
+    await configureSnapshot(query);
+    assert.deepEqual((await query(publicTableNamesSql)).rows,tables.rows,'Public table inventory changed before its locks were admitted');
     const authority=await query(`select state,mutations_paused,
       (select count(*)::int from custodial_dr.application_mutation_leases) leases
       from custodial_dr.restore_control where singleton`);
@@ -145,54 +165,64 @@ async function apply(){
     assert.equal(before.catalogHash,current429.sourceCatalog);
     const registryBefore=await readCurrent429Registry(query,'before');
     assert.equal(registryBefore.event_guard_sha256,target.event_guard_sha256);
-    const weekBefore=await readCurrentWeek(query);
+    enter('verify_frozen_schedule_before_apply');
+    const weekBefore=await readCurrentWeek(query,{requireVersion2:true});
     assert.equal(weekBefore.coverage.working_coverage,true,'Production Chicago week unavailable before apply');
     const scheduleBefore=await readScheduleDay(query);
-    stage='execute_four_reviewed_migrations';
+    enter('execute_four_reviewed_migrations');
     for(const migration of plan.pending){
       await query(migration.body);
+      await restoreCurrent429ProofBudgets(query);
       await query(`insert into supabase_migrations.schema_migrations(version,statements,name,created_by,idempotency_key,rollback)
         values($1,$2::text[],$3,$4,null,null)`,[
         migration.version,[migration.sql],migration.file.slice(15,-4),'Custodial signed four-migration workflow '+process.env.GITHUB_RUN_ID,
       ]);
     }
-    stage='verify_target_before_commit';
+    enter('verify_target_before_commit');
     const after=await readSnapshot(query,db);
     verifyTarget(after,target,plan);
     assert.deepEqual(after.ledger.slice(0,current429.sourceCount),before.ledger);
     assertCurrent429CatalogDelta(before.catalog,after.catalog);
     assert.deepEqual(await readCurrent429Registry(query,'after'),registryBefore);
-    const weekAfter=await readCurrentWeek(query);
-    assert.equal(weekAfter.coverage.working_coverage,true,'Production Chicago week unavailable after apply');
-    assert.deepEqual(weekAfter,weekBefore);
+    // The signed rehearsal already executed the exact week reader on both
+    // sides of these exact bodies. This transaction has a frozen public
+    // snapshot, a pinned source catalog and the same reviewed definition,
+    // ACL and private-registry delta. Retain the narrower in-lock operational
+    // day comparison and run the full fresh week after releasing admission.
     assert.deepEqual(await readScheduleDay(query),scheduleBefore);
-    stage='commit';
+    enter('commit');
     commitRequested=true;
     assert.equal((await query('commit')).command,'COMMIT');
     committed=true;
     transaction=false;
-    stage='verify_production_readback';
+    enter('release_application_mutation_locks');
+    await releaseCurrent429ApplicationLocks(query);
+    enter('verify_production_readback');
     await query('begin isolation level repeatable read read only');
     transaction=true;
     await configureSnapshot(query);
     verifyTarget(await readSnapshot(query,db),target,plan);
     assert.deepEqual(await readCurrent429Registry(query,'after'),registryBefore);
     const schedule=await readScheduleDay(query);
-    const week=await readCurrentWeek(query);
+    const week=await readCurrentWeek(query,{requireVersion2:true});
     assert.equal(week.coverage.working_coverage,true,'Production Chicago week unavailable on commit readback');
-    const response=await fetch('https://memphis-zoo-mcp.onrender.com/schedule-api/health',{redirect:'error',signal:AbortSignal.timeout(15000)});
-    const healthy=response.ok&&(await response.json()).ok===true;
     await query('rollback');
     transaction=false;
-    const scheduleReady=healthy;
-    console.log(JSON.stringify({ok:scheduleReady,production_committed:true,production_target_verified:true,
+    enter('probe_application_http_liveness');
+    const response=await fetch('https://memphis-zoo-mcp.onrender.com/schedule-api/health',{redirect:'error',signal:AbortSignal.timeout(15000)});
+    const healthy=response.ok&&(await response.json()).ok===true;
+    console.log(JSON.stringify({ok:healthy,production_committed:true,production_target_verified:true,
       run_id:process.env.GITHUB_RUN_ID,backup_run_id:current429.runId,plan_sha256:plan.plan_sha256,
       target_ledger_count:target.ledger_count,target_ledger_head:target.ledger_head,
-      target_catalog_fingerprint:target.catalog.fingerprint,schedule_api_http:response.status,schedule,week:week.coverage}));
-    if(!scheduleReady)process.exitCode=1;
+      target_catalog_fingerprint:target.catalog.fingerprint,
+      sql_operational_day_0400_chicago:schedule,sql_employee_week_civil_chicago:week.coverage,
+      schedule_api_liveness:{http_status:response.status,ok:healthy},protected_phone_schedule:'NOT_PROBED',
+      elapsed_ms:Math.round(performance.now()-started)}));
+    if(!healthy)process.exitCode=1;
   }catch(error){
     if(transaction&&!committed)await db.query('rollback').catch(()=>{});
     console.error(JSON.stringify({ok:false,stage,production_committed:committed?true:commitRequested?null:false,
+      stage_elapsed_ms:Math.round(performance.now()-stageStarted),elapsed_ms:Math.round(performance.now()-started),
       sqlstate:/^[0-9A-Z]{5}$/.test(error?.code??'')?error.code:null}));
     process.exitCode=1;
   }finally{

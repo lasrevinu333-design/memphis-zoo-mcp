@@ -70,22 +70,25 @@ export const currentWeekReadbackSql = `with week as (
 ), days as (
  select today,monday+i service_date from week cross join generate_series(0,6) i
 ), authority_days as materialized (
- select d.*,a.governed,a.projection_status,a.projection_id
+ select d.*,a.governed,a.projection_status,a.projection_id,a.publication_id
  from days d cross join lateral public.static_weekly_v6_schedule_authority_state(d.service_date) a
 ), current_days as materialized (
  select * from authority_days where governed and projection_status='current'
+  and publication_id is not null and projection_id is not null and service_date>=today
 ), employee_days as materialized (
- select d.service_date, r.employee_id,
+ select d.service_date,r.employee_id,r.working,
         public.static_weekly_v5_read_employee_day(d.service_date,r.employee_id,transaction_timestamp()) payload
- from days d
+ from current_days d
  cross join lateral (
-  select distinct roster.employee_id from public.static_weekly_v6_read_roster(d.service_date) roster
-  where roster.employee_id is not null
+  select roster.employee_id,bool_or(roster.active) working
+  from public.static_weekly_v6_read_roster(d.service_date) roster
+  where roster.employee_id is not null group by roster.employee_id
  ) r
 ), employee_facts as materialized (
  select e.*,e.payload->>'projection_status'='current'
         and e.payload->>'governed'='true' and e.payload->>'service_date'=d.service_date::text
-        and e.payload->>'employee_id'=e.employee_id::text and e.payload->>'projection_id'=d.projection_id::text is_current
+        and e.payload->>'employee_id'=e.employee_id::text
+        and e.payload->>'publication_id'=d.publication_id::text and e.payload->>'projection_id'=d.projection_id::text is_current
  from employee_days e join authority_days d using(service_date)
 ), employee_items as materialized (
  select e.service_date,e.employee_id::text employee_id,
@@ -97,22 +100,41 @@ export const currentWeekReadbackSql = `with week as (
  ) item
  where e.is_current and item->>'status'='ASSIGNED'
    and item->>'source_type' in ('static_weekly_projection','static_weekly_lunch_coverage')
-), authority_items as materialized (
- select d.service_date,s.assigned_employee_id::text employee_id,s.segment_id::text occurrence_id,''::text responsibility_id,
-        s.coverage_start::time coverage_start,s.coverage_end::time coverage_end
- from current_days d cross join lateral public.static_weekly_v6_read_schedule_segments(d.service_date) s
- where s.projection_id=d.projection_id and s.owner_type='EMPLOYEE'
-   and s.status='ASSIGNED' and s.source_type='static_weekly_projection'
- union all
- select d.service_date,l.coverer_id::text,l.normal_occurrence_id::text,l.responsibility_id,l.coverage_start,l.coverage_end
- from current_days d cross join lateral public.static_weekly_v8_read_lunch_segments(d.service_date) l
+), normal_segments as materialized (
+ select d.service_date,s.assigned_employee_id,s.segment_id,s.coverage_start,s.coverage_end,
+        s.owner_type,s.status,s.source_type from current_days d
+ cross join lateral public.static_weekly_v6_read_schedule_segments(d.service_date) s
+ where s.projection_id=d.projection_id
+), accepted_lunch as materialized (
+ select d.service_date,l.coverer_id,l.coverer_name,l.responsibility_id,l.normal_occurrence_id,
+        l.coverage_start,l.coverage_end from current_days d
+ cross join lateral public.static_weekly_v8_read_lunch_segments(d.service_date) l
  where l.projection_id=d.projection_id
+), nonemployee_lunch as materialized (
+ select l.service_date,l.responsibility_id,l.normal_occurrence_id,l.coverage_start,l.coverage_end,
+        registry.capacity_slot_id
+ from accepted_lunch l left join public.static_weekly_contractor_capacity_registrations registry
+  on registry.capacity_code=l.coverer_name
+ where l.coverer_id is null
+), contractor_checks as (
+ select service_date,count(*)::int capacity_rows,
+   (count(*) filter(where capacity_slot_id is null or responsibility_id is null or normal_occurrence_id is null
+       or coverage_start is null or coverage_end is null or coverage_start>=coverage_end)
+    +count(*)-count(distinct (capacity_slot_id,responsibility_id,normal_occurrence_id,coverage_start,coverage_end)))::int invalid_capacity_rows
+ from nonemployee_lunch group by service_date
+), authority_items as materialized (
+ select s.service_date,s.assigned_employee_id::text employee_id,s.segment_id::text occurrence_id,''::text responsibility_id,
+        s.coverage_start::time coverage_start,s.coverage_end::time coverage_end
+ from normal_segments s where s.owner_type='EMPLOYEE' and s.status='ASSIGNED' and s.source_type='static_weekly_projection'
+ union all
+ select l.service_date,l.coverer_id::text,l.normal_occurrence_id::text,l.responsibility_id,l.coverage_start,l.coverage_end
+ from accepted_lunch l where l.coverer_id is not null
 ), assignment_differences as (
  (select * from authority_items except all select * from employee_items)
  union all
  (select * from employee_items except all select * from authority_items)
 )
-select d.today::text,d.service_date::text,d.governed,d.projection_status,
+select d.today::text,d.service_date::text,d.governed,d.projection_status,2::int coverage_version,
        count(e.employee_id)::int roster_employees,
        count(e.employee_id) filter(where e.is_current)::int current_employees,
        (select count(*)::int from authority_items i where i.service_date=d.service_date and i.responsibility_id='') normal_assignments,
@@ -121,6 +143,15 @@ select d.today::text,d.service_date::text,d.governed,d.projection_status,
         (e.payload->>'schedule_status'='missing_assignments' or e.payload->>'phase'='schedule_missing'))::int employees_missing_assignments,
        coalesce(bool_and(e.payload->>'lunch_coverage_status' is not distinct from 'PERSISTED')
         filter(where e.is_current),false) lunch_coverage_current,
+       coalesce(c.capacity_rows,0) capacity_rows,coalesce(c.invalid_capacity_rows,0) invalid_capacity_rows,
+       coalesce(bool_and(e.is_current is true and e.working is false
+          and e.payload->>'phase' is not distinct from 'off_day'
+          and e.payload->>'schedule_status' is not distinct from 'off'
+          and e.payload->'all_items' is not distinct from '[]'::jsonb
+          and (coalesce(e.payload->'shift','null'::jsonb)='null'::jsonb or e.payload#>>'{shift,active}'='false')),false)
+        and count(e.employee_id)>0
+        and not exists(select 1 from normal_segments s where s.service_date=d.service_date)
+        and not exists(select 1 from accepted_lunch l where l.service_date=d.service_date) explicit_off_day,
        encode(extensions.digest(convert_to(coalesce(string_agg(
         encode(extensions.digest(convert_to(e.payload::text,'UTF8'),'sha256'),'hex'),''
         order by e.employee_id),''),'UTF8'),'sha256'),'hex') employee_days_sha256,
@@ -128,13 +159,16 @@ select d.today::text,d.service_date::text,d.governed,d.projection_status,
         'public.static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)','EXECUTE') reader_execute
 from authority_days d
 left join employee_facts e on e.service_date=d.service_date
-group by d.today,d.service_date,d.governed,d.projection_status
+left join contractor_checks c on c.service_date=d.service_date
+group by d.today,d.service_date,d.governed,d.projection_status,c.capacity_rows,c.invalid_capacity_rows
 order by d.service_date`;
 
-export function summarizeCurrentWeekCoverage(rows) {
+export function summarizeCurrentWeekCoverage(rows, {requireVersion2=false}={}) {
   assert.equal(rows.length, 7, 'Schedule authority must report all seven Chicago calendar days');
   const today = rows[0].today;
   const monday = new Date(rows[0].service_date + 'T00:00:00Z');
+  const version2=rows[0].coverage_version===2;
+  if(requireVersion2)assert.equal(version2,true,'Versioned exact employee, contractor and off-day evidence required');
   assert.equal(monday.getUTCDay(), 1, 'The schedule readback must begin on Monday');
   for (const [index, row] of rows.entries()) {
     assert.match(row.today, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
@@ -151,21 +185,37 @@ export function summarizeCurrentWeekCoverage(rows) {
     assert.equal(typeof row.lunch_coverage_current, 'boolean');
     assert.match(row.employee_days_sha256, sha256);
     assert.equal(typeof row.reader_execute, 'boolean');
+    assert.equal(row.coverage_version,version2?2:undefined,'All days must use the same recognized evidence version');
+    if(version2){
+      assert.ok(Number.isSafeInteger(row.capacity_rows)&&row.capacity_rows>=0);
+      assert.ok(Number.isSafeInteger(row.invalid_capacity_rows)&&row.invalid_capacity_rows>=0);
+      assert.equal(typeof row.explicit_off_day,'boolean');
+      if(row.explicit_off_day)assert.ok(row.normal_assignments===0&&row.capacity_rows===0&&row.roster_employees>0
+        &&row.current_employees===row.roster_employees&&row.assignment_differences===0
+        &&row.employees_missing_assignments===0&&row.lunch_coverage_current);
+    }
   }
   assert.ok(rows.some(row => row.service_date === today));
   const remaining = rows.filter(row => row.service_date >= today);
   const missing = remaining.filter(row => !row.governed || row.projection_status !== 'current'
     || !row.reader_execute || row.current_employees !== row.roster_employees
-    || row.normal_assignments === 0 || row.assignment_differences !== 0
+    || (row.normal_assignments === 0 && !row.explicit_off_day) || row.assignment_differences !== 0
+    || (version2&&row.invalid_capacity_rows!==0)
     || row.employees_missing_assignments !== 0 || !row.lunch_coverage_current);
   return { today, dates_checked: remaining.map(row => row.service_date),
-    dates_missing_coverage: missing.map(row => row.service_date), working_coverage: missing.length === 0 };
+    dates_missing_coverage: missing.map(row => row.service_date), working_coverage: missing.length === 0,
+    ...(version2?{coverage_version:2,explicit_off_days:remaining.filter(row=>row.explicit_off_day).map(row=>row.service_date)}:{}) };
 }
 
-export async function readCurrentWeek(query) {
+export async function readCurrentWeek(query,options) {
   const result = await query(currentWeekReadbackSql);
   assert.equal(result.rowCount, 7);
-  return { days: result.rows, coverage: summarizeCurrentWeekCoverage(result.rows) };
+  return { days: result.rows, coverage: summarizeCurrentWeekCoverage(result.rows,options) };
+}
+
+export async function restoreCurrent429ProofBudgets(query) {
+  await query("set local lock_timeout='5s'");
+  await query("set local statement_timeout='180s'");
 }
 
 // Invoked by an owning disposable rehearsal after its existing signed
@@ -270,7 +320,7 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
     assert.deepEqual(await data(), initial.data);
     source.assertCurrent();
     stage = 'VERIFY_CURRENT_WEEK';
-    const weekBefore = await readCurrentWeek(query);
+    const weekBefore = await readCurrentWeek(query,{requireVersion2:is429});
     if(is429)assert.equal(weekBefore.coverage.working_coverage,true,'The restored current week must be usable before qualification');
     const registryBefore=is429?await readCurrent429Registry(query,'before'):null;
 
@@ -278,6 +328,7 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
     for (const migration of source.pending) {
       version = migration.version;
       await query(migration.body);
+      if(is429)await restoreCurrent429ProofBudgets(query);
       await query(`insert into supabase_migrations.schema_migrations(version,statements,name,created_by,idempotency_key,rollback)
         values($1,$2::text[],$3,$4,null,null)`, [
         migration.version, [migration.sql], migration.file.slice(15, -4), 'isolated-forward-target-capture',
@@ -295,7 +346,7 @@ export async function captureCurrent428RollbackTarget({client, archive, bootstra
     assert.deepEqual(await data(), initial.data, 'Forward migration changed original application rows');
     await readReconciliation();
     stage = 'VERIFY_CURRENT_WEEK';
-    const weekAfter = await readCurrentWeek(query);
+    const weekAfter = await readCurrentWeek(query,{requireVersion2:is429});
     assert.deepEqual(weekAfter, weekBefore, 'Forward definitions changed an existing current-week employee read');
     const catalogAfter=await catalog(is429);
     if(is429){

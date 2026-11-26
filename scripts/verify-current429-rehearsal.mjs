@@ -60,7 +60,7 @@ export function verifyCurrent429Result({receipt, candidate, tree, runId}) {
   assert.match(capture.target.ledger_sha256,hash);
   assert.match(capture.target.catalog.fingerprint,hash);
   assert.notEqual(capture.target.catalog.fingerprint,current429.sourceCatalog);
-  const schedule=summarizeCurrentWeekCoverage(capture.target.current_chicago_week);
+  const schedule=summarizeCurrentWeekCoverage(capture.target.current_chicago_week,{requireVersion2:true});
   assert.deepEqual(capture.target.current_chicago_week_coverage,schedule);
   assert.equal(schedule.working_coverage,true,'Usable signed Chicago week required');
   assert.match(result.completed_at,/^\d{4}-\d\d-\d\dT/);
