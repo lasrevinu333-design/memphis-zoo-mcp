@@ -218,7 +218,9 @@ async function apply(){
       backup_run_id:current429.runId,archive_digest:current429.archiveDigest,plan_sha256:plan.plan_sha256,
       target_ledger_count:target.ledger_count,target_ledger_head:target.ledger_head,
       target_catalog_fingerprint:target.catalog.fingerprint,target_catalog_counts:target.catalog.counts,
-      target_ledger_sha256:target.ledger_sha256,rollback_verified_in_rehearsal:true,
+      target_ledger_sha256:target.ledger_sha256,
+      target_ledger_metadata_sha256:ledgerMetadataDigest(after.ledger.map(row=>({...row,statement_sha256:row.statements.map(sha)}))),
+      rollback_verified_in_rehearsal:true,
       sql_operational_day_0400_chicago:schedule,sql_employee_week_civil_chicago:week.coverage,
       schedule_api_liveness:{http_status:response.status,ok:healthy},protected_phone_schedule:'NOT_PROBED',
       elapsed_ms:Math.round(performance.now()-started)}));
