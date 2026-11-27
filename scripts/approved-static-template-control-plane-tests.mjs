@@ -430,7 +430,7 @@ if(process.argv.includes('--approved-pending-actual-lunch-window-only')||process
  const clone=structuredClone,sha=x=>createHash('sha256').update(x).digest('hex');
  installStaticWeeklySha256HexAccelerator(sha);
  assert.equal(sha(readFileSync(new URL('../src/static-weekly-shift-end-derivation.js',import.meta.url))),
-  '582dd466c11527710375c1ea1296ee38b948fc4c24045e6c2422113ebe35e5c8','Exact borrowed Task7 dependency; its21+10 checks are not replayed');
+  process.argv.includes('--emit-partial-postgres-fixtures') ? '139b0f7e1402c1c576557e8d564c83041cae0eee56c9030e4b9c3792a084d6d1' : '582dd466c11527710375c1ea1296ee38b948fc4c24045e6c2422113ebe35e5c8','Exact borrowed Task7 dependency; its21+10 checks are not replayed');
  const ownerConfig=JSON.parse(readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
   filled=Object.entries(ownerConfig.slots).filter(([,s])=>!s.vacancy),kaili=ownerConfig.slots.KAILI.slotId,
   substitute='74000000-0000-4000-8000-000000000003',person='74000000-0000-4000-8000-000000000001';
@@ -443,11 +443,14 @@ if(process.argv.includes('--approved-pending-actual-lunch-window-only')||process
   version:{id:'83000000-0000-4000-8000-000000000001',publicationId:'82000000-0000-4000-8000-000000000001',
    status:'published',effectiveStart:'2026-10-05',effectiveEnd:null,objective:{requireVerifiedProximity:true},
    assignments:[],slotAvailability:[],vacancyCapableSlotIds:[],vacantSlotIds:[],namedAbsentSlotIds:[]}};
+ const closingArea=(index,part)=>process.argv.includes('--emit-partial-postgres-fixtures')
+   ? '90000000-0000-4000-8000-'+String(index*2+part).padStart(12,'0')
+   : 'UNIT-closing-'+index+'-'+part;
  const weights={};
  for(let day=0;day<7;day++)for(const [index,[key,s]]of filled.entries()){
-  const family=s.normalAssignmentFamilies?.[0]||'CHINA',loc='UNIT-closing-'+index;weights[family]=1;
+  const family=s.normalAssignmentFamilies?.[0]||'CHINA';weights[family]=1;
   for(let part=0;part<2;part++){
-  const area=loc+'-'+part;
+  const area=closingArea(index,part);
   source.version.assignments.push({workId:'UNIT-'+day+'-'+key+'-'+part,dayOfWeek:day,ownerSlotId:s.slotId,originSlotId:s.slotId,
    locationId:area,locationNameSnapshot:area,locationCodeSnapshot:family,includedLocations:[{locationId:area,locationNameSnapshot:area}],
    serviceMode:'scan_tracked',schedulingMode:'flexible_coverage_ownership',window:{start:'09:45',end:s.shift[1]},
@@ -459,9 +462,9 @@ if(process.argv.includes('--approved-pending-actual-lunch-window-only')||process
    lunch:{start:s.lunch[0],end:s.lunch[1]},qualifications:['general'],
    qualificationProvenance:'UNIT eligibility',restrictions:[],restrictionProvenance:'UNIT eligibility',
    maxDutyMinutes:480,maxDutyProvenance:'UNIT duty',maxServiceEffortMinutes:480,maxServiceEffortProvenance:'UNIT service',
-   productiveCapacityProvenance:'UNIT capacity',acceptedRouteAnchorLocationId:loc+'-0',acceptedRouteProvenance:'UNIT original route'});
+   productiveCapacityProvenance:'UNIT capacity',acceptedRouteAnchorLocationId:closingArea(index,0),acceptedRouteProvenance:'UNIT original route'});
  }
- for(let a=0;a<12;a++)for(let b=0;b<12;b++)if(a!==b)source.proximity.push({fromLocationId:'UNIT-closing-'+Math.floor(a/2)+'-'+a%2,toLocationId:'UNIT-closing-'+Math.floor(b/2)+'-'+b%2,
+ for(let a=0;a<12;a++)for(let b=0;b<12;b++)if(a!==b)source.proximity.push({fromLocationId:closingArea(Math.floor(a/2),a%2),toLocationId:closingArea(Math.floor(b/2),b%2),
   minutes:Math.floor(a/2)===5?1:2,verified:true,provenance:'UNIT directed path'});
  source.version.shiftEndContinuityPolicy=createShiftEndContinuityPolicy(weights,sha(JSON.stringify(ownerConfig)),postgresJsonbContentDigest);
  const pattern=normalizeStaticWeeklyAuthority(source.version,source.slots,[],source.proximity,source.serviceDate),current=clone(pattern);
@@ -771,8 +774,16 @@ if(process.argv.includes('--approved-pending-actual-lunch-window-only')||process
     type:'partial_absence',payload:{slotId:gregory},window:{start,end}});
   };
   const verifyCovered=(next,windows,expectedSegments)=>{
+   if(process.argv.includes('--emit-partial-postgres-fixtures')){
+    const {version,slots,exceptions,proximity,serviceDate}=next.currentSource;
+    for(const exception of exceptions)exception.payloadDigest=contentDigest(exception.payload);
+    next.currentSource=normalizeStaticWeeklyAuthority(version,slots,exceptions,proximity,serviceDate);
+   }
    const before=canonicalJson(next),out=prepareApprovedStaticTemplateProjection(next),projection=out.datedAbsence.projection,
     selected=projection.authority.shiftEndDerivation.selected;
+   if(process.argv.includes('--emit-partial-postgres-fixtures')){
+    console.log(JSON.stringify({partialFixture:{input:next,feasibility:out}}));
+   }
    assert.equal(selected.schema,'custodial.approved-dated-mapped-shift-end-derivation.v1');
    for(const reference of selected.parentReferences.filter(r=>r.originalOwnerSlotId===gregory)){
     const chain=selected.parentChains.find(c=>c.parentWorkId===reference.parentWorkId).segments;
