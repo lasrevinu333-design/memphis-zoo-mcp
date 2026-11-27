@@ -2,7 +2,8 @@
 // application schema/DATA, grants, roles or existing databases are consumed.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
+import {setTimeout as pause} from 'node:timers/promises';
 import {randomBytes,createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
@@ -146,38 +147,60 @@ export function classifySyntheticResult(raw,expectedChecks){
 }
 // Ports here are supplied only by the owning qualifier. This helper grants no
 // target admission; verify() still performs every native Docker identity proof.
-export function proveSyntheticNativeReadiness({verify,psql,wait,mark}){
+export async function proveSyntheticNativeReadiness({verify,psql,wait,mark}){
  mark('WAIT_AUTHENTICATED_STARTUP_SELECT');let ready=false;
  for(let i=0;i<120&&!ready;i++){
-  verify();ready=psql('supabase_admin','select 1',true)==='1';if(!ready)wait(1000);
+  await verify();ready=await psql('supabase_admin','select 1',true)==='1';if(!ready)await wait(1000);
  }
  assert.equal(ready,true);
  mark('WAIT_FINAL_HEALTH');let healthy=false;
  for(let i=0;i<120&&!healthy;i++){
-  const state=verify();healthy=state.Running===true&&(!state.Health||state.Health.Status==='healthy');
-  if(!healthy)wait(1000);
+  const state=await verify();healthy=state.Running===true&&(!state.Health||state.Health.Status==='healthy');
+  if(!healthy)await wait(1000);
  }
  assert.equal(healthy,true);
  // Match the shipping runner's final image-init settling interval, then prove
  // the actual postgres session again. No SET ROLE, catalog replay or grants.
- mark('SETTLE_FINAL_SERVER');wait(10000);verify();
+ mark('SETTLE_FINAL_SERVER');await wait(10000);await verify();
  mark('VERIFY_FINAL_NATIVE_OWNER');
- assert.equal(psql('postgres',"select current_user=session_user and current_user='postgres'",false),'t');
- verify();return Object.freeze({authenticated_startup_verified:true,final_health_verified:true,final_owner_verified:true});
+ assert.equal(await psql('postgres',"select current_user=session_user and current_user='postgres'",false),'t');
+ await verify();return Object.freeze({authenticated_startup_verified:true,final_health_verified:true,final_owner_verified:true});
 }
-export function qualifyImmutablePostgresAcls(){
+function runDockerProcess(args,{env,input,timeout,signal}) {
+ return new Promise(resolveProcess=>{
+  const child=spawn('docker',args,{cwd:root,env,timeout,signal,killSignal:'SIGKILL',stdio:['pipe','pipe','pipe']});
+  let error,stdout='',stderr='';
+  child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
+  function limit() {
+   if(Buffer.byteLength(stdout)+Buffer.byteLength(stderr)>1024*1024){
+    error??=new Error('Owned synthetic subprocess output exceeded its bound');
+    child.kill('SIGKILL');
+   }
+  }
+  child.stdout.on('data',value=>{stdout+=value;limit();});
+  child.stderr.on('data',value=>{stderr+=value;limit();});
+  child.stdin.on('error',error=>{if(error.code!=='EPIPE')child.kill('SIGKILL');});
+  child.once('error',cause=>{error??=cause;});
+  child.once('close',(status,signal)=>resolveProcess({status,signal,error,stdout,stderr}));
+  child.stdin.end(input);
+ });
+}
+export async function qualifyImmutablePostgresAcls(){
  const owner=randomBytes(16).toString('hex'),name='mz_schema_rebuild_acl_qualification_'+owner,networkName=name+'_private_'+owner;
  const label='custodial.private-backup-rehearsal',ownerProfile={id:'immutable-private-current-postgres',actor:'postgres'};
  const deadline=Date.now()+180000,env={...Object.fromEntries(['PATH','HOME'].filter(k=>process.env[k]).map(k=>[k,process.env[k]])),LC_ALL:'C'};
- let cid,networkId,imageId,cleanupDeadline,stage='VERIFY_INSTALLED_IMAGE',stopping=false,receipt={schema:'custodial.synthetic-owner-acl-qualification.v1',ok:false,cleanup_checked:false,archive_accessed:false,production_accessed:false,roles_or_grants_changed:false};
- const stop=()=>{stopping=true;};process.on('SIGTERM',stop);process.on('SIGINT',stop);
- const docker=(args,{input,cleanup=false,allowFailure=false,sqlStateOnly=false,expectedErrorCase=null}={})=>{
-  if(!cleanup)assert.ok(!stopping&&Date.now()<deadline);else assert.ok(Date.now()<cleanupDeadline);
+ let cid,networkId,imageId,cleanupDeadline,stage='VERIFY_INSTALLED_IMAGE',receipt={schema:'custodial.synthetic-owner-acl-qualification.v1',ok:false,cleanup_checked:false,archive_accessed:false,production_accessed:false,roles_or_grants_changed:false};
+ const cancellation=new AbortController();
+ const stop=()=>cancellation.abort();
+ process.on('SIGTERM',stop);process.on('SIGINT',stop);
+ const docker=async(args,{input,cleanup=false,allowFailure=false,sqlStateOnly=false,expectedErrorCase=null}={})=>{
+  if(!cleanup)assert.ok(!cancellation.signal.aborted&&Date.now()<deadline);else assert.ok(Date.now()<cleanupDeadline);
   if(expectedErrorCase!==null){
    assert.equal(cleanup,false);assert.equal(allowFailure,false);assert.equal(sqlStateOnly,true);
    assertExpectedAclInvocation(expectedErrorCase,args,input,cid);
   }
-  const result=spawnSync('docker',args,{cwd:root,env,input,encoding:'utf8',timeout:Math.min(15000,(cleanup?cleanupDeadline:deadline)-Date.now()),killSignal:'SIGKILL',maxBuffer:1024*1024,stdio:['pipe','pipe','pipe']});
+  const result=await runDockerProcess(args,{env,input,signal:cleanup?undefined:cancellation.signal,
+   timeout:Math.min(15000,(cleanup?cleanupDeadline:deadline)-Date.now())});
   const diagnostic=syntheticSubprocessDiagnostic(result,sqlStateOnly);
   if(sqlStateOnly&&!cleanup)receipt.last_sql_process=diagnostic;
   if(expectedErrorCase!==null){
@@ -193,58 +216,58 @@ export function qualifyImmutablePostgresAcls(){
   }
   return result.stdout.trim();
  };
- const inspect=()=>JSON.parse(docker(['inspect',cid]))[0];
- const verify=()=>{
-  const pg=inspect();assert.equal(pg.Image,imageId);const address=assertOwnedPg(pg,{id:cid,name,owner,networkId,networkName,ownerProfile});
+ const inspect=async()=>JSON.parse(await docker(['inspect',cid]))[0];
+ const verify=async()=>{
+  const pg=await inspect();assert.equal(pg.Image,imageId);const address=assertOwnedPg(pg,{id:cid,name,owner,networkId,networkName,ownerProfile});
   assert.equal(pg.HostConfig.Memory,1073741824);assert.equal(pg.HostConfig.MemorySwap,1073741824);assert.equal(pg.HostConfig.NanoCpus,1000000000);assert.equal(pg.HostConfig.PidsLimit,256);
   assert.deepEqual(pg.HostConfig.Tmpfs,{'/var/lib/postgresql/data':'rw,size=1g'});
-  const net=JSON.parse(docker(['network','inspect',networkId]))[0];
+  const net=JSON.parse(await docker(['network','inspect',networkId]))[0];
   assert.equal(net.Id,networkId);assert.equal(net.Name,networkName);assert.equal(net.Internal,true);assert.equal(net.Labels[label],owner);
   assert.deepEqual(Object.keys(net.Containers),[cid]);assert.equal(net.Containers[cid].Name,name);assert.equal(net.Containers[cid].IPv4Address.split('/')[0],address);
   return pg.State;
  };
  try{
-  assert.equal(JSON.parse(docker(['context','inspect','--format','{{json .Endpoints.docker.Host}}'])),'unix:///var/run/docker.sock');
-  const image=JSON.parse(docker(['image','inspect',PG_IMAGE]))[0];assert.ok(image.RepoDigests.includes(PG_IMAGE));assert.match(image.Id,/^sha256:[0-9a-f]{64}$/);imageId=image.Id;
+  assert.equal(JSON.parse(await docker(['context','inspect','--format','{{json .Endpoints.docker.Host}}'])),'unix:///var/run/docker.sock');
+  const image=JSON.parse(await docker(['image','inspect',PG_IMAGE]))[0];assert.ok(image.RepoDigests.includes(PG_IMAGE));assert.match(image.Id,/^sha256:[0-9a-f]{64}$/);imageId=image.Id;
   const fixture=immutablePostgresAclFixtureSql();receipt.fixture_sha256=sha(fixture.sql);receipt.expected_checks=fixture.checks;
   receipt.expected_error_checks=fixture.expected_error_cases.length;receipt.total_checks=fixture.total_checks;receipt.batch_sha256=fixture.batch_sha256;
-  stage='CREATE_OWNED_NETWORK';networkId=docker(['network','create','--internal','--label',label+'='+owner,networkName]);assert.match(networkId,/^[0-9a-f]{64}$/);
-  stage='CREATE_OWNED_POSTGRES';cid=docker(['run','--pull=never','-d','--name',name,'--label',label+'='+owner,'--label','custodial.private-owner-profile='+ownerProfile.id,'--label','custodial.private-owner-actor=postgres','--network',networkName,
+  stage='CREATE_OWNED_NETWORK';networkId=await docker(['network','create','--internal','--label',label+'='+owner,networkName]);assert.match(networkId,/^[0-9a-f]{64}$/);
+  stage='CREATE_OWNED_POSTGRES';cid=await docker(['run','--pull=never','-d','--name',name,'--label',label+'='+owner,'--label','custodial.private-owner-profile='+ownerProfile.id,'--label','custodial.private-owner-actor=postgres','--network',networkName,
    '--memory','1g','--memory-swap','1g','--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size=1g','-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',PG_IMAGE,
    'postgres','-D','/etc/postgresql','-c','listen_addresses=*','-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements','-c','cron.database_name=postgres','-c','cron.launch_active_jobs=off']);assert.match(cid,/^[0-9a-f]{64}$/);
-  stage='VERIFY_OWNED_POSTGRES';verify();
+  stage='VERIFY_OWNED_POSTGRES';await verify();
   const psql=(actor,sql,allowFailure=false)=>docker(['exec',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate','-v','SHOW_CONTEXT=never','-U',actor,'-d','postgres','-c',sql],{allowFailure,sqlStateOnly:true});
-  Object.assign(receipt,proveSyntheticNativeReadiness({verify,psql,mark:value=>{stage=value;},wait:ms=>{
-   assert.ok(!stopping&&Date.now()+ms<deadline);Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms);
+  Object.assign(receipt,await proveSyntheticNativeReadiness({verify,psql,mark:value=>{stage=value;},wait:ms=>{
+   assert.ok(!cancellation.signal.aborted&&Date.now()+ms<deadline);return pause(ms,undefined,{signal:cancellation.signal});
   }}));
   stage='EXECUTE_SYNTHETIC_SELECTS';
-  const raw=docker(stdinPsqlArgs(cid),{input:fixture.sql,sqlStateOnly:true});
+  const raw=await docker(stdinPsqlArgs(cid),{input:fixture.sql,sqlStateOnly:true});
   const result=classifySyntheticResult(raw,fixture.checks);
   if(Object.hasOwn(result,'native_checks')){
    receipt.native_checks=result.native_checks;receipt.native_passed=result.native_passed;receipt.native_failed=result.native_failed;
   }
   if(!result.ok){stage=result.failure_stage;throw new Error('SYNTHETIC_RESULT_REFUSED');}
-  stage='VERIFY_POST_SELECT_TARGET';verify();
+  stage='VERIFY_POST_SELECT_TARGET';await verify();
   const outcomes=[];receipt.expected_error_results=[];receipt.expected_error_passed=0;
   for(const item of fixture.expected_error_cases){
-   receipt.expected_error_case=item.case_id;stage='VERIFY_EXPECTED_EMPTY_ACL_TARGET';verify();
+   receipt.expected_error_case=item.case_id;stage='VERIFY_EXPECTED_EMPTY_ACL_TARGET';await verify();
    stage='EXECUTE_EXPECTED_EMPTY_ACL';
-   const outcome=docker(stdinPsqlArgs(cid),{input:item.sql,sqlStateOnly:true,expectedErrorCase:item});
-   stage='VERIFY_EXPECTED_EMPTY_ACL_TARGET';verify();outcomes.push(outcome);receipt.expected_error_results.push(outcome);receipt.expected_error_passed=outcomes.length;
+   const outcome=await docker(stdinPsqlArgs(cid),{input:item.sql,sqlStateOnly:true,expectedErrorCase:item});
+   stage='VERIFY_EXPECTED_EMPTY_ACL_TARGET';await verify();outcomes.push(outcome);receipt.expected_error_results.push(outcome);receipt.expected_error_passed=outcomes.length;
   }
-  stage='VERIFY_EXPECTED_ERROR_BATCH';verifyExpectedAclBatch(fixture,outcomes);verify();
+  stage='VERIFY_EXPECTED_ERROR_BATCH';verifyExpectedAclBatch(fixture,outcomes);await verify();
   receipt.total_passed=result.native_passed+outcomes.length;assert.equal(receipt.total_passed,fixture.total_checks);
   delete receipt.expected_error_case;receipt.ok=true;stage='FINISHED';
  }catch{receipt.failure_stage=stage;}
  finally{
   cleanupDeadline=Date.now()+45000;
   try{
-   if(!cid){const found=docker(['ps','-aq','--no-trunc','--filter','name=^/'+name+'$','--filter','label='+label+'='+owner],{cleanup:true}).split('\n').filter(Boolean);assert.ok(found.length<=1);cid=found[0];}
-   if(cid){const pg=JSON.parse(docker(['inspect',cid],{cleanup:true}))[0];assert.equal(pg.Id,cid);assert.equal(pg.Name,'/'+name);assert.equal(pg.Config.Image,PG_IMAGE);assert.equal(pg.Image,imageId);assert.equal(pg.Config.Labels[label],owner);docker(['rm','-f',cid],{cleanup:true});}
-   const found=docker(['ps','-aq','--no-trunc','--filter','label='+label+'='+owner],{cleanup:true});assert.equal(found,'');
-   const nets=docker(['network','ls','-q','--no-trunc','--filter','label='+label+'='+owner],{cleanup:true}).split('\n').filter(Boolean);assert.ok(nets.length<=1);
-   if(nets.length){if(networkId)assert.equal(nets[0],networkId);const net=JSON.parse(docker(['network','inspect',nets[0]],{cleanup:true}))[0];assert.equal(net.Name,networkName);assert.equal(net.Internal,true);assert.equal(net.Labels[label],owner);assert.deepEqual(net.Containers,{});docker(['network','rm',net.Id],{cleanup:true});}
-   assert.equal(docker(['network','ls','-q','--no-trunc','--filter','label='+label+'='+owner],{cleanup:true}),'');receipt.cleanup_checked=true;
+   if(!cid){const found=(await docker(['ps','-aq','--no-trunc','--filter','name=^/'+name+'$','--filter','label='+label+'='+owner],{cleanup:true})).split('\n').filter(Boolean);assert.ok(found.length<=1);cid=found[0];}
+   if(cid){const pg=JSON.parse(await docker(['inspect',cid],{cleanup:true}))[0];assert.equal(pg.Id,cid);assert.equal(pg.Name,'/'+name);assert.equal(pg.Config.Image,PG_IMAGE);assert.equal(pg.Image,imageId);assert.equal(pg.Config.Labels[label],owner);await docker(['rm','-f',cid],{cleanup:true});}
+   const found=await docker(['ps','-aq','--no-trunc','--filter','label='+label+'='+owner],{cleanup:true});assert.equal(found,'');
+   const nets=(await docker(['network','ls','-q','--no-trunc','--filter','label='+label+'='+owner],{cleanup:true})).split('\n').filter(Boolean);assert.ok(nets.length<=1);
+   if(nets.length){if(networkId)assert.equal(nets[0],networkId);const net=JSON.parse(await docker(['network','inspect',nets[0]],{cleanup:true}))[0];assert.equal(net.Name,networkName);assert.equal(net.Internal,true);assert.equal(net.Labels[label],owner);assert.deepEqual(net.Containers,{});await docker(['network','rm',net.Id],{cleanup:true});}
+   assert.equal(await docker(['network','ls','-q','--no-trunc','--filter','label='+label+'='+owner],{cleanup:true}),'');receipt.cleanup_checked=true;
   }catch{receipt.ok=false;receipt.cleanup_checked=false;receipt.cleanup_stage='OWNED_RESOURCE_CLEANUP_REFUSED';}
   process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);
  }
@@ -252,5 +275,5 @@ export function qualifyImmutablePostgresAcls(){
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  if(process.argv.length!==3||process.argv[2]!=='--run-owned-synthetic')throw new Error('Explicit owned synthetic qualification required');
- const receipt=qualifyImmutablePostgresAcls();console.log(JSON.stringify(receipt));if(!receipt.ok||!receipt.cleanup_checked)process.exitCode=1;
+ const receipt=await qualifyImmutablePostgresAcls();console.log(JSON.stringify(receipt));if(!receipt.ok||!receipt.cleanup_checked)process.exitCode=1;
 }

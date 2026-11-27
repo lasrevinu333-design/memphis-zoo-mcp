@@ -50,9 +50,9 @@ test('native result failure separates JSON parse, shape, types and predicate mis
  assert.deepEqual(classifySyntheticResult('{"checks":69,"passed":69,"failed":0}',69),{ok:true,native_checks:69,native_passed:69,native_failed:0});
 });
 
-test('readiness proves authenticated startup, final health, settling and exact final owner in order',()=>{
+test('readiness proves authenticated startup, final health, settling and exact final owner in order',async()=>{
  const calls=[],stages=[];let initial=0,health=0;
- const result=proveSyntheticNativeReadiness({
+ const result=await proveSyntheticNativeReadiness({
   mark:stage=>{stages.push(stage);calls.push(stage);},verify:()=>{calls.push('verify');return {Running:true,Health:{Status:stages.at(-1)==='WAIT_FINAL_HEALTH'&&health++===0?'starting':'healthy'}};},
   psql:(actor,sql,allowFailure)=>{calls.push({actor,sql,allowFailure});if(actor==='supabase_admin')return initial++===0?null:'1';return 't';},wait:ms=>calls.push(ms),
  });
@@ -63,10 +63,10 @@ test('readiness proves authenticated startup, final health, settling and exact f
  assert.deepEqual(result,{authenticated_startup_verified:true,final_health_verified:true,final_owner_verified:true});
 });
 
-test('readiness fails closed on target drift, unhealthy final server, cancellation and wrong final owner',()=>{
+test('readiness fails closed on target drift, unhealthy final server, cancellation and wrong final owner',async()=>{
  for(const mode of ['drift','not_authenticated','unhealthy','cancel','wrong_owner']){
   let phase,queries=0,finalQueries=0;
-  assert.throws(()=>proveSyntheticNativeReadiness({mark:value=>{phase=value;},verify:()=>{if(mode==='drift')throw Error(secret);return {Running:true,Health:{Status:mode==='unhealthy'?'starting':'healthy'}};},
+  await assert.rejects(()=>proveSyntheticNativeReadiness({mark:value=>{phase=value;},verify:()=>{if(mode==='drift')throw Error(secret);return {Running:true,Health:{Status:mode==='unhealthy'?'starting':'healthy'}};},
    psql:actor=>{queries++;if(actor==='postgres'){finalQueries++;return mode==='wrong_owner'?'f':'t';}return mode==='not_authenticated'?null:'1';},
    wait:ms=>{if(mode==='cancel'&&ms===10000)throw Error(secret);}}));
   assert.equal(finalQueries,mode==='wrong_owner'?1:0);if(mode==='drift')assert.equal(queries,0);
@@ -98,15 +98,16 @@ const stdinArgs=cid=>['exec','-i',cid,'psql','-X','-qAt','-v','ON_ERROR_STOP=1',
 
 test('75-case batch keeps69 valid Boolean rows and six separately bound exact invalid-array SELECTs',()=>{
  const fixture=immutablePostgresAclFixtureSql();assert.equal(fixture.checks,69);assert.equal(fixture.total_checks,75);assert.equal(fixture.expected_error_cases.length,6);
- assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'4b15cba1c876eca3a2f3c1ed1c65b0eef96843ad2f02ffd9b4d5b96e94100334');
+ assert.equal(Buffer.byteLength(fixture.sql),55239);assert.equal(fixture.batch_sha256,'dc0efbc3fae9a8516ed561840b122939da53890b15a2a9e6d7de52fd705ff3d7');
  // The cohort is appended to the last fixed Source statement; the exact ACL
  // predicates and all six hostile-array SQL bytes remain unchanged. Reverse
  // that layer before the earlier manager-statement predecessor check.
  const currentProgram=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url),'utf8'));
  const beforeCyclic=removeCurrentCyclicCohorts(currentProgram);
  const originalManager=beforeCyclic.statements[11].sourceSha256;
+ const retainedEmployeePush=beforeCyclic.statements[12].sourceSha256;
  const beforeCyclicBatch={schema:'custodial.synthetic-owner-acl-batch.v1',boolean_checks:fixture.checks,boolean_sql_sha256:hash(fixture.sql),
-  expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,source_sha256:case_id==='MANAGER_CURRENT_EMPTY_ACL'?originalManager:source_sha256,sql_sha256}))};
+  expected_errors:fixture.expected_error_cases.map(({case_id,source_sha256,sql_sha256})=>({case_id,source_sha256:case_id==='MANAGER_CURRENT_EMPTY_ACL'?originalManager:case_id==='EMPLOYEE_PUSH_CURRENT_EMPTY_ACL'?retainedEmployeePush:source_sha256,sql_sha256}))};
  assert.equal(hash(JSON.stringify(beforeCyclicBatch)),'60f43e1ec4c1fa8eaa3bd83384dc073d8eeff5f6e52928c12b64496d5323a351');
  const beforeCohort=removeCurrentRestoreGuardCohort(currentProgram);
  const originalEmployeePush=beforeCohort.statements.find(s=>s.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql').sourceSha256;
@@ -175,7 +176,7 @@ test('complete expected-error batch refuses omitted, duplicate, copied, foreign 
  const source=readFileSync(new URL('./qualify-immutable-postgres-acls.mjs',import.meta.url),'utf8');
  assert.ok(source.indexOf("if(!result.ok){stage=result.failure_stage")<source.indexOf('for(const item of fixture.expected_error_cases)'));
  assert.ok(source.includes('assert.equal(allowFailure,false);assert.equal(sqlStateOnly,true)'));
- assert.ok(source.indexOf('assertExpectedAclInvocation(expectedErrorCase,args,input,cid)')<source.indexOf("const result=spawnSync('docker'"));
- assert.ok(source.includes('verifyExpectedAclBatch(fixture,outcomes);verify()'));
+ assert.ok(source.indexOf('assertExpectedAclInvocation(expectedErrorCase,args,input,cid)')<source.indexOf("const result=await runDockerProcess(args"));
+ assert.ok(source.includes('verifyExpectedAclBatch(fixture,outcomes);await verify()'));
  assert.equal(classifySyntheticResult('{}',69).ok,false);
 });

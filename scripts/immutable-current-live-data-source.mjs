@@ -32,7 +32,27 @@ const releaseHistoryCountInverse = () => {
   return JSON.parse(bytes);
 };
 
+export function projectDeferredOriginalIndex(original, reverse) {
+  const last=original.statements.at(-1);
+  const from=reverse?'af96769cbf0c77763dad9c514817da663f1453117be8bad79672630d7d805bd0':'5dca4d0a70e3e6e3fef106e3d16407c4fb90c7c1521b6a8e6fb608390f73556e';
+  if (last?.sourceSha256 !== from || sha256(last.sql) !== from) return null;
+  const bytes=readFileSync(new URL('../release/installed-source/20261127_deferred_original_index_inverse.json',import.meta.url));
+  assert.equal(sha256(bytes),'2f079824ccca219a4efbee4f72d6ea04534d9fcf7d0d3ce8275e90c01c0a7088');
+  const proof=JSON.parse(bytes);
+  const result=structuredClone(original),statement=result.statements.at(-1);
+  for(const {before,after} of reverse?proof.hunks.toReversed():proof.hunks) {
+    const [fromText,toText]=reverse?[after,before]:[before,after];
+    assert.equal(statement.sql.split(fromText).length,2);
+    statement.sql=statement.sql.replace(fromText,()=>toText);
+  }
+  statement.sourceSha256=sha256(statement.sql);
+  assert.equal(statement.sourceSha256,reverse?proof.previousStatementSha256:proof.currentStatementSha256);
+  return result;
+}
+
 function transform(original, reverse, proof) {
+  const historical=projectDeferredOriginalIndex(original,true);
+  if(historical)original=historical;
   const { previousProgramSha256, currentProgramSha256, previousStatementSha256, currentStatementSha256, hunks } = proof;
   assert.equal(sha256(serialize(original)), reverse ? currentProgramSha256 : previousProgramSha256);
   const program = structuredClone(original);
@@ -46,7 +66,7 @@ function transform(original, reverse, proof) {
   statement.sourceSha256 = sha256(statement.sql);
   assert.equal(statement.sourceSha256, reverse ? previousStatementSha256 : currentStatementSha256);
   assert.equal(sha256(serialize(program)), reverse ? previousProgramSha256 : currentProgramSha256);
-  return program;
+  return historical?projectDeferredOriginalIndex(program,false):program;
 }
 
 export function extendCurrentLiveDataSnapshot(program) {
@@ -79,5 +99,6 @@ export function removeCurrentLiveDataSnapshot(program) {
   const prior = indexed.statements[0].sql.includes(indexedStageMarker)
     ? transform(indexed, true, indexedStageInverse())
     : indexed;
-  return prior.statements[0].sql.includes(marker) ? transform(prior, true, inverse()) : prior;
+  const original=prior.statements[0].sql.includes(marker)?transform(prior,true,inverse()):prior;
+  return projectDeferredOriginalIndex(original,true)??original;
 }

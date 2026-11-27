@@ -1,0 +1,34 @@
+{
+  "previousStatementSha256": "5dca4d0a70e3e6e3fef106e3d16407c4fb90c7c1521b6a8e6fb608390f73556e",
+  "currentStatementSha256": "af96769cbf0c77763dad9c514817da663f1453117be8bad79672630d7d805bd0",
+  "hunks": [
+    {
+      "before": " staged custodial_dr.immutable_ordinary_import_rows;expected_count bigint;observed bigint:=0;matches bigint:=0;\n actual_matches bigint;projection text;original_projection text;member jsonb;\n",
+      "after": " staged custodial_dr.immutable_ordinary_import_rows;matches integer:=0;\n actual_matches bigint;projection text;projection_hash bytea;original_projection text;key jsonb;\n"
+    },
+    {
+      "before": " SELECT v INTO STRICT member FROM jsonb_array_elements(ctx.original_manifest->'catalog') v\n  JOIN pg_catalog.pg_class c ON c.oid=p_table_oid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace\n  WHERE v->>'schema_name'=n.nspname AND v->>'table_name'=c.relname;\n expected_count:=(member->>'row_count')::bigint;\n",
+      "after": " -- FINISHED follows the single transaction-wide ordinal, raw digest, typed\n -- projection and actual-row multiset checks. Reprove the exact row here.\n"
+    },
+    {
+      "before": " projection:=custodial_dr.immutable_import_row_projection(p_new_row);\n",
+      "after": " projection:=custodial_dr.immutable_import_row_projection(p_new_row);\n projection_hash:=extensions.digest(projection,'sha256');\n"
+    },
+    {
+      "before": "   AND s.table_oid=p_table_oid ORDER BY s.ordinal LOOP\n  observed:=observed+1;\n  IF staged.ordinal IS DISTINCT FROM observed\n   OR staged.original_row_sha256 IS DISTINCT FROM encode(extensions.digest(convert_to(staged.original_row_utf8,'UTF8'),'sha256'),'hex')\n  THEN RAISE EXCEPTION 'Exact deferred original ordinal or raw digest differs';END IF;\n",
+      "after": "   AND s.table_oid=p_table_oid AND extensions.digest(s.typed_original_text,'sha256')=projection_hash\n   AND convert_to(s.typed_original_text,'UTF8')=convert_to(projection,'UTF8')\n  LIMIT 2 LOOP\n  matches:=matches+1;\n  IF staged.original_row_sha256 IS DISTINCT FROM encode(extensions.digest(convert_to(staged.original_row_utf8,'UTF8'),'sha256'),'hex')\n  THEN RAISE EXCEPTION 'Exact deferred original raw digest differs';END IF;\n"
+    },
+    {
+      "before": "  IF original_projection IS DISTINCT FROM staged.typed_original_text THEN RAISE EXCEPTION 'Exact deferred original codec differs';END IF;\n  IF original_projection IS NOT DISTINCT FROM projection THEN matches:=matches+1;END IF;\n",
+      "after": "  IF convert_to(original_projection,'UTF8') IS DISTINCT FROM convert_to(staged.typed_original_text,'UTF8')\n  THEN RAISE EXCEPTION 'Exact deferred original codec differs';END IF;\n"
+    },
+    {
+      "before": " IF observed IS DISTINCT FROM expected_count OR matches<>1 THEN RETURN false;END IF;\n EXECUTE format('SELECT count(*) FROM ONLY %s r WHERE custodial_dr.immutable_import_row_projection(r)=$1',p_table_oid::regclass)\n  INTO actual_matches USING projection;\n",
+      "after": " IF matches<>1 THEN RETURN false;END IF;\n key:=to_jsonb(p_new_row);\n IF p_table_oid='public.static_weekly_approved_initial_confirmations'::regclass THEN\n  SELECT count(*) INTO actual_matches FROM ONLY public.static_weekly_approved_initial_confirmations r\n   WHERE r.manager_id=(key->>'manager_id')::uuid AND r.idempotency_key=key->>'idempotency_key'\n   AND convert_to(custodial_dr.immutable_import_row_projection(r),'UTF8')=convert_to(projection,'UTF8');\n ELSE\n  SELECT count(*) INTO actual_matches FROM ONLY public.weekly_schedule_lunch_documents r\n   WHERE r.projection_id=(key->>'projection_id')::uuid\n   AND convert_to(custodial_dr.immutable_import_row_projection(r),'UTF8')=convert_to(projection,'UTF8');\n END IF;\n"
+    },
+    {
+      "before": " IF current_user<>session_user OR current_user<>'postgres' THEN RAISE EXCEPTION 'Exact isolated original cohort owner required';END IF;\n",
+      "after": " IF current_user<>session_user OR current_user<>'postgres' THEN RAISE EXCEPTION 'Exact isolated original cohort owner required';END IF;\n CREATE INDEX immutable_deferred_original_projection_digest\n  ON custodial_dr.immutable_ordinary_import_rows\n  (database_oid,backend_pid,transaction_id,table_oid,extensions.digest(typed_original_text,'sha256'));\n\n"
+    }
+  ]
+}

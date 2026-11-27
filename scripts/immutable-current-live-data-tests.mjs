@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { extendCurrentLiveDataSnapshot, extendIndexedOrdinaryStage, extendTypedOrdinarySetInsert, removeCurrentFinishReleaseHistoryCount, removeCurrentLiveDataSnapshot } from './immutable-current-live-data-source.mjs';
+import { projectDeferredOriginalIndex, extendCurrentLiveDataSnapshot, extendIndexedOrdinaryStage, extendTypedOrdinarySetInsert, removeCurrentFinishReleaseHistoryCount, removeCurrentLiveDataSnapshot } from './immutable-current-live-data-source.mjs';
 
-const document = JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json', import.meta.url)));
+const latest = JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json', import.meta.url)));
+const document = projectDeferredOriginalIndex(latest,true)??latest;
 const prior = removeCurrentLiveDataSnapshot(document);
 const sql = document.statements[0].sql;
 const predecessor = prior.statements[0].sql;
