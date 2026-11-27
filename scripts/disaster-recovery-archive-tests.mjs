@@ -314,14 +314,16 @@ if(process.argv.includes('--ordinary-native-text-owner-only')){
    assert.match(source,/Date\.now\(\) >= expiresAt/);assert.match(source,/db\._txStatus !== "T"/);
  });
  check('native truncation denies external FK closure and type casts reject custom functions',()=>{
-   assert.ok(source.includes('nativeTextDatabase ? "" : " cascade"'));
+   assert.ok(source.includes('=> "only " + qualified(table.schema_name, table.table_name)'));
+  assert.ok(source.includes('restart identity restrict'));
+  assert.doesNotMatch(source,/truncate[^\n]*cascade/i);
    assert.match(source,/x\.castsource=t\.oid and x\.casttarget='pg_catalog\.text'/);
    assert.match(source,/x\.castsource='pg_catalog\.text'::pg_catalog\.regtype and x\.casttarget=t\.oid/);
    assert.match(source,/cast_proc\.pronamespace<>'pg_catalog'::pg_catalog\.regnamespace/);
    assert.match(source,/cast_proc\.prolang<>/);
  });
  check('whole-table final readback and evidence precede same COMMIT; unknown cannot retry',()=>{
-   const evidence=source.indexOf('if(nativeTextDatabase){\n      await recordDatabaseRestored();');
+   const evidence=source.indexOf('    await recordDatabaseRestored();');
    const compare=source.indexOf('await compareNativeTextRestorePlans(nativeTextPlans);',evidence);
    const commit=source.indexOf('    await db.query("commit");',compare);
    assert.ok(evidence>0&&compare>evidence&&commit>compare);
@@ -382,9 +384,12 @@ if(process.argv.includes('--ordinary-native-text-owner-only')){
    check(name+' cannot claim backup fidelity',()=>{const r=structuredClone(restore);change(r);assert.throws(()=>receipt(r));});
  check('backup-only workflow exits before forward SQL/runtime and skips full attestation',()=>{
    const flow=readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8');
-   assert.match(flow,/default: full_candidate/);assert.match(flow,/if: inputs\.rehearsal_scope != 'backup_only'/);
+   assert.match(flow,/default: full_candidate/);assert.match(flow,/if:[^\n]*inputs\.rehearsal_scope == 'full_candidate'/);
    const boundary=flow.indexOf('node scripts/production-backup-rehearsal-scope.mjs restore-result');
-   assert.ok(boundary>flow.indexOf('RESTORE_APPLY=true'));assert.ok(flow.indexOf('exit 0',boundary)<flow.indexOf('release:migrations:apply'));
+   const restored=flow.indexOf('RESTORE_APPLY=true');
+   const backupOnlyExit=flow.indexOf('exit 0',boundary);
+   const forward=flow.indexOf('node scripts/run-release-migration-full-candidate.mjs',boundary);
+   assert.ok(restored>=0&&boundary>restored&&backupOnlyExit>boundary&&forward>backupOnlyExit);
    assert.match(flow,/test "\$source_commit" = "\$GITHUB_SHA"/);
  });
  console.log(JSON.stringify({selector:'ordinary-native-text-owner-only',cases,
