@@ -240,7 +240,10 @@ jobs:
               trap - EXIT
               exit "$status"
             fi
-            if test "${private_route_active:-false}" = true; then return "$status"; fi
+            if test "${private_route_active:-false}" = true; then
+              trap - EXIT
+              exit "$status"
+            fi
             for owned_pid in "${backend_pid:-}" "${static_pid:-}" "${proxy_pid:-}"; do
               if test -n "$owned_pid"; then kill "$owned_pid" >/dev/null 2>&1 || true; fi
             done
@@ -253,7 +256,8 @@ jobs:
             fi
             docker rm -f "$postgrest_container" >/dev/null 2>&1 || true
             docker rm -f "$container" >/dev/null 2>&1 || true
-            return "$status"
+            trap - EXIT
+            exit "$status"
           }
           trap cleanup EXIT
           trap 'exit 130' INT
