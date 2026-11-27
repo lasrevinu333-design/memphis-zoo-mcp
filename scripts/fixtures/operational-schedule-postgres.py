@@ -52,11 +52,11 @@ def blank_schema():
 def run_pg(sql):
     image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed'
     shell="""set -eu
-initdb -D /fixture/db -U postgres -A trust --no-locale >/dev/null
+initdb -D /fixture/db -U postgres -A trust --no-locale --encoding=UTF8 >/dev/null
 pg_ctl -D /fixture/db -l /fixture/server.log -o "-c listen_addresses='' -c unix_socket_directories=/fixture -c shared_preload_libraries=''" -w start >/dev/null
 trap 'pg_ctl -D /fixture/db -m fast -w stop >/dev/null' EXIT
-psql -h /fixture -U postgres -XAtqb -v ON_ERROR_STOP=1 -v VERBOSITY=terse"""
+psql -h /fixture -U postgres -XAtqb -v ON_ERROR_STOP=1 -v VERBOSITY=default"""
     result=subprocess.run(['docker','run','-i','--pull=never','--rm','--network','none','--read-only','--user','100:101','--tmpfs','/fixture:rw,mode=0700,uid=100,gid=101','--tmpfs','/tmp:rw,mode=1777','--memory','900m','--pids-limit','96','--entrypoint','/bin/bash',image,'-c',shell],input=sql,text=True,capture_output=True)
     print(result.stdout.strip(),flush=True)
-    if result.returncode:print(result.stderr[-2400:],file=sys.stderr);sys.exit(result.returncode)
+    if result.returncode:print(result.stderr[:900]+"\n"+result.stderr[-1100:],file=sys.stderr);sys.exit(result.returncode)
 if __name__=='__main__':run_pg(blank_schema()+proposal+(root/'scripts/fixtures/operational-schedule-followup-checks.sql').read_text())
