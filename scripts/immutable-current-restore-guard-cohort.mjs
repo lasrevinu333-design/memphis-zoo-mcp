@@ -101,8 +101,8 @@ export const deferredOriginalMatcherSql=`
 CREATE FUNCTION custodial_dr.immutable_import_matches_deferred_original_record(p_table_oid oid,p_new_row anyelement)
 RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $deferred_original$
 DECLARE ctx custodial_dr.immutable_private_import_context;checked custodial_dr.immutable_private_import_context;
- staged custodial_dr.immutable_ordinary_import_rows;expected_count bigint;observed bigint:=0;matches bigint:=0;
- actual_matches bigint;projection text;original_projection text;member jsonb;
+ staged custodial_dr.immutable_ordinary_import_rows;matches integer:=0;
+ actual_matches bigint;projection text;projection_hash bytea;original_projection text;key jsonb;
 BEGIN
  IF current_user<>session_user OR current_user<>'postgres' OR pg_catalog.pg_trigger_depth()<>1
   OR p_table_oid NOT IN('public.static_weekly_approved_initial_confirmations'::regclass,'public.weekly_schedule_lunch_documents'::regclass)
@@ -113,26 +113,34 @@ BEGIN
    AND backend_pid=pg_backend_pid() AND transaction_id=txid_current()) THEN RETURN false;END IF;
  ctx:=custodial_dr.immutable_import_assert_context();
  IF ctx.phase<>'FINISHED' OR ctx.active_table_oid IS NOT NULL OR ctx.active_row_sha256 IS NOT NULL THEN RETURN false;END IF;
- SELECT v INTO STRICT member FROM jsonb_array_elements(ctx.original_manifest->'catalog') v
-  JOIN pg_catalog.pg_class c ON c.oid=p_table_oid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-  WHERE v->>'schema_name'=n.nspname AND v->>'table_name'=c.relname;
- expected_count:=(member->>'row_count')::bigint;
+ -- FINISHED follows the single transaction-wide ordinal, raw digest, typed
+ -- projection and actual-row multiset checks. Reprove the exact row here.
  projection:=custodial_dr.immutable_import_row_projection(p_new_row);
+ projection_hash:=extensions.digest(projection,'sha256');
  FOR staged IN SELECT s.* FROM custodial_dr.immutable_ordinary_import_rows s
   WHERE s.database_oid=ctx.database_oid AND s.backend_pid=ctx.backend_pid AND s.transaction_id=ctx.transaction_id
-   AND s.table_oid=p_table_oid ORDER BY s.ordinal LOOP
-  observed:=observed+1;
-  IF staged.ordinal IS DISTINCT FROM observed
-   OR staged.original_row_sha256 IS DISTINCT FROM encode(extensions.digest(convert_to(staged.original_row_utf8,'UTF8'),'sha256'),'hex')
-  THEN RAISE EXCEPTION 'Exact deferred original ordinal or raw digest differs';END IF;
+   AND s.table_oid=p_table_oid AND extensions.digest(s.typed_original_text,'sha256')=projection_hash
+   AND convert_to(s.typed_original_text,'UTF8')=convert_to(projection,'UTF8')
+  LIMIT 2 LOOP
+  matches:=matches+1;
+  IF staged.original_row_sha256 IS DISTINCT FROM encode(extensions.digest(convert_to(staged.original_row_utf8,'UTF8'),'sha256'),'hex')
+  THEN RAISE EXCEPTION 'Exact deferred original raw digest differs';END IF;
   EXECUTE format('SELECT custodial_dr.immutable_import_row_projection(r) FROM custodial_dr.immutable_import_decode_record(null::%s,$1::text) r',p_table_oid::regclass)
    INTO original_projection USING staged.original_row_utf8;
-  IF original_projection IS DISTINCT FROM staged.typed_original_text THEN RAISE EXCEPTION 'Exact deferred original codec differs';END IF;
-  IF original_projection IS NOT DISTINCT FROM projection THEN matches:=matches+1;END IF;
+  IF convert_to(original_projection,'UTF8') IS DISTINCT FROM convert_to(staged.typed_original_text,'UTF8')
+  THEN RAISE EXCEPTION 'Exact deferred original codec differs';END IF;
  END LOOP;
- IF observed IS DISTINCT FROM expected_count OR matches<>1 THEN RETURN false;END IF;
- EXECUTE format('SELECT count(*) FROM ONLY %s r WHERE custodial_dr.immutable_import_row_projection(r)=$1',p_table_oid::regclass)
-  INTO actual_matches USING projection;
+ IF matches<>1 THEN RETURN false;END IF;
+ key:=to_jsonb(p_new_row);
+ IF p_table_oid='public.static_weekly_approved_initial_confirmations'::regclass THEN
+  SELECT count(*) INTO actual_matches FROM ONLY public.static_weekly_approved_initial_confirmations r
+   WHERE r.manager_id=(key->>'manager_id')::uuid AND r.idempotency_key=key->>'idempotency_key'
+   AND convert_to(custodial_dr.immutable_import_row_projection(r),'UTF8')=convert_to(projection,'UTF8');
+ ELSE
+  SELECT count(*) INTO actual_matches FROM ONLY public.weekly_schedule_lunch_documents r
+   WHERE r.projection_id=(key->>'projection_id')::uuid
+   AND convert_to(custodial_dr.immutable_import_row_projection(r),'UTF8')=convert_to(projection,'UTF8');
+ END IF;
  IF actual_matches<>1 THEN RETURN false;END IF;
  checked:=custodial_dr.immutable_import_assert_context();
  IF checked IS DISTINCT FROM ctx THEN RAISE EXCEPTION 'Exact deferred original transaction changed';END IF;
@@ -199,6 +207,10 @@ DECLARE profiles constant jsonb:=$current_original_guard_profiles$${JSON.stringi
 BEGIN
  PERFORM custodial_dr.immutable_import_owner_fence();
  IF current_user<>session_user OR current_user<>'postgres' THEN RAISE EXCEPTION 'Exact isolated original cohort owner required';END IF;
+ CREATE INDEX immutable_deferred_original_projection_digest
+  ON custodial_dr.immutable_ordinary_import_rows
+  (database_oid,backend_pid,transaction_id,table_oid,extensions.digest(typed_original_text,'sha256'));
+
  FOR relation IN SELECT DISTINCT t->>'schema' schema_name,t->>'table' table_name FROM jsonb_array_elements(profiles) f
   CROSS JOIN LATERAL jsonb_array_elements(f->'triggers') t ORDER BY schema_name,table_name LOOP
   EXECUTE format('LOCK TABLE %I.%I IN ACCESS EXCLUSIVE MODE',relation.schema_name,relation.table_name);
