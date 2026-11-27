@@ -59,7 +59,7 @@ try {
       [row.version, row.name, row.statements],
     );
   }
-  const cronRestoration = await restoreCronJobs(db, cronJobs, { sourceDatabase });
+  const cronRestoration = await restoreCronJobs(db, cronJobs, { sourceDatabase, sourceCounter: summary.source_identity.cron_jobid_counter });
   if (cronRestoration.differences.length) throw new Error("Isolated pg_cron hydration differs from the exact archived inventory.");
   const release = summary.source_identity.release;
   if (!release || typeof release !== "object") throw new Error("Signed release identity is unavailable.");

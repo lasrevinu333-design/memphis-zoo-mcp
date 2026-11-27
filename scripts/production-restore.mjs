@@ -44,6 +44,7 @@ import {
   verifyFreshLocalStorageProvider,
 } from "./disaster-recovery-storage.mjs";
 import {
+  archivedSequenceCounter,
   compareCronJobs,
   readCronJobs,
   restoreCronJobs,
@@ -183,6 +184,9 @@ if (summary.format === "memphis-zoo-disaster-recovery.v4") {
       binding:JSON.parse(readFileSync(join(sourceDir,"inventory","source-schema-binding.json"),"utf8")),
       catalog:JSON.parse(readFileSync(join(sourceDir,"inventory","source-catalog.json"),"utf8"))});
   }
+  if (Object.hasOwn(summary.source_identity, "cron_jobid_counter")) {
+    archivedSequenceCounter(summary.source_identity.cron_jobid_counter, cronJobs);
+  }
   archivedCronJobs = cronJobs;
 }
 for (const object of objects) {
@@ -304,6 +308,9 @@ if (databaseOnly) {
   }
 } else if (!/^[a-z0-9]{20}$/.test(projectRef) || confirmedRef !== projectRef) {
   throw new Error("Destructive restore requires SUPABASE_PROJECT_REF and an exact RESTORE_CONFIRM_PROJECT_REF match.");
+}
+if (!databaseOnly && summary.source_identity.cron_jobid_counter === undefined) {
+  throw new Error("Production restore requires the archived pg_cron sequence counter.");
 }
 if (projectRef !== summary.project_ref) throw new Error("The signed archive project does not equal the confirmed restore target.");
 if (!databaseOnly && !secret) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for a production restore apply.");
@@ -875,6 +882,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       if(nativeTextDatabase)await db.query("set local session_replication_role = replica");
       cronEvidence = await (freshPrivateDatabase ? verifyRestoredCronJobs : restoreCronJobs)(db, archivedCronJobs, {
         sourceDatabase: String(summary.database_snapshot?.database_name || "") || null,
+        sourceCounter: summary.source_identity.cron_jobid_counter,
       });
       requireFreshContinuation();
       await db.query(freshPrivateDatabase ? "rollback" : "commit");

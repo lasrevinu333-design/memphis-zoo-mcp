@@ -77,11 +77,11 @@ export async function seedIsolatedCurrentPostgresCron({verifiedArchive,connectio
    (select count(*)::int from custodial_dr.application_mutation_leases) leases,
    to_regclass('custodial_dr.immutable_private_import_context')::text existing_import`)).rows;
   assert.deepEqual(extra,[{jobs:0,migrations:0,controls:0,manifests:0,events:0,leases:0,existing_import:null}]);
-  const port=Object.freeze({query});stage='RESTORE_CRON';const restored=await restoreCronJobs(port,cron,{sourceDatabase});assert.equal(restored.differences.length,0);
-  stage='VERIFY_CRON';const verified=await verifyRestoredCronJobs(port,cron,{sourceDatabase});assert.equal(verified.differences.length,0);
+  const port=Object.freeze({query});stage='RESTORE_CRON';const restored=await restoreCronJobs(port,cron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter});assert.equal(restored.differences.length,0);
+  stage='VERIFY_CRON';const verified=await verifyRestoredCronJobs(port,cron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter});assert.equal(verified.differences.length,0);
   stage='COMMIT';await raw('commit');active=false;committed=true;
   stage='READBACK';await raw('begin isolation level repeatable read read only');active=true;readback=true;
-  await context();const after=await verifyRestoredCronJobs(port,cron,{sourceDatabase});assert.equal(after.differences.length,0);
+  await context();const after=await verifyRestoredCronJobs(port,cron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter});assert.equal(after.differences.length,0);
   // Read-only completion is one ROLLBACK, never a retry after an uncertain end.
   active=false;await raw('rollback');
   result={schema:'custodial.isolated-current-postgres-cron-setup.v1',ok:true,jobs:cron.length,rows_and_counter_verified:true,

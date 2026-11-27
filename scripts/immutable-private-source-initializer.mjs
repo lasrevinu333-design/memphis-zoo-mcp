@@ -153,7 +153,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   seededCron=inventory('cron-jobs.json');assert.ok(Array.isArray(seededCron));
   const sourceDatabase=source.sourceBinding.summary.database_snapshot?.database_name;
   assert.equal(typeof sourceDatabase,'string');assert.ok(sourceDatabase.length>0);
-  const verified=await verifyRestoredCronJobs(Object.freeze({query}),seededCron,{sourceDatabase});
+  const verified=await verifyRestoredCronJobs(Object.freeze({query}),seededCron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter});
   checkSource();await readContext();assert.equal(verified.target_database,originalContext.database);
   assert.equal(verified.differences.length,0,'Exact signed isolated cron setup required before original effects');
  }
@@ -273,14 +273,14 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   from custodial_dr.restore_control where singleton`)).rows;
  assert.deepEqual(cronControl,[{generation:'0',mutations_paused:false,state:'READY',restore_id:null}]);
  const cronPort=Object.freeze({query});
- const restoredCron=seededIsolatedCron?await verifyRestoredCronJobs(cronPort,cron,{sourceDatabase})
-  :await restoreCronJobs(cronPort,cron,{sourceDatabase});
+ const restoredCron=seededIsolatedCron?await verifyRestoredCronJobs(cronPort,cron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter})
+  :await restoreCronJobs(cronPort,cron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter});
  checkSource();await readContext();
  assert.equal(restoredCron.target_database,originalContext.database);
  const expectedCron=normalizedCronJobs(cron,{sourceDatabase,targetDatabase:originalContext.database});
  assert.ok(isDeepStrictEqual(restoredCron.expected,expectedCron),'Original mapped cron inventory differs');
  assert.equal(restoredCron.differences.length,0,'Original restored cron state differs');
- const verifiedCron=await verifyRestoredCronJobs(cronPort,cron,{sourceDatabase});
+ const verifiedCron=await verifyRestoredCronJobs(cronPort,cron,{sourceDatabase,sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter});
  checkSource();await readContext();
  assert.equal(verifiedCron.target_database,originalContext.database);
  assert.ok(isDeepStrictEqual(verifiedCron.expected,expectedCron),'Original mapped cron inventory differs');

@@ -191,11 +191,39 @@ export async function readCronJobs(client) {
   return normalizedCronJobs(result.rows.map((item) => item.row));
 }
 
-export async function restoreCronJobs(client, archivedJobs, { sourceDatabase = null } = {}) {
+const quoteSequenceIdentifier = value => '"' + value.replaceAll('"', '""') + '"';
+const sequenceName = ({ schema_name, sequence_name }) =>
+  quoteSequenceIdentifier(schema_name) + "." + quoteSequenceIdentifier(sequence_name);
+
+export function archivedSequenceCounter(value, jobs) {
+  const maximum = jobs.reduce((max, job) => BigInt(job.jobid) > max ? BigInt(job.jobid) : max, 1n);
+  if (value === undefined) return { last_value: maximum.toString(), is_called: jobs.length > 0 };
+  if (!value || !isDeepStrictEqual(Object.keys(value).sort(), ["is_called", "last_value"])
+      || typeof value.last_value !== "string" || !/^[1-9][0-9]{0,18}$/.test(value.last_value)
+      || BigInt(value.last_value) > 9223372036854775807n
+      || typeof value.is_called !== "boolean" || BigInt(value.last_value) < maximum
+      || (!value.is_called && jobs.some(job => BigInt(job.jobid) === BigInt(value.last_value)))) {
+    throw new Error("Archived pg_cron counter is malformed or may reuse an existing job ID.");
+  }
+  return { last_value: value.last_value, is_called: value.is_called };
+}
+
+export async function captureCronSequenceCounter(client, jobs) {
+  const sequence = await resolveCronJobDefaultSequence(client);
+  const result = await client.query(`select last_value::text last_value,is_called from ${sequenceName(sequence)}`);
+  if (result.rowCount !== 1 || !result.rows[0]
+      || !isDeepStrictEqual(await resolveCronJobDefaultSequence(client), sequence)) {
+    throw new Error("Original pg_cron counter is unavailable or changed.");
+  }
+  return archivedSequenceCounter(result.rows[0], jobs);
+}
+
+export async function restoreCronJobs(client, archivedJobs, { sourceDatabase = null, sourceCounter } = {}) {
   const target = await client.query("select current_database() database_name");
   const targetDatabase = String(target.rows[0]?.database_name || "");
   if (!targetDatabase) throw new Error("Restore target database identity is unavailable for pg_cron reconciliation.");
   const expected = normalizedCronJobs(archivedJobs, { sourceDatabase, targetDatabase });
+  const expectedCounter = archivedSequenceCounter(sourceCounter, expected);
   const originalSequence = await resolveCronJobDefaultSequence(client);
   const requireOriginalSequence = async () => {
     if (!isDeepStrictEqual(await resolveCronJobDefaultSequence(client), originalSequence)) {
@@ -208,8 +236,7 @@ export async function restoreCronJobs(client, archivedJobs, { sourceDatabase = n
   // even for extension sequences without OWNED BY. No WITH value: PostgreSQL
   // uses its existing stored start; definition/owner/bounds remain untouched.
   // Catalog names are validated detached strings, never caller SQL.
-  const quoteIdentifier = value => '"' + value.replaceAll('"', '""') + '"';
-  await client.query(`alter sequence ${quoteIdentifier(originalSequence.schema_name)}.${quoteIdentifier(originalSequence.sequence_name)} restart`);
+  await client.query(`alter sequence ${sequenceName(originalSequence)} restart`);
   await requireOriginalSequence();
   await client.query("truncate cron.job restart identity");
   await requireOriginalSequence();
@@ -220,23 +247,21 @@ export async function restoreCronJobs(client, archivedJobs, { sourceDatabase = n
     `, CRON_JOB_FIELDS.map((field) => job[field]));
     await requireOriginalSequence();
   }
-  const maximumId = expected.reduce((maximum, job) => {
-    const id = BigInt(job.jobid);
-    return id > maximum ? id : maximum;
-  }, 1n).toString();
   await requireOriginalSequence();
-  await client.query("select setval($1::regclass,$2,$3)", [originalSequence.sequence_oid, maximumId, expected.length > 0]);
+  await client.query("select setval($1::regclass,$2,$3)",
+    [originalSequence.sequence_oid, expectedCounter.last_value, expectedCounter.is_called]);
   await requireOriginalSequence();
   const actual = await readCronJobs(client);
   await requireOriginalSequence();
   const differences = compareCronJobs(expected, actual);
-  return { before, expected, actual, differences, target_database: targetDatabase };
+  return { before, expected, actual, differences, target_database: targetDatabase,
+    counter_fidelity: sourceCounter === undefined ? 'LEGACY_MINIMUM_ONLY' : 'EXACT_ARCHIVED_COUNTER' };
 }
 
 // Read-only comparison DATA for the already-restored fresh target. Caller
 // owns the original snapshot, Source/current native client and fences. A
 // MATCH here neither admits effects nor repairs/advances a sequence.
-export async function verifyRestoredCronJobs(client, archivedJobs, { sourceDatabase = null } = {}) {
+export async function verifyRestoredCronJobs(client, archivedJobs, { sourceDatabase = null, sourceCounter } = {}) {
   const unavailable = () => { throw new Error("Restored pg_cron verification is unavailable or changed."); };
   if (!client || types.isProxy(client) || typeof client.query !== "function") unavailable();
   const originalQuery = client.query;
@@ -296,9 +321,9 @@ export async function verifyRestoredCronJobs(client, archivedJobs, { sourceDatab
   const actualCounter=await counter();await requireOriginalSequence();
   if(!isDeepStrictEqual(before,actual) || !isDeepStrictEqual(beforeCounter,actualCounter)) unavailable();
   const differences=compareCronJobs(expected,actual);
-  const expectedCounter={last_value:expected.reduce((maximum,job)=>BigInt(job.jobid)>maximum?BigInt(job.jobid):maximum,1n).toString(),
-    is_called:expected.length>0};
+  const expectedCounter=archivedSequenceCounter(sourceCounter,expected);
   if(!isDeepStrictEqual(expectedCounter,actualCounter)) differences.push({category:"cron_state",field:"jobid_sequence",
     expected:expectedCounter,actual:actualCounter});
-  return {before,expected,actual,differences,target_database:targetDatabase};
+  return {before,expected,actual,differences,target_database:targetDatabase,
+    counter_fidelity:sourceCounter===undefined?'LEGACY_MINIMUM_ONLY':'EXACT_ARCHIVED_COUNTER'};
 }

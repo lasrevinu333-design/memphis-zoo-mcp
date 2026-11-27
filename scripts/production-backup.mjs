@@ -19,6 +19,7 @@ import { Readable } from "node:stream";
 import { finished, pipeline } from "node:stream/promises";
 import { promisify, types } from "node:util";
 import pg from "pg";
+import { captureCronSequenceCounter } from "./disaster-recovery-cron.mjs";
 import { createBackupPgDumpExecutor, captureBackupExporterIdentity } from "./production-backup-pg-dump-retry.mjs";
 import {captureCatalogFromSnapshot} from "./schema-catalog-readonly-client.mjs";
 import {bindBackupSchemaExtension} from "./backup-release-schema-binding.mjs";
@@ -258,6 +259,7 @@ const storageBuckets = [];
 let storageConsistencyProjection = null;
 let migrationLedger = [];
 let cronJobs = [];
+let cronSequenceCounter;
 let extensionInventory = [];
 let snapshot = null;
 let backupExporterIdentity = null;
@@ -324,6 +326,7 @@ try {
   if (!migrationLedger.length || String(migrationLedger.at(-1)?.version || "") !== migrationHead) {
     throw new Error("The captured migration ledger does not terminate at the production migration head.");
   }
+  const beforeCronCounter = await captureCronSequenceCounter(client, []);
   const cronResult = await client.query(`
     select json_build_object(
       'jobid', j.jobid::text, 'schedule', j.schedule, 'command', j.command,
@@ -339,6 +342,10 @@ try {
     }
     return row;
   });
+  cronSequenceCounter = await captureCronSequenceCounter(client, cronJobs);
+  if (stableJsonFile(beforeCronCounter) !== stableJsonFile(cronSequenceCounter)) {
+    throw new Error("Original pg_cron counter changed during capture.");
+  }
   const extensionResult = await client.query(`
     select e.extname, e.extversion, n.nspname schema_name
     from pg_extension e join pg_namespace n on n.oid=e.extnamespace
@@ -625,6 +632,7 @@ const summary = {
     migration_ledger_count: migrationLedger.length,
     cron_jobs_sha256: cronJobsSha256,
     cron_job_count: cronJobs.length,
+    cron_jobid_counter: cronSequenceCounter,
     extensions_sha256: extensionsSha256,
     runtime_contract_sha256: runtimeContractSha256,
     runtime_configuration_sha256: runtimeConfigurationSha256,
