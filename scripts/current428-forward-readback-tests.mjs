@@ -11,7 +11,8 @@ const source = readFileSync(new URL('./current428-forward-readback.mjs', import.
   .replace(/^import .*;\n/gm, '')
   .replace(/^export /gm, '');
 const archive = Object.freeze({});
-const archiveDigest = 'a'.repeat(64);
+const digest428 = 'a'.repeat(64);
+const digest429 = 'c'.repeat(64);
 const manifestDigest = 'b'.repeat(64);
 const restoreId = '12345678-1234-1234-1234-123456789abc';
 const projectRef = 'rqquvtjdmugpigbndmne';
@@ -33,6 +34,7 @@ const sourceInventory = Object.freeze({
 });
 
 function fixture(options = {}) {
+  const archiveDigest = options.archiveDigest ?? digest428;
   const calls = [];
   const profile = {
     database_name: database, database_owner: 'postgres', actor: 'postgres', original_actor: 'postgres',
@@ -46,7 +48,7 @@ function fixture(options = {}) {
     authority_invalidated: true, post_restore_verified: true, final_manifest_sha256: manifestDigest,
     mutation_leases: '0', ...options.state,
   };
-  const guards = Array.from({ length: 51 }, (_, i) => ({
+  const guards = Array.from({ length: options.recipes ?? 51 }, (_, i) => ({
     identity: 'public.fixture' + i + '()', owner: 'postgres', definition: 'after ' + i, body: 'body ' + i,
     attributes: { oid: 10000 + i, proacl: null, prosecdef: false },
   }));
@@ -109,7 +111,7 @@ function fixture(options = {}) {
         source_ledger_head: ledger.at(-1).version, source_ledger_file_sha256: stableJsonFileSha256(ledger),
         source_inventory: sourceInventory,
       };
-    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } }, archiveDigest, {archiveDigest:'a'.repeat(64)},
+    }, { env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '5481' } }, digest428, { archiveDigest: digest429 },
     original => { assert.equal(original, archive); return binding; },
     (original, scope) => { assert.equal(original, archive); assert.deepEqual(scope, { databaseOnly: true }); return selection; },
     nativeTextColumnProjection, quoteIdentifier);
@@ -127,6 +129,15 @@ function fixture(options = {}) {
     preserve: () => ports.readCurrent428PreservedRows({ client: new Client(), archive }),
   };
 }
+
+test('the verified archive selects the exact recovery definitions for its own baseline', async () => {
+  for (const [archiveDigest, count, otherCount] of [[digest428, 51, 52], [digest429, 52, 51]]) {
+    const result = await fixture({ archiveDigest, recipes: count }).run();
+    assert.equal(result.restored_recipes, count);
+    await assert.rejects(fixture({ archiveDigest, recipes: otherCount }).run, /Recovery recipe count/);
+  }
+  await assert.rejects(fixture({ archiveDigest: 'd'.repeat(64) }).run, /Unknown readback archive/);
+});
 
 test('observes only the owning paused, verified copy and reports exact reconciliation categories', async () => {
   const unit = fixture();

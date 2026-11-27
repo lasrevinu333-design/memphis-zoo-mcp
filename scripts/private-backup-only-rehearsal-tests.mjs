@@ -138,6 +138,21 @@ test('the secondary VM verification precedes decryption, with hosted signing and
   assert.match(applyJob,/needs\.sign_current429_vm\.result == 'success'/);
   assert.doesNotMatch(vmJob,/SUPABASE_MIGRATION_DB_URL/);
 });
+test('VM scratch rejects pre-existing mounts and inconclusive mount probes', () => {
+  const path = new URL('./current429-vm-scratch.sh', import.meta.url).pathname;
+  const source = readFileSync(path, 'utf8');
+  for (const target of ['/mnt/docker', '/var/lib/containerd']) {
+    const guard = 'require_current429_unmounted ' + target + ' || return 1';
+    assert.ok(source.indexOf(guard) < source.indexOf('vm_scratch="$(mktemp'));
+    assert.ok(source.indexOf(guard) >= 0 && source.lastIndexOf(guard) > source.indexOf('close_current429_vm_scratch()'));
+  }
+  const probe = 'source "$1"; mountpoint() { return "$PROBE_STATUS"; }; require_current429_unmounted /fixture';
+  for (const [code, expected] of [[32, 0], [0, 1], [1, 1], [127, 1]]) {
+    const run = spawnSync('bash', ['-ec', probe, 'test', path], { env: { PROBE_STATUS: String(code) } });
+    assert.equal(run.status, expected, run.stderr.toString());
+  }
+});
+
 test('only the secondary VM gets extra schema replay time and uses the same isolated adapter',()=>{
   const runner=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   const start=runner.indexOf('const schemaReplayTimeoutMs =');

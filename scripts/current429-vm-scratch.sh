@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 # Sourced by the exact signed-backup workflow on the existing dedicated VM.
 
+require_current429_unmounted() {
+  local status
+  if mountpoint -q -- "$1"; then
+    printf 'Scratch target already mounted: %s\n' "$1" >&2
+    return 1
+  else
+    status=$?
+  fi
+  # util-linux returns 32 for an existing path that is not a mountpoint.
+  # Permission, path and system errors cannot establish that it is safe to bind.
+  if [[ "$status" != 32 ]]; then
+    printf 'Could not verify scratch mount state: %s (status %s)\n' "$1" "$status" >&2
+    return 1
+  fi
+}
+
 open_current429_vm_scratch() {
   test "${RUNNER_ENVIRONMENT:-}" = self-hosted
   test "${RUNNER_NAME:-}" = custodial-foundation-zorin
@@ -14,8 +30,8 @@ open_current429_vm_scratch() {
   test "$(docker info --format '{{.DockerRootDir}}')" = /mnt/docker
   containerd config dump | grep -Fx "root = '/var/lib/containerd'" >/dev/null
   test -z "$(docker ps -q)"
-  ! mountpoint -q /mnt/docker
-  ! mountpoint -q /var/lib/containerd
+  require_current429_unmounted /mnt/docker || return 1
+  require_current429_unmounted /var/lib/containerd || return 1
   systemctl is-active --quiet docker.service
   systemctl is-active --quiet docker.socket
   systemctl is-active --quiet containerd.service
@@ -79,8 +95,8 @@ close_current429_vm_scratch() {
   fi
   if test "${vm_docker_displaced:-false}" = true; then
     sudo -n systemctl start containerd.service docker.socket docker.service || return 1
-    ! mountpoint -q /mnt/docker || return 1
-    ! mountpoint -q /var/lib/containerd || return 1
+    require_current429_unmounted /mnt/docker || return 1
+    require_current429_unmounted /var/lib/containerd || return 1
     test "$(docker info --format '{{.DockerRootDir}}')" = /mnt/docker || return 1
   fi
 }

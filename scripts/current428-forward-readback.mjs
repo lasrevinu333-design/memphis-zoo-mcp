@@ -127,7 +127,10 @@ export async function readCurrent428RecoveryDefinitions({client, archive, bootst
   assert.ok(state === 'restored' || state === 'original');
   const { query } = originalReadbackPort(client);
   const recipes = bootstrapSource.recipes;
-  assert.equal(recipes.length, 51);
+  const archiveDigest = readVerifiedArchiveSourceBinding(archive).archive_digest;
+  assert.ok([CURRENT428_ARCHIVE_DIGEST, current429.archiveDigest].includes(archiveDigest), 'Unknown readback archive');
+  const expectedRecipes = archiveDigest === current429.archiveDigest ? 52 : 51;
+  assert.equal(recipes.length, expectedRecipes, 'Recovery recipe count differs from the signed archive profile');
   const restored = state === 'restored';
   const guards = await query(recipeSql, [recipes.map(recipe => recipe.identity)]);
   assert.equal(guards.rowCount, recipes.length);
