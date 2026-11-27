@@ -13,7 +13,7 @@ const contextSql=source.match(/const contextSql=`([\s\S]*?)`;/)[1];
 function fixture(mode='ok'){
  const calls=[],archive={},state={connected:0,ended:0,restored:0,verified:0,withdrawn:false,committed:false,readOnly:false,readbackContexts:0};
  const cron=[{jobid:'5',schedule:'* * * * *',command:'PRIVATE COMMAND',database:'postgres',username:'postgres',nodename:'localhost',nodeport:5432,active:true,jobname:'PRIVATE NAME'}];
- const original={inventory:{'inventory/original-relations.json':JSON.stringify([{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}]),'inventory/cron-jobs.json':JSON.stringify(cron)},sourceBinding:{summary:{database_snapshot:{database_name:'postgres'}}}};
+ const original={inventory:{'inventory/original-relations.json':JSON.stringify([{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}]),'inventory/cron-jobs.json':JSON.stringify(cron)},sourceBinding:{summary:{database_snapshot:{database_name:'postgres'},source_identity:{cron_jobid_counter:{last_value:'14',is_called:true}}}}};
  const error=()=>Object.assign(new Error('PRIVATE SQL ROW AND SECRET'),{code:'08006'});
  class Native extends EventEmitter{
   constructor(options){super();this.connectionParameters={host:'127.0.0.1',database:'mz_schema_rebuild_123'};calls.push('construct');}
@@ -37,10 +37,10 @@ function fixture(mode='ok'){
   prepareVerifiedImmutableBootstrapSource:async supplied=>{assert.equal(supplied,archive);return original;},
   assertVerifiedImmutableBootstrapSource:current,
   readVerifiedImmutableBootstrapOwnerProfile:()=>({id:'immutable-private-current-postgres',actor:mode==='profile'?'supabase_admin':'postgres'}),
-  restoreCronJobs:async(port,jobs,options)=>{state.restored++;assert.deepEqual(jobs,cron);assert.deepEqual(options,{sourceDatabase:'postgres'});
+  restoreCronJobs:async(port,jobs,options)=>{state.restored++;assert.deepEqual(jobs,cron);assert.deepEqual(options,{sourceDatabase:'postgres',sourceCounter:{last_value:'14',is_called:true}});
    await port.query('alter sequence "cron"."jobid_seq" restart');await port.query('truncate cron.job restart identity');await port.query('insert into cron.job values ($1)',['PRIVATE SIGNED ROW']);
    return{differences:[],target_database:'mz_schema_rebuild_123'};},
-  verifyRestoredCronJobs:async(port,jobs)=>{state.verified++;assert.deepEqual(jobs,cron);await port.query('select exact_cron_rows_and_counter');return{differences:mode==='counter'||mode==='readback'&&state.committed?[{}]:[]};}};
+  verifyRestoredCronJobs:async(port,jobs,options)=>{state.verified++;assert.deepEqual(jobs,cron);assert.deepEqual(options,{sourceDatabase:'postgres',sourceCounter:{last_value:'14',is_called:true}});await port.query('select exact_cron_rows_and_counter');return{differences:mode==='counter'||mode==='readback'&&state.committed?[{}]:[]};}};
  const fn=new Function(...Object.keys(deps),body+';return seedIsolatedCurrentPostgresCron;')(...Object.values(deps));
  const run=(changes={})=>fn({verifiedArchive:archive,connectionString:'postgresql://supabase_admin:postgres@127.0.0.1:43210/mz_schema_rebuild_123',runId:'123',...changes});
  return{run,calls,state};
