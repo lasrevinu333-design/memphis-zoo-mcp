@@ -79,7 +79,7 @@ export function backupArchiveMetadata(summary,archiveDigest) {
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const mode=process.argv[2],p=process.env.RUNNER_TEMP;
   assert.ok(['metadata','source-binding','restore-result'].includes(mode));assert.ok(p);
-  const archive=materializeVerifiedArchive({sourceDir:p+'/production-backup',
+  const archive=materializeVerifiedArchive({sourceDir:process.env.RESTORE_SOURCE_DIR || p+'/production-backup',
     archiveVerifyKey:requireSigningKey(process.env.RESTORE_ARCHIVE_VERIFY_KEY,'RESTORE_ARCHIVE_VERIFY_KEY'),
     archiveVerifyKeyId:process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID,supportedFormats:['memphis-zoo-disaster-recovery.v4'],
     requiredEntries:['backup-summary.json','inventory/table-catalog.json','inventory/storage-buckets.json','inventory/storage-objects.json']});
