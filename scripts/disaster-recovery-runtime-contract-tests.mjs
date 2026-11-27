@@ -20,14 +20,16 @@ if (process.argv.includes('--normal-legacy-row-fidelity-only') || process.argv.i
  const freshInsert="          } else {\n            requireOrdinaryRestoreIntentFresh();\n            await db.query(insert, [rawRowText]);\n          }";
  assert.equal(currentLoop.split(freshInsert).length,2);
  const fidelityOnlyLoop=currentLoop.replace(freshInsert,'          } else await db.query(insert, [rawRowText]);');
- const priorLoop=fidelityOnlyLoop.replace(ownedFidelityDelta,"          const rawRowText = decodeRestoreTableRowLine(line, table);");
+ const privatePhase='restorePhase = "restore_table"; privateRestorePhase(restorePhase);';
+ assert.equal(fidelityOnlyLoop.split(privatePhase).length,2,'exact private diagnostic added to the successor');
+ const priorLoop=fidelityOnlyLoop.replace(privatePhase,'restorePhase = "restore_table";').replace(ownedFidelityDelta,"          const rawRowText = decodeRestoreTableRowLine(line, table);");
  assert.equal(createHash('sha256').update(priorLoop).digest('hex'),'cb42e8396760b61aedee294a93e97bed5e7898ec3e47efd459288b2e4d3604c2','all original shipping loop bytes must be recovered; unrelated drift refuses');
  assert.match(source,/readVerifiedRestoreTableSelection, decodeRestoreTableRowLine, assertRestoreRowMutationFidelity, createRestoreRowUtf8Guard/);
  assert.ok(currentLoop.includes('nativeTextPlans ? decodeRestoreTableRowLine(line, table)') && currentLoop.includes(': assertRestoreRowMutationFidelity(line, table)'));
  assert.ok(currentLoop.indexOf('assertRestoreRowMutationFidelity(line, table)')<currentLoop.indexOf('await db.query(insert, [rawRowText])'));
  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
  const identifiers=source.split(String.fromCharCode(10)).filter(line=>line.startsWith('function quoteIdentifier(')||line.startsWith('function qualified('));assert.equal(identifiers.length,2);
- function compile(loop){return new AsyncFunction('ports','const {db,databaseTables,verifiedArchive,openVerifiedRestoreTableData,createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine,assertRestoreRowMutationFidelity,nativeTextPlans,nativeTextQuery,requireOrdinaryRestoreIntentFresh=()=>{}}=ports;let restorePhase,restoreTable;'+identifiers.join(String.fromCharCode(10))+String.fromCharCode(10)+loop);}
+ function compile(loop){return new AsyncFunction('ports','const {db,databaseTables,verifiedArchive,openVerifiedRestoreTableData,createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine,assertRestoreRowMutationFidelity,nativeTextPlans,nativeTextQuery,requireOrdinaryRestoreIntentFresh=()=>{},privateRestorePhase=()=>{}}=ports;let restorePhase,restoreTable;'+identifiers.join(String.fromCharCode(10))+String.fromCharCode(10)+loop);}
  const current=compile(currentLoop),prior=compile(priorLoop),work=mkdtempSync(join(tmpdir(),'UNIT-normal-legacy-fidelity-'));
  const key='UNIT-only-normal-legacy-fidelity-HMAC-20261027',keyId='unit-normal-legacy-fidelity-v1';
  const sha=b=>createHash('sha256').update(b).digest('hex');const cases=[];let ordinal=0;
@@ -104,11 +106,19 @@ if (process.argv.includes('--normal-legacy-row-fidelity-only') || process.argv.i
     assert.equal(calls.some(sql=>sql.startsWith('truncate')),!expiresAfterLock);if(expiresAfterLock)assert.match(String(error),/expired/);else assert.equal(error,undefined);
     cases.push({case:expiresAfterLock?'expiry after awaited table lock prevents TRUNCATE':'fresh authorization preserves normal lock then TRUNCATE',status:'PASS',captured_queries:calls,actual_SQL:false});
    }
-   const commitMarker='    requireOrdinaryRestoreIntentFresh();\n    await db.query("commit");\n  } catch (error) {\n    await db.query("rollback").catch(() => {});\n    if (mixedDataCommitAttempted)';
-   assert.equal(source.split(commitMarker).length,2,'exact ordinary DATA final-commit seam');
-   const commit=new AsyncFunction('ports','const {requireOrdinaryRestoreIntentFresh,db}=ports;'+commitMarker.slice(0,commitMarker.indexOf('\n  } catch')));
-   for(const expired of [false,true]){const calls=[];let error;try{await commit({requireOrdinaryRestoreIntentFresh:()=>{if(expired)throw new Error('UNIT authorization expired');},db:{query:async q=>calls.push(q)}});}catch(e){error=e;}
-    assert.deepEqual(calls,expired?[]:['commit']);assert.equal(Boolean(error),expired);cases.push({case:expired?'expired ordinary intent prevents final DATA COMMIT':'fresh ordinary intent preserves final DATA COMMIT',status:'PASS',captured_queries:calls,actual_SQL:false});}
+   const commitStart='    requireOrdinaryRestoreIntentFresh();\n    dataCommitAttempted = true;\n    await db.query("commit");';
+   const body=exactBetween(commitStart,'  restorePhase = "authority_reconciliation";');
+   const commit=new AsyncFunction('ports','const {requireOrdinaryRestoreIntentFresh,db}=ports;const nativeTextDatabase=false,immutablePrivateDataEvidence=null;let dataCommitAttempted=false;try{'+body);
+   for(const mode of ['fresh','expired','missing_receipt']){
+    const calls=[];let error;
+    try{await commit({requireOrdinaryRestoreIntentFresh(){if(mode==='expired')throw Error('UNIT authorization expired');},
+     db:{query:async q=>{calls.push(q);if(mode==='missing_receipt'&&q==='commit')throw Error('UNIT response unavailable');}}});}catch(e){error=e;}
+    assert.deepEqual(calls,mode==='fresh'?['commit']:mode==='expired'?['rollback']:['commit','rollback']);
+    if(mode==='expired')assert.match(error.message,/expired/);
+    else if(mode==='missing_receipt'){assert.equal(error.code,'ORDINARY_DATA_COMMIT_OUTCOME_UNKNOWN');assert.equal(error.retry_safe,false);}
+    else assert.equal(error,undefined);
+    cases.push({case:'ordinary DATA '+mode,status:'PASS',captured_queries:calls,actual_SQL:false});
+   }
    const f=fixture({raws:['{"id":1,"value":{"valid":true}}']}),readers=[];let error,inserts=0;
    try{try{await current({db:{query:async()=>{inserts++;return{rows:[],rowCount:1};}},databaseTables:[f.table],verifiedArchive:f.archive,openVerifiedRestoreTableData:(...a)=>{const r=api.openVerifiedRestoreTableData(...a);readers.push(r);return r;},createRestoreRowUtf8Guard:api.createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine:api.decodeRestoreTableRowLine,assertRestoreRowMutationFidelity:api.assertRestoreRowMutationFidelity,nativeTextPlans:null,nativeTextQuery:()=>assert.fail(),requireOrdinaryRestoreIntentFresh:()=>{throw new Error('UNIT authorization expired');}});}catch(e){error=e;}assert.match(String(error),/expired/);assert.equal(inserts,0);cases.push({case:'ordinary row effect rechecks authorization after source decoding',status:'PASS',captured_mutations:0,actual_SQL:false});}finally{for(const r of readers)await r.close();f.archive.cleanup();}
   }
