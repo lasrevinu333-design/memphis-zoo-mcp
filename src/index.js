@@ -2618,7 +2618,9 @@ async function serveHealthDependencies(req, res) {
         to_regclass('public.msg_message_audit') is not null as message_audit_table,
         to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null as exact_finish_rpc,
         to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null as manager_messaging_rpc,
-        to_regprocedure('public.claim_operational_notification_jobs(text,integer,integer)') is not null as worker_claim_rpc,
+        coalesce(has_function_privilege('service_role',
+          to_regprocedure('public.claim_operational_notification_jobs_v2(text,integer,integer,boolean)'), 'EXECUTE'), false)
+          as worker_claim_rpc,
         (select count(*)::int from public.operational_notification_jobs where status in ('pending','leased')) as notification_backlog,
         (select count(*)::int from public.operational_notification_jobs where status = 'dead') as notification_dead_letters,
         (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases

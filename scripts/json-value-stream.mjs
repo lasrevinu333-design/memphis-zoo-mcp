@@ -1,6 +1,7 @@
 export function parseJsonValueStream(input, label = "JSON value stream") {
   const text = String(input);
   const values = [];
+  const byteOffset = (index) => Buffer.byteLength(text.slice(0, index), "utf8");
   let offset = 0;
 
   const skipWhitespace = () => {
@@ -32,14 +33,14 @@ export function parseJsonValueStream(input, label = "JSON value stream") {
         if (character === "{" || character === "[") stack.push(character);
         else if (character === "}" || character === "]") {
           const expected = character === "}" ? "{" : "[";
-          if (stack.pop() !== expected) throw new Error(`${label} contains mismatched JSON delimiters at byte ${offset}.`);
+          if (stack.pop() !== expected) throw new Error(`${label} contains mismatched JSON delimiters at byte ${byteOffset(offset)}.`);
           if (stack.length === 0) {
             offset += 1;
             break;
           }
         }
       }
-      if (stack.length !== 0 || inString) throw new Error(`${label} contains an incomplete JSON value at byte ${start}.`);
+      if (stack.length !== 0 || inString) throw new Error(`${label} contains an incomplete JSON value at byte ${byteOffset(start)}.`);
     } else if (opener === "\"") {
       let escaped = false;
       offset += 1;
@@ -52,7 +53,7 @@ export function parseJsonValueStream(input, label = "JSON value stream") {
           break;
         }
       }
-      if (text[offset - 1] !== "\"" || escaped) throw new Error(`${label} contains an incomplete JSON string at byte ${start}.`);
+      if (text[offset - 1] !== "\"" || escaped) throw new Error(`${label} contains an incomplete JSON string at byte ${byteOffset(start)}.`);
     } else {
       while (offset < text.length && !/\s/u.test(text[offset])) offset += 1;
     }
@@ -60,7 +61,7 @@ export function parseJsonValueStream(input, label = "JSON value stream") {
     try {
       values.push(JSON.parse(text.slice(start, offset)));
     } catch (error) {
-      throw new Error(`${label} contains invalid JSON at byte ${start}: ${error.message}`);
+      throw new Error(`${label} contains invalid JSON at byte ${byteOffset(start)}: ${error.message}`);
     }
   }
 

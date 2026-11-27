@@ -27,8 +27,10 @@ let exporter, writer, result, failed = false, cleanupFailed = false, phase = 'im
 const events = { injected_failures: 0, native_dumps: 0, daemon_absence_checks: 0, delays: [], exporter_probes: 0, expiry_refused: false, signing_attempted: false };
 try {
   // No pull. Fail if the exact image is not already installed.
-  const installed = await run('docker', ['image', 'inspect', image, '--format', '{{.Id}}']);
-  assert.equal(installed.stdout.trim(), image.split('@')[1]);
+  const installed = await run('docker', ['image', 'inspect', image, '--format', '{{json .}}']);
+  const imageIdentity = JSON.parse(installed.stdout);
+  assert.match(imageIdentity.Id, /^sha256:[a-f0-9]{64}$/);
+  assert.ok(imageIdentity.RepoDigests.includes(image), "Exact pinned repository digest must be present");
   phase = 'certificate';
   await run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-keyout', privateKey, '-out', certificate]);
   chmodSync(privateKey, 0o600); chmodSync(certificate, 0o644);

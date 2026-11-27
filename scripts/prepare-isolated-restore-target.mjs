@@ -63,13 +63,11 @@ try {
   if (cronRestoration.differences.length) throw new Error("Isolated pg_cron hydration differs from the exact archived inventory.");
   const release = summary.source_identity.release;
   if (!release || typeof release !== "object") throw new Error("Signed release identity is unavailable.");
-  await db.query("truncate public.release_deployment_manifest cascade");
+  await db.query("truncate only public.release_deployment_manifest restrict");
   await db.query(
     "insert into public.release_deployment_manifest select * from json_populate_record(null::public.release_deployment_manifest,$1::json)",
     [JSON.stringify(release)],
   );
-  await db.query("commit");
-
   const state = await db.query(`
     select
       (select max(version)::text from supabase_migrations.schema_migrations) migration_head,
@@ -92,6 +90,7 @@ try {
       || actualExtensionDigest !== expectedExtensionDigest) {
     throw new Error(`Isolated recovery-control hydration mismatch: ${JSON.stringify({ ...row, actualExtensionDigest, expectedExtensionDigest })}`);
   }
+  await db.query("commit");
   console.log(JSON.stringify({
     ok: true,
     stage: "signed_recovery_control_hydrated",

@@ -38,7 +38,7 @@ function readReadonlyExternalAttestation(path) {
 }
 
 async function fetchJson(url, label, headers = {}) {
-  const response = await fetch(url, { redirect: "error", headers: { accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000) });
+  const response = await fetch(url, { redirect: "error", headers: { accept: "application/json", ...headers }, redirect: "error", signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
   return response.json();
 }
@@ -58,8 +58,9 @@ const identityUrl = String(process.env.BACKEND_SCHEMA_IDENTITY_URL || new URL("/
 const healthUrl = String(process.env.BACKEND_HEALTH_URL || new URL("/admin-api/release-monitor/dependencies", backendUrl).toString());
 const authorityHealthUrl = String(process.env.BACKEND_AUTHORITY_HEALTH_URL || new URL("/admin-api/release-monitor/authority", backendUrl).toString());
 const dashboardCanaryUrl = new URL("/admin-api/release-monitor/dashboard-canary", backendUrl).toString();
-// Existing machine observer token is confined to fixed same-origin GET diagnostics.
-for(const [url,path] of [[healthUrl,'/admin-api/release-monitor/dependencies'],[authorityHealthUrl,'/admin-api/release-monitor/authority'],[dashboardCanaryUrl,'/admin-api/release-monitor/dashboard-canary']]) {
+// Existing machine observer token is confined to fixed canonical GET diagnostics.
+assert.equal(new URL(backendUrl).origin, 'https://memphis-zoo-mcp.onrender.com', 'Monitor requires the canonical backend origin');
+for(const [url,path] of [[identityUrl,'/admin-api/release-schema-identity'],[healthUrl,'/admin-api/release-monitor/dependencies'],[authorityHealthUrl,'/admin-api/release-monitor/authority'],[dashboardCanaryUrl,'/admin-api/release-monitor/dashboard-canary']]) {
   const target=new URL(url),base=new URL(backendUrl);
   assert.equal(target.origin,base.origin,'Monitor credentials cannot leave the canonical backend origin');
   assert.equal(target.pathname,path,'Monitor requires the protected release-observer diagnostic route');

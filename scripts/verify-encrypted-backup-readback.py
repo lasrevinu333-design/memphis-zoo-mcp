@@ -41,7 +41,7 @@ def safe_extract(archive, destination, max_bytes=MAX_BYTES, max_members=MAX_MEMB
     """
     destination = Path(destination)
     destination.mkdir(mode=0o700)
-    with tempfile.TemporaryFile() as raw:
+    with tempfile.TemporaryFile(dir=destination.parent) as raw:
         total = 0
         with gzip.open(archive, 'rb') as source:
             while chunk := source.read(1024 * 1024):

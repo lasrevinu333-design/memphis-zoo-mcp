@@ -41,6 +41,10 @@ export async function seedIsolatedCurrentPostgresCron({verifiedArchive,connectio
  const expected='mz_schema_rebuild_'+runId,url=new URL(connectionString);
  assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(decodeURIComponent(url.pathname),'/'+expected);
  assert.equal(decodeURIComponent(url.username),'supabase_admin');assert.equal(url.protocol,'postgresql:');
+ // node-postgres also interprets query parameters as connection settings.
+ assert.equal(url.search,'','Owned relay URL cannot contain connection overrides');
+ assert.equal(url.hash,'','Owned relay URL cannot contain a fragment');
+ assert.match(url.port,/^[1-9][0-9]*$/,'Owning factory must supply the explicit relay port');
  const inventory=JSON.parse(source.inventory['inventory/original-relations.json']);assert.ok(Array.isArray(inventory)&&inventory.length>0);
  const seen=new Set(),counts=inventory.map(row=>{assert.ok(schemas.has(row.schema_name));assert.equal(row.relation_kind,'r');assert.equal(row.is_partition,false);
   const name=quote(row.schema_name)+'.'+quote(row.table_name);assert.ok(!seen.has(name));seen.add(name);return `select count(*)::bigint n from ${name}`;});
