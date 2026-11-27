@@ -682,11 +682,16 @@ async function host(){
     mark('PREPARE_ARCHIVED_OBJECTS');const migrationsHash=hash(stable(typed)),objectsRows=await originalRows(archive,'objects',api),inventory=api.readVerifiedStorageUploadInventory(archive),objects=[];
     const mount=resolve(custody,'provider-input');mkdirSync(mount,{mode:0o700});
     const audit=resolve(custody,'provider-audit');mkdirSync(audit,{mode:0o700});
+    const stagedPayloads = new Set();
     for(const o of inventory.objectRecords){
       const native=objectsRows.find(x=>x.id===o.object_id);insist(native && native.bucket_id===o.bucket_id && native.name===o.name,'Original object membership mismatch.');
       const meta=typeof native.metadata==='string'?JSON.parse(native.metadata):native.metadata;
       const blob=api.readVerifiedStorageUploadBlob(archive,o.object_id),bytes=Buffer.from(await blob.blob.arrayBuffer()),file=o.sha256;
-      insist(hash(bytes)===o.sha256 && bytes.length===o.size_bytes,'Original object byte mismatch.');writeFileSync(resolve(mount,file),bytes,{mode:0o400,flag:'wx'});
+      insist(hash(bytes)===o.sha256 && bytes.length===o.size_bytes,'Original object byte mismatch.');
+      if (!stagedPayloads.has(file)) {
+        writeFileSync(resolve(mount,file),bytes,{mode:0o400,flag:'wx'});
+        stagedPayloads.add(file);
+      }
       const contentType=meta.mimetype,cacheControl=String(meta.cacheControl??meta.cache_control);
       insist(typeof contentType==='string' && contentType.length>0 && cacheControl!=='undefined' && !/[\r\n]/.test(contentType+cacheControl),'Exact original object metadata required.');
       objects.push({...o,file,version:native.version,contentType,cacheControl});

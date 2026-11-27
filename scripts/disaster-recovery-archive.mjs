@@ -922,13 +922,14 @@ function readPinnedArchiveFile(rootFd, relativePath, maxBytes) {
 }
 
 function copyPinnedArchiveFile(rootFd, relativePath, destinationRoot, expectedSha256) {
-  const sourceFd = openPinnedArchiveFile(rootFd, relativePath);
   const destinationPath = join(destinationRoot, relativePath);
   mkdirSync(dirname(destinationPath), { recursive: true, mode: 0o700 });
-  const destinationFd = openSync(destinationPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
   const hash = createHash("sha256");
   const buffer = Buffer.allocUnsafe(1024 * 1024);
+  const sourceFd = openPinnedArchiveFile(rootFd, relativePath);
+  let destinationFd;
   try {
+    destinationFd = openSync(destinationPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
     while (true) {
       const count = readSync(sourceFd, buffer, 0, buffer.length, null);
       if (count === 0) break;
@@ -937,8 +938,11 @@ function copyPinnedArchiveFile(rootFd, relativePath, destinationRoot, expectedSh
       while (written < count) written += writeSync(destinationFd, buffer, written, count - written);
     }
   } finally {
-    closeSync(sourceFd);
-    closeSync(destinationFd);
+    try {
+      closeSync(sourceFd);
+    } finally {
+      if (destinationFd !== undefined) closeSync(destinationFd);
+    }
   }
   const actualSha256 = hash.digest("hex");
   if (actualSha256 !== expectedSha256) throw new Error(`Backup checksum verification failed for ${relativePath}.`);
@@ -1024,11 +1028,17 @@ export function materializeVerifiedArchive({
       if (parsedSelections) for (const cached of parsedSelections.values()) cached.bytes.fill(0);
       restoreTableSelectionParses.delete(sectionContext);
       for (const abort of sectionContext.readers) abort();
-      cleaned = true;
-      if (exitCleanup) process.off("exit", exitCleanup);
       rmSync(snapshotDirectory, { recursive: true, force: true });
+      cleaned = true;
+      process.off("exit", exitCleanup);
     };
-    exitCleanup = cleanup;
+    exitCleanup = () => {
+      try { cleanup(); }
+      catch {
+        console.error(`Verified archive snapshot cleanup failed: ${snapshotDirectory}`);
+        process.exitCode = 1;
+      }
+    };
     process.once("exit", exitCleanup);
     const archive = {
       directory: snapshotDirectory,

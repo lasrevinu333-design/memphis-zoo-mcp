@@ -7,6 +7,7 @@ import {packageVerifiedBackup,requireOriginalStorageSize} from "./production-bac
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import pg from "pg";
+import { validateProductionDatabaseUrl, assertProductionDatabaseIdentity } from "./production-database-identity.mjs";
 import {privateRestoreFailureDiagnostic,privateRestoreStageDiagnostic} from "./run-official-local-storage-rehearsal.mjs";
 import { verifyRestoredLeadershipGeneration } from "./leadership-restore-generation.mjs";
 import { types } from "node:util";
@@ -169,7 +170,11 @@ if (summary.format === "memphis-zoo-disaster-recovery.v4") {
   if (!Array.isArray(cronJobs) || cronJobs.length !== Number(summary.source_identity.cron_job_count)) {
     throw new Error("Signed cron inventory count is inconsistent.");
   }
-  if(summary.source_identity.release?.migration_head!==summary.source_identity.migration_head){
+  if (summary.source_identity.release?.migration_head !== summary.source_identity.migration_head
+      || Object.hasOwn(summary.source_identity, "source_schema_binding_sha256")
+      || Object.hasOwn(summary.source_identity, "source_catalog_sha256")
+      || checksumPaths.has("inventory/source-schema-binding.json")
+      || checksumPaths.has("inventory/source-catalog.json")) {
     for(const [name,field]of [["source-schema-binding.json","source_schema_binding_sha256"],["source-catalog.json","source_catalog_sha256"]]){
       const path=verifiedArchivePath("inventory/"+name,"Source schema binding");
       if(await sha256File(path)!==summary.source_identity[field])throw new Error("Signed source schema extension inventory mismatch.");
@@ -384,8 +389,10 @@ async function stagePrivateOriginalsUnderOwnedFence() {
 }
 const restoreId = String(intent.restore_id).toLowerCase();
 const generation = Number(intent.authority_generation);
+if (!databaseOnly && !databaseCaCertPath) throw new Error("Production restore requires a pinned PostgreSQL CA.");
 const restoreClientOptions = {
-  connectionString: databaseUrl,
+  connectionString: databaseOnly ? databaseUrl : validateProductionDatabaseUrl(databaseUrl, projectRef).connectionString,
+  connectionTimeoutMillis: 10_000,
   application_name: "memphis-zoo-disaster-restore",
   ...(databaseCaCertPath ? { ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true } } : {}),
 };
@@ -568,13 +575,14 @@ async function recordEvent(phase, outcome, evidence = {}) {
 }
 
 async function setControl(state, { paused = true, failureReason = null, completed = false } = {}) {
-  await db.query(`
+  const result = await db.query(`
     update custodial_dr.restore_control set
       state=$1,mutations_paused=$2,failure_reason=$3,
       completed_at=case when $4 then clock_timestamp() else completed_at end,
       updated_at=clock_timestamp()
     where singleton=true and restore_id=$5 and authority_generation=$6
   `, [state, paused, failureReason, completed, restoreId, generation]);
+  if (result.rowCount !== 1) throw new Error("The original restore control row was not updated.");
 }
 
 async function readTargetIdentity() {
@@ -1253,6 +1261,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
 try {
   privateRestorePhase('CONNECT_NATIVE_CLIENT');
   await db.connect();
+  if (!databaseOnly) await assertProductionDatabaseIdentity(db, { migrationAuthority: true });
   privateRestorePhase('ACQUIRE_RESTORE_SESSION_LOCK');
   await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
   restoreSessionLockHeld = true;
@@ -1596,12 +1605,14 @@ try {
   let nativeTextPlans = null;
   let databaseEvidence;
   let databaseEventEvidence;
-  let mixedDataCommitAttempted = false;
+  let dataCommitAttempted = false;
   async function recordDatabaseRestored() {
     requireOrdinaryRestoreIntentFresh();
     await setControl("DATABASE_RESTORED");
     requireOrdinaryRestoreIntentFresh();
-    await db.query(`update custodial_dr.restore_manifests set database_verified=true,database_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify(databaseEvidence)]);
+    const result = await db.query(`update custodial_dr.restore_manifests set database_verified=true,database_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1 and authority_generation=$3`,
+      [restoreId, JSON.stringify(databaseEvidence), generation]);
+    if (result.rowCount !== 1) throw new Error("The original restore manifest row was not updated.");
     requireOrdinaryRestoreIntentFresh();
     await recordEvent("DATABASE", "PASSED", databaseEventEvidence);
   }
@@ -1628,10 +1639,9 @@ try {
       schema_name pg_catalog.text not null,table_name pg_catalog.text not null,raw pg_catalog.text not null) on commit preserve rows`);
     if (databaseTables.length) {
       restorePhase = "truncate_target_tables"; privateRestorePhase(restorePhase);
-      // Native TEXT truncates ONLY the complete authenticated table set.
-      // PostgreSQL refuses an external FK dependent; CASCADE must never reach
-      // an unselected namespace just because the selected census matched.
-      const sql=`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity${nativeTextDatabase ? "" : " cascade"}`;
+      // PostgreSQL must refuse foreign-key dependents outside the signed selection.
+      // ONLY prevents implicit truncation through inheritance.
+      const sql = `truncate ${databaseTables.map((table) => "only " + qualified(table.schema_name, table.table_name)).join(",")} restart identity restrict`;
       if (!nativeTextDatabase) {
         requireOrdinaryRestoreIntentFresh();
         await db.query(`lock table ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} in access exclusive mode`);
@@ -1730,42 +1740,37 @@ try {
       };
       Object.assign(databaseEvidence, mixedEvidence);
       Object.assign(databaseEventEvidence, mixedEvidence);
-      // DATA and its existing control/manifest/event evidence commit together.
-      // A lost COMMIT reply must be reconciled from that same restore identity,
-      // never by blindly replaying the original importer into a nonempty target.
-      await recordDatabaseRestored();
     }
+    // The original DATA decision and its control, manifest and event evidence
+    // must commit together for every supported table encoding.
+    await recordDatabaseRestored();
     if(nativeTextDatabase){
-      await recordDatabaseRestored();
       // Last table comparison follows every evidence/check callback. The same
       // ACCESS EXCLUSIVE locks and control row remain held through COMMIT.
       await compareNativeTextRestorePlans(nativeTextPlans);
     }
     requireOriginalArchiveSource();
-    if (immutablePrivateDataEvidence !== null || nativeTextDatabase) {
-      if(nativeTextDatabase)requireNativeTextOwner();
-      restorePhase = nativeTextDatabase ? "commit_native_text_data" : "commit_immutable_mixed_data"; privateRestorePhase(restorePhase);
-      mixedDataCommitAttempted = true;
-    }
+    if (nativeTextDatabase) requireNativeTextOwner();
+    restorePhase = nativeTextDatabase ? "commit_native_text_data"
+      : immutablePrivateDataEvidence !== null ? "commit_immutable_mixed_data" : "commit_ordinary_data";
+    privateRestorePhase(restorePhase);
     requireOrdinaryRestoreIntentFresh();
+    dataCommitAttempted = true;
     await db.query("commit");
   } catch (error) {
     await db.query("rollback").catch(() => {});
-    if (mixedDataCommitAttempted) {
+    if (dataCommitAttempted) {
       // A successful ROLLBACK reply cannot undo/prove absence of an earlier
       // COMMIT whose response was lost. Keep the original paused for named
       // reconciliation; expose no raw private SQL/row error detail here.
       throw Object.assign(new Error("Original DATA commit outcome is unknown; retain the original restore identity for named reconciliation, not an import retry."), {
-        code: nativeTextDatabase ? "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN" : "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN", outcome: "UNKNOWN", retry_safe: false,
+        code: nativeTextDatabase ? "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"
+          : immutablePrivateDataEvidence !== null ? "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN" : "ORDINARY_DATA_COMMIT_OUTCOME_UNKNOWN",
+        outcome: "UNKNOWN", retry_safe: false,
       });
     }
     throw error;
   }
-  if (immutablePrivateDataEvidence === null && !nativeTextDatabase) {
-    requireOrdinaryRestoreIntentFresh();
-    await recordDatabaseRestored();
-  }
-
   restorePhase = "authority_reconciliation"; privateRestorePhase(restorePhase);
   requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
@@ -1847,11 +1852,13 @@ try {
   const outcomeUnknown = error?.outcome === "UNKNOWN" && error?.retry_safe === false;
   const code = outcomeUnknown && (error?.code === "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN"
     || error?.code === "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"
+    || error?.code === "ORDINARY_DATA_COMMIT_OUTCOME_UNKNOWN"
     || error?.code === "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED"
     || (freshPrivateDatabase && error?.code === "IMMUTABLE_PRIVATE_DATA_COMMIT_NOT_ADMITTED")
     || error?.code === "RESTORE_RETRY_RECONCILIATION_REQUIRED") ? error.code : null;
   const currentImport = code === "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN"
     || code === "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"
+    || code === "ORDINARY_DATA_COMMIT_OUTCOME_UNKNOWN"
     || code === "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED"
     || (freshPrivateDatabase && code === "IMMUTABLE_PRIVATE_DATA_COMMIT_NOT_ADMITTED");
   let requestedOriginalRestore;

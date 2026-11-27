@@ -396,6 +396,19 @@ try {
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
     where n.nspname in ('custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in ('r','p','f') order by n.nspname,c.relname
   `);
+  const inheritedTables = await client.query(`
+    select 1 from pg_inherits i
+    join pg_class parent on parent.oid = i.inhparent
+    join pg_namespace parent_schema on parent_schema.oid = parent.relnamespace
+    join pg_class child on child.oid = i.inhrelid
+    join pg_namespace child_schema on child_schema.oid = child.relnamespace
+    where parent.relkind in ('r','p','f')
+      and (parent_schema.nspname=any($1::text[]) or child_schema.nspname=any($1::text[]))
+    limit 1
+  `, [schemaCandidates]);
+  if (inheritedTables.rowCount !== 0) {
+    throw new Error("Backup cannot sign partitioned or inherited table data in the archive namespaces.");
+  }
   const catalogResult = await client.query(`
     select n.nspname schema_name, c.relname table_name,
            coalesce((
@@ -529,6 +542,7 @@ for (const original of storageObjects) {
   const encodedName = segments.map(encodeURIComponent).join("/");
   const response = await fetch(`https://${projectRef}.supabase.co/storage/v1/object/authenticated/${encodeURIComponent(object.bucket_id)}/${encodedName}`, {
     redirect: "error",
+    signal: AbortSignal.timeout(60_000),
     headers: { apikey: secret, Authorization: `Bearer ${secret}` },
   });
   let expectedBytes;
@@ -538,7 +552,19 @@ for (const original of storageObjects) {
     await response.body?.cancel().catch(() => {});
     throw error;
   }
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(outputPath, { flags: "wx", mode: 0o600 }));
+  await pipeline(
+    Readable.fromWeb(response.body),
+    async function* boundStorageBytes(chunks) {
+      let written = 0;
+      for await (const chunk of chunks) {
+        written += chunk.length;
+        if (written > expectedBytes) throw new Error("Downloaded Storage bytes exceed the original object size.");
+        yield chunk;
+      }
+      if (written !== expectedBytes) throw new Error("Downloaded Storage bytes differ from the original object size.");
+    },
+    createWriteStream(outputPath, { flags: "wx", mode: 0o600 }),
+  );
   chmodSync(outputPath, 0o600);
   const capturedBytes = statSync(outputPath).size;
   if (capturedBytes !== expectedBytes) throw new Error("Downloaded Storage bytes differ from the original object size.");

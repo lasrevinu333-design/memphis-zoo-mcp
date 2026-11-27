@@ -41,7 +41,7 @@ export async function readCurrent429Registry(query, phase) {
     end as current_definition
     from public.custodial_release_authority_restore_inventory i
   ) select count(*)::int as count,
-    public.static_weekly_digest_text(coalesce(string_agg(to_jsonb(inventory)::text,E'\\n' order by restore_order)
+    public.static_weekly_digest_text(coalesce(string_agg(to_jsonb(inventory)::text,E'\\n' order by restore_order, object_kind collate "C", object_identity collate "C")
       filter(where restore_order not in (100308,850002)),'')) as unchanged_sha256,
     jsonb_agg(definition_sha256 order by restore_order) filter(where restore_order in (100308,850002)) as bound_hashes,
     bool_and(definition_sha256=public.static_weekly_digest_text(definition_sql))
