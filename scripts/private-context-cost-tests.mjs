@@ -1,3 +1,4 @@
+import {withRehearsalContext} from './fixtures/rehearsal-shell-source.mjs';
 import {spawn} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import test from 'node:test';
@@ -38,11 +39,11 @@ test('the finite observer is append-only and preserves every existing importer b
  assert.throws(()=>removePrivateContextCostObservation('scripts/immutable-private-data-import.mjs',current+'\n'));
 });
 test('normal runner and workflow are recovered in full and diagnostic cannot enter a native legacy fallback',()=>{
- const runner=read('./run-private-backup-only-rehearsal.mjs'),workflow=read('../.github/workflows/production-backup-migration-rehearsal.yml');
+ const runner=read('./run-private-backup-only-rehearsal.mjs'),workflow=withRehearsalContext(read('../.github/workflows/production-backup-migration-rehearsal.yml'));
  assert.equal(sha(removePrivateContextCostObservation('scripts/run-private-backup-only-rehearsal.mjs',runner)),'bca81f466de6733d5968fc23742ce11e765809cb272164dd264e7ff03a37f4b1');
  assert.equal(sha(removePrivateContextCostObservation('.github/workflows/production-backup-migration-rehearsal.yml',workflow)),'e3352172fac50e799262819801d1c4f6396ae45e8664fee92272d445bbf5bcfa');
  assert.throws(()=>removePrivateContextCostObservation('scripts/run-private-backup-only-rehearsal.mjs',runner.replace('lifetimeMs===6*60*60*1000','lifetimeMs===5*60*60*1000')));
- assert.throws(()=>removePrivateContextCostObservation('.github/workflows/production-backup-migration-rehearsal.yml',workflow.replace('&& 350 || 45','&& 360 || 45')));
+ assert.throws(()=>removePrivateContextCostObservation('.github/workflows/production-backup-migration-rehearsal.yml',workflow.replace(' || test -e "$plaintext_dir"','')));
  assert.match(runner,/scope:contextDiagnosticOnly\?'context_cost_only':'backup_only'/);
  assert.match(runner,/disposable_database_restore_outcome:contextDiagnosticOnly\?'NOT_ATTEMPTED'/);
  assert.ok(runner.includes("timeout:300000}"));assert.ok(runner.includes("assert.equal(profile,'private')"));assert.ok(runner.includes("if(contextDiagnosticOnly)assert.deepEqual(ownerProfile,{id:'immutable-private-current-postgres',actor:'postgres'})"));

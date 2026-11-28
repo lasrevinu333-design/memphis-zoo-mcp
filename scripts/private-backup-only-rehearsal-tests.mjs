@@ -1,3 +1,4 @@
+import {withRehearsalContext} from './fixtures/rehearsal-shell-source.mjs';
 import test from 'node:test';
 import {removeCurrentBoundedOrdinaryConsumerSource} from './immutable-current-bounded-stage-source.mjs';
 import {removeOrdinaryProgressObservations} from './immutable-ordinary-progress-source-proof.mjs';
@@ -109,20 +110,21 @@ test('success requires private/ordinary/storage readback plus provider and held 
   }
 });
 test('workflow dispatches authenticated private selection before native target and bypasses legacy cleanup',()=>{
-  const w=readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8');
+  const w=withRehearsalContext(readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8'));
   const start=w.indexOf('node scripts/run-private-backup-only-rehearsal.mjs --dispatch'),native=w.indexOf('          docker pull "$image"');
   assert.ok(start>0&&native>start);const branch=w.slice(start,native);
   assert.match(branch,/--dispatch \| tee -a "\$receipt"; then exit 0; else status=\$\?; fi/);
   assert.match(branch,/test "\$status" = 3/);
   assert.ok(w.indexOf('source-binding')<start);assert.ok(w.indexOf('restore:prepare-isolated')>native);
-  assert.match(w,/if test "\$\{private_route_active:-false\}" = true; then return "\$status"; fi/);
+  const cleanup=w.slice(w.indexOf('          cleanup() {'),w.indexOf('          trap cleanup EXIT'));
+  assert.match(cleanup,/if test "\$\{private_route_active:-false\}" = true; then\s+trap - EXIT\s+exit "\$status"\s+fi\s+for owned_pid/);
   assert.ok(w.indexOf('private_route_active=true')<w.indexOf('trap cleanup EXIT'));
   assert.match(w,/python3 scripts\/extract-rehearsal-archive.py/);
   assert.doesNotMatch(w,/tar -C \"\$backup_dir\" -xzf/);
   assert.ok(branch.indexOf('test "$status" = 3')<branch.indexOf('private_route_active=false'));
 });
 test('the secondary VM verification precedes decryption, with hosted signing and SQL apply',()=>{
-  const workflow=readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8');
+  const workflow=withRehearsalContext(readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8'));
   const [vmJob,hostedJobs]=workflow.split('\n  sign_current429_vm:');
   const [signJob,applyJob]=hostedJobs.split('\n  apply_current429:');
   assert.match(vmJob,/github\.run_attempt == '1' && inputs\.backup_run_id == '45645963579'/);
@@ -817,11 +819,15 @@ test('actual connect and session-lock boundaries retain distinct safe failure ph
   const source=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
   const start=source.indexOf("  privateRestorePhase('CONNECT_NATIVE_CLIENT');"),end=source.indexOf('try {\n  requireRestoreIntentFresh();\n  if (freshPrivateDatabase)',start);
   assert.ok(start>0&&end>start);
-  const factory=new Function('ports',`const {db,privateRestorePhase}=ports;let restoreSessionLockHeld=false;return async()=>{${source.slice(start,end)}return restoreSessionLockHeld;};`);
+  const factory=new Function('ports',`const {db,privateRestorePhase,databaseOnly,assertProductionDatabaseIdentity}=ports;let restoreSessionLockHeld=false;return async()=>{${source.slice(start,end)}return restoreSessionLockHeld;};`);
   for(const failConnect of [true,false]){
     let queries=0,phase;const error=Object.assign(new Error(privateSentinels.join('\n')),{code:failConnect?'ECONNREFUSED':'57014'});
-    const run=factory({db:{connect:async()=>{if(failConnect)throw error;},query:async()=>{queries++;throw error;}},privateRestorePhase:x=>{phase=x;}});
-    await assert.rejects(run());assert.equal(queries,failConnect?0:1);
+    let identityReads=0;
+    const db={connect:async()=>{if(failConnect)throw error;},query:async sql=>{assert.match(sql,/^select pg_advisory_lock/);queries++;throw error;}};
+    const run=factory({db,databaseOnly:false,assertProductionDatabaseIdentity:async(client,options)=>{
+      assert.equal(client,db);assert.deepEqual(options,{migrationAuthority:true});identityReads++;
+    },privateRestorePhase:x=>{phase=x;}});
+    await assert.rejects(run(),e=>e===error);assert.equal(identityReads,failConnect?0:1);assert.equal(queries,failConnect?0:1);
     const diagnostic=privateRestoreStageDiagnostic(phase,'REFUSED',error),first=privateRestoreStreamDiagnostic(Buffer.from(JSON.stringify(diagnostic)+'\n'),true);
     const delivered=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify(first))).restore_diagnostics[0];
     assert.equal(delivered.phase,failConnect?'CONNECT_NATIVE_CLIENT':'ACQUIRE_RESTORE_SESSION_LOCK');assertNoPrivate(delivered);

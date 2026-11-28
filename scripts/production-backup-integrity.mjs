@@ -4,11 +4,6 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 
 const rootControls = ['SHA256SUMS', 'archive-signature.json'];
 const isPrivateOwner = state => state.uid === process.getuid() && (state.mode & 0o077) === 0;
-const exactSize = value => {
-  const parsed = typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) ? Number(value) : value;
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-};
-
 export function productionBackupConnection(url) {
   const parsed = new URL(url);
   const settings = [...parsed.searchParams];
@@ -50,32 +45,7 @@ export function readBackupFiles(root) {
   return files.sort();
 }
 
-function strongEtag(value) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim(), unquoted = trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
-  return unquoted && /^[!#-~]+$/.test(unquoted) && !unquoted.startsWith('W/') ? unquoted : null;
-}
-
-export function requireOriginalStorageSize(object) {
-  const lengths = ['size', 'contentLength'].filter(key => Object.hasOwn(object.metadata || {}, key))
-    .map(key => exactSize(object.metadata[key]));
-  if (!lengths.length || lengths[0] === null || lengths.some(size => size !== lengths[0]))
-    throw Error('Original Storage object byte length is unavailable or conflicting.');
-  return lengths[0];
-}
-
-export function requireOriginalStorageResponse(object, response) {
-  if (response.status !== 200 || !response.body) throw Error('Storage object download did not return a complete response.');
-  const originalSize = requireOriginalStorageSize(object);
-  const headerLength = response.headers.get('content-length');
-  if (headerLength !== null && exactSize(headerLength) !== originalSize)
-    throw Error('Provider response length differs from the original Storage object.');
-  const tags = ['eTag', 'etag'].filter(key => Object.hasOwn(object.metadata || {}, key))
-    .map(key => strongEtag(object.metadata[key]));
-  if (tags.length && (!tags[0] || tags.some(tag => tag !== tags[0]) || strongEtag(response.headers.get('etag')) !== tags[0]))
-    throw Error('Provider response ETag differs from the original Storage object.');
-  return originalSize;
-}
+export { requireOriginalStorageResponse, requireOriginalStorageSize } from './backup-storage-object.mjs';
 
 export async function packageVerifiedBackup(source, archive, output) {
   if (!isAbsolute(output)) throw Error('The verified backup tar output must use an absolute path.');

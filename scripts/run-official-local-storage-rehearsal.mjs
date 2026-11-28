@@ -569,6 +569,36 @@ select jsonb_build_object(
 async function storageCatalog(db){const r=await db.query(STORAGE_CATALOG_SQL);insist(r.rowCount===1 && r.rows[0].catalog?.schema?.length===1,'Storage catalog unavailable.');
  const text=stable(r.rows[0].catalog);insist(Buffer.byteLength(text)<=16*1024**2,'Storage catalog bound exceeded.');return {catalog:r.rows[0].catalog,sha256:hash(text)};}
 
+export async function stageArchivedStorageObjects({ inventory, objectsRows, readBlob, mount }) {
+  const objects = [];
+  const stagedPayloads = new Set();
+  for (const object of inventory.objectRecords) {
+    const native = objectsRows.find(row => row.id === object.object_id);
+    insist(native && native.bucket_id === object.bucket_id && native.name === object.name, 'Original object membership mismatch.');
+    const meta = typeof native.metadata === 'string' ? JSON.parse(native.metadata) : native.metadata;
+    const { blob } = readBlob(object.object_id);
+    const bytes = Buffer.from(await blob.arrayBuffer());
+    const file = object.sha256;
+    insist(hash(bytes) === file && bytes.length === object.size_bytes, 'Original object byte mismatch.');
+    if (!stagedPayloads.has(file)) {
+      writeFileSync(resolve(mount, file), bytes, {mode: 0o400, flag: 'wx'});
+      stagedPayloads.add(file);
+    }
+    const contentType = meta.mimetype, cacheControl = String(meta.cacheControl ?? meta.cache_control);
+    insist(typeof contentType === 'string' && contentType.length > 0 && cacheControl !== 'undefined'
+      && !/[\r\n]/.test(contentType + cacheControl), 'Exact original object metadata required.');
+    objects.push({...object, file, version: native.version, contentType, cacheControl});
+  }
+  return objects;
+}
+
+export async function uploadArchivedStorageObject({ object, bytes, backend, locator, bucket, tenant }) {
+  insist(bytes.length === object.size_bytes && hash(bytes) === object.sha256, 'Verified original object changed.');
+  const key = locator.getKeyLocation({tenantId: tenant, bucketId: object.bucket_id, objectName: object.name});
+  await backend.uploadObject(bucket, key, object.version ?? undefined, Readable.from(bytes),
+    object.contentType, object.cacheControl, undefined, bytes.length);
+}
+
 async function containerGate(){
   const input=JSON.parse(readFileSync('/custody/input.json','utf8'));verifyOwnedDiagnosticBinding(input);let phase='connect_gate';
   const require=createRequire('/app/package.json'),{Client}=require('pg');
@@ -605,9 +635,9 @@ async function containerGate(){
     phase='verify_empty_namespace';insist(readdirSync(process.env.STORAGE_FILE_BACKEND_PATH).length===0,'FILE namespace was not empty.');
     for(const object of input.objects){
       nativeGuard.check();phase='read_verified_object';const bytes=readFileSync('/custody/'+object.file);
-      insist(bytes.length===object.size_bytes && hash(bytes)===object.sha256,'Verified original object changed.');
-      const key=locator.getKeyLocation({tenantId:process.env.TENANT_ID,bucketId:object.bucket_id,objectName:object.name});
-      phase='official_archived_version_upload';await nativeGuard.run(()=>backend.uploadObject(process.env.GLOBAL_S3_BUCKET,key,object.version??undefined,Readable.from(bytes),object.contentType,object.cacheControl,undefined,bytes.length));
+      phase='official_archived_version_upload';
+      await nativeGuard.run(() => uploadArchivedStorageObject({ object, bytes, backend, locator,
+        tenant: process.env.TENANT_ID, bucket: process.env.GLOBAL_S3_BUCKET }));
     }
     phase='verify_post_bootstrap_migrations';const r=await db.query('select row_to_json(m) row from storage.migrations m order by id');
     insist(hash(stable(r.rows.map(x=>x.row)))===input.migrations_sha256,'Bootstrap changed archived migration metadata.');
@@ -679,23 +709,10 @@ async function host(){
     typed.sort((x,y)=>x.id-y.id);const migrationCount=typed.length;insist(migrationCount>0 && migrationCount<=1024 && new Set(typed.map(x=>x.id)).size===migrationCount && typeof typed.at(-1).name==='string','Authenticated full migration identity required.');
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')insist(migrationCount===74,'Production original exact74 migration rows required.');
     durable(resolve(custody,'ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json'),{source_profile:a.source_profile,rows:typed,count:migrationCount,sha256:hash(stable(typed)),authenticated_source_metadata_only:true});
-    mark('PREPARE_ARCHIVED_OBJECTS');const migrationsHash=hash(stable(typed)),objectsRows=await originalRows(archive,'objects',api),inventory=api.readVerifiedStorageUploadInventory(archive),objects=[];
+    mark('PREPARE_ARCHIVED_OBJECTS');const migrationsHash=hash(stable(typed)),objectsRows=await originalRows(archive,'objects',api),inventory=api.readVerifiedStorageUploadInventory(archive);
     const mount=resolve(custody,'provider-input');mkdirSync(mount,{mode:0o700});
     const audit=resolve(custody,'provider-audit');mkdirSync(audit,{mode:0o700});
-    const stagedPayloads = new Set();
-    for(const o of inventory.objectRecords){
-      const native=objectsRows.find(x=>x.id===o.object_id);insist(native && native.bucket_id===o.bucket_id && native.name===o.name,'Original object membership mismatch.');
-      const meta=typeof native.metadata==='string'?JSON.parse(native.metadata):native.metadata;
-      const blob=api.readVerifiedStorageUploadBlob(archive,o.object_id),bytes=Buffer.from(await blob.blob.arrayBuffer()),file=o.sha256;
-      insist(hash(bytes)===o.sha256 && bytes.length===o.size_bytes,'Original object byte mismatch.');
-      if (!stagedPayloads.has(file)) {
-        writeFileSync(resolve(mount,file),bytes,{mode:0o400,flag:'wx'});
-        stagedPayloads.add(file);
-      }
-      const contentType=meta.mimetype,cacheControl=String(meta.cacheControl??meta.cache_control);
-      insist(typeof contentType==='string' && contentType.length>0 && cacheControl!=='undefined' && !/[\r\n]/.test(contentType+cacheControl),'Exact original object metadata required.');
-      objects.push({...o,file,version:native.version,contentType,cacheControl});
-    }
+    const objects = await stageArchivedStorageObjects({inventory, objectsRows, readBlob: id => api.readVerifiedStorageUploadBlob(archive, id), mount});
     mark('BIND_WORKER_INPUT');const worker=stageOwnedStorageWorker(mount);
     const input={diagnostic_helper_sha256:worker.diagnostic_helper_sha256,diagnostic_helper_bytes:worker.diagnostic_helper_bytes,source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner,session_user:id.session_user,current_user:id.current_user},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
     durable(resolve(custody,'WORKER_INPUT_REDACTED.json'),{input_sha256:hash(stable(input)),...worker,

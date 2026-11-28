@@ -1,0 +1,54 @@
+{
+  "current_sha256": "955f0a738adce02b5c342eb50e0c7a6cc808091c7f3a074a854c7aae57c2ceb0",
+  "previous_sha256": "b12d1bc1db6d430a6634e00d19908afd963425c7934df89a597e21d1fbf81651",
+  "reverse_hunks": [
+    {
+      "start": 9285,
+      "end": 11507,
+      "current": "          # Confirm the selected run's current successful attempt, immutable\n          # uploaded artifact ID, and the producer's verified ciphertext.\n          backup_run=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID\")\"\n          backup_attempt=\"$(jq -er --arg id \"$BACKUP_RUN_ID\" --arg repo \"$GITHUB_REPOSITORY\" '\n            select((.id | tostring) == $id and .repository.full_name == $repo and\n              .status == \"completed\" and .conclusion == \"success\" and\n              .path == \".github/workflows/production-disaster-recovery-backup.yml\") |\n            .run_attempt | select(type == \"number\" and . >= 1)' <<<\"$backup_run\")\"\n          art_name=\"memphis-zoo-disaster-recovery-$BACKUP_RUN_ID\"\n          backup_artifact_id=\"$(gh api --paginate --slurp \"repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID/artifacts?per_page=100\" |\n            jq -er --arg name \"$art_name\" '\n              [.[] | .artifacts[] | select(.name == $name and .expired == false)] |\n              select(length == 1) | .[0].id | select(type == \"number\" and . >= 1)')\"\n          readback_dir=\"$(mktemp -d \"${RUNNER_TEMP}/producer-backup-readback.XXXXXXXX\")\"\n          gh run download \"$BACKUP_RUN_ID\" --repo \"$GITHUB_REPOSITORY\" \\\n            --name \"backup-readback-receipt-$BACKUP_RUN_ID-$backup_attempt\" --dir \"$readback_dir\"\n          ciphertext_sha256=\"$(sha256sum -- \"$encrypted\" | awk '{print $1}')\"\n          ciphertext_bytes=\"$(stat -c '%s' -- \"$encrypted\")\"\n          jq -e --arg repo \"$GITHUB_REPOSITORY\" --arg run \"$BACKUP_RUN_ID\" \\\n            --arg attempt \"$backup_attempt\" --arg artifact \"$backup_artifact_id\" \\\n            --arg digest \"$ciphertext_sha256\" --argjson size \"$ciphertext_bytes\" '\n            .schema == \"custodial.backup-readback.v1\" and .repository == $repo and\n            .run_id == $run and .run_attempt == $attempt and .artifact_id == $artifact and\n            .ciphertext_sha256 == $digest and .ciphertext_bytes == $size and\n            .uploaded_artifact_readback == \"passed\" and .signed_archive_validation == \"passed\" and\n            .database_restore_performed == false and .storage_restore_performed == false\n          ' \"$readback_dir/backup-readback-receipt.json\" > /dev/null\n",
+      "previous": ""
+    },
+    {
+      "start": 13338,
+      "end": 13610,
+      "current": "            if test -n \"${plaintext_dir:-}\"; then\n              if ! rm -rf -- \"$plaintext_dir\" || test -e \"$plaintext_dir\"; then\n                printf '%s\\n' 'Caller-owned plaintext cleanup was not verified.' >&2\n                status=1\n              fi\n            fi\n",
+      "previous": ""
+    },
+    {
+      "start": 14447,
+      "end": 14583,
+      "current": "            if test \"${private_route_active:-false}\" = true; then\n              trap - EXIT\n              exit \"$status\"\n            fi\n",
+      "previous": "            if test \"${private_route_active:-false}\" = true; then return \"$status\"; fi\n"
+    },
+    {
+      "start": 15447,
+      "end": 15498,
+      "current": "            trap - EXIT\n            exit \"$status\"\n",
+      "previous": "            return \"$status\"\n"
+    },
+    {
+      "start": 15538,
+      "end": 15599,
+      "current": "          trap 'exit 130' INT\n          trap 'exit 143' TERM\n",
+      "previous": ""
+    },
+    {
+      "start": 15814,
+      "end": 16092,
+      "current": "          umask 077\n          plaintext_dir=\"$(mktemp -d \"${RUNNER_TEMP}/rehearsal-plaintext.XXXXXXXX\")\"\n          plaintext_tar=\"$plaintext_dir/memphis-zoo-backup.tar.gz\"\n          backup_dir=\"$plaintext_dir/production-backup\"\n          export RESTORE_SOURCE_DIR=\"$backup_dir\"\n",
+      "previous": "          backup_dir=\"${RUNNER_TEMP}/production-backup\"\n"
+    },
+    {
+      "start": 16396,
+      "end": 16533,
+      "current": "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"$encrypted\" -out \"$plaintext_tar\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n",
+      "previous": "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"$encrypted\" -out \"${RUNNER_TEMP}/memphis-zoo-backup.tar.gz\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n"
+    },
+    {
+      "start": 16578,
+      "end": 16697,
+      "current": "          python3 scripts/extract-rehearsal-archive.py \"$plaintext_tar\" \"$backup_dir\"\n          rm -- \"$plaintext_tar\"\n",
+      "previous": "          python3 scripts/extract-rehearsal-archive.py \"$RUNNER_TEMP/memphis-zoo-backup.tar.gz\" \"$backup_dir\"\n"
+    }
+  ]
+}

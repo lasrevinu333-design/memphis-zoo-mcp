@@ -712,7 +712,7 @@ export async function refuseUnreconciledImmutableRetry(db, { restoreId, generati
           where outcome='UNKNOWN' or evidence_json->>'outcome'='UNKNOWN'
             or evidence_json->'retry_safe'='false'::jsonb) unresolved_events,
         exists(select 1 from original_manifest
-          where database_verified=true and database_evidence ? 'original_data_import') private_data_verified,
+          where database_verified=true) data_verified,
         (exists(select 1 from original_events
           where jsonb_typeof(evidence_json) is distinct from 'object'
             or (evidence_json ? 'outcome' and jsonb_typeof(evidence_json->'outcome') is distinct from 'string')
@@ -727,7 +727,7 @@ export async function refuseUnreconciledImmutableRetry(db, { restoreId, generati
     refuse("original history is unavailable");
   }
   const keys = ["control_count", "matching_control_count", "manifest_count", "matching_manifest_count", "event_count", "failure_recorded",
-    "conflicting_events", "unresolved_events", "private_data_verified", "contradictory_evidence"];
+    "conflicting_events", "unresolved_events", "data_verified", "contradictory_evidence"];
   const row = result?.rows?.[0];
   if (result?.rowCount !== 1 || !Array.isArray(result.rows) || result.rows.length !== 1
       || !row || Object.keys(row).length !== keys.length
@@ -737,8 +737,8 @@ export async function refuseUnreconciledImmutableRetry(db, { restoreId, generati
       || !Number.isSafeInteger(row.event_count) || row.event_count < 1
       || row.failure_recorded !== true) refuse("original history binding is incomplete or contradictory");
   if (row.conflicting_events !== false || row.unresolved_events !== false
-      || row.private_data_verified !== false || row.contradictory_evidence !== false) {
-    refuse("original history contains uncertain, committed private DATA, or contradictory evidence");
+      || row.data_verified !== false || row.contradictory_evidence !== false) {
+    refuse("original history contains uncertain, committed DATA, or contradictory evidence");
   }
   // Intentionally no admission value, mutation, reconciliation, or retry token.
 }

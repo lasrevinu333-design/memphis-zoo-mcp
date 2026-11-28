@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import pg from 'pg';
+import {writePrivateReceipt,withConnectionDeadline,watchMigrationTransport,prepareOriginalMigrationReceipt,submitOriginalMigrationCommit,observeUnacknowledgedMigration} from './original-release-migration-commit.mjs';
 import {stableJson,stableJsonFileSha256,requireSigningKey,verifyBinding,releaseMigrationRehearsalAttestationBinding} from './disaster-recovery-crypto.mjs';
 import {validateProductionDatabaseUrl,assertProductionDatabaseIdentity} from './production-database-identity.mjs';
 import {captureCatalogFromSnapshot} from './schema-catalog-readonly-client.mjs';
@@ -100,8 +101,21 @@ async function readScheduleDay(query){
   return schedule;
 }
 
+export async function commitPreparedCurrent429({db,attempt,directory,createObserver,assertIdentity=assertProductionDatabaseIdentity,timeoutMs}){
+  try {
+    await submitOriginalMigrationCommit(db, timeoutMs);
+    return {acknowledged:true,readback:null};
+  } catch {
+    const readback = await observeUnacknowledgedMigration({
+      attempt,directory,original:db,observer:createObserver(),assertIdentity,timeoutMs,
+    });
+    return {acknowledged:false,readback};
+  }
+}
+
 async function apply(){
-  let stage='authorization',db,transaction=false,committed=false,commitRequested=false;
+  let stage='authorization',db,transaction=false,committed=false,commitRequested=false,readback=null,originalClosed=false;
+  let commitXid=null,locksReleased=false,targetVerified=false;
   const started=performance.now();
   let stageStarted=started;
   const enter=next=>{stage=next;stageStarted=performance.now();};
@@ -131,9 +145,11 @@ async function apply(){
     const plan=readCurrent429Plan();
     enter('physical_production_identity');
     const {connectionString}=validateProductionDatabaseUrl(process.env.SUPABASE_DB_URL,current429.projectRef);
-    db=new pg.Client({connectionString,connectionTimeoutMillis:10000,
+    const connectionOptions={connectionString,connectionTimeoutMillis:10000,
       ssl:{ca:readFileSync(process.env.SUPABASE_DB_CA_CERT_PATH,'utf8'),rejectUnauthorized:true},
-      application_name:'custodial-429-reviewed-forward'});
+      application_name:'custodial-429-reviewed-forward'};
+    db=new pg.Client(connectionOptions);
+    watchMigrationTransport(db);
     await db.connect();
     await assertProductionDatabaseIdentity(db,{migrationAuthority:true});
     const query=(statement,params)=>db.query(statement,params);
@@ -192,27 +208,56 @@ async function apply(){
     // day comparison and run the full fresh week after releasing admission.
     assert.deepEqual(await readScheduleDay(query),scheduleBefore);
     enter('commit');
+    const xid=(await query('select pg_catalog.pg_current_xact_id()::text as xid')).rows[0]?.xid;
+    assert.ok(typeof xid==='string' && /^[1-9][0-9]{0,19}$/.test(xid) && BigInt(xid)<=18446744073709551615n);
+    const attempt={schema:'custodial.current429-original-migration-commit.v1',postgres_transaction_id:xid,
+      project_ref:current429.projectRef,candidate_commit:candidate,candidate_tree:tree,run_id:process.env.GITHUB_RUN_ID,
+      run_attempt:process.env.GITHUB_RUN_ATTEMPT,verified_rehearsal_receipt_sha256:sha(rehearsalReceipt),
+      backup_run_id:current429.runId,archive_digest:current429.archiveDigest,plan_sha256:plan.plan_sha256,
+      source_catalog_fingerprint:before.catalogHash,source_ledger_sha256:before.ledgerHash,
+      target_catalog_fingerprint:after.catalogHash,target_ledger_sha256:after.ledgerHash,outcome:'UNKNOWN',retry_safe:false};
+    const directory=prepareOriginalMigrationReceipt(attempt,process.env.RUNNER_TEMP);
+    console.error(JSON.stringify({...attempt,phase:'PREPARED_FOR_COMMIT'}));
+    commitXid=xid;
     commitRequested=true;
-    assert.equal((await query('commit')).command,'COMMIT');
+    const outcome=await commitPreparedCurrent429({db,attempt,directory,createObserver:()=>new pg.Client({
+      ...connectionOptions,application_name:'custodial-429-original-status',
+      options:'-c default_transaction_read_only=on -c statement_timeout=5000',
+    })});
+    if(!outcome.acknowledged){
+      originalClosed=true;
+      readback=outcome.readback;
+      enter('original_commit_readback');
+      throw new Error('Original COMMIT acknowledgement lost');
+    }
     committed=true;
     transaction=false;
+    enter('persist_commit_acknowledgement');
+    const acknowledged={...attempt,phase:'COMMIT_ACKNOWLEDGED',outcome:'COMMITTED',production_committed:true,
+      application_locks_release_verified:false,production_target_verified:false};
+    writePrivateReceipt(directory,'current429-production-migration-commit-acknowledged.json',acknowledged);
+    console.error(JSON.stringify(acknowledged));
     enter('release_application_mutation_locks');
-    await releaseCurrent429ApplicationLocks(query);
+    await withConnectionDeadline(db,()=>releaseCurrent429ApplicationLocks(query),10000,watchMigrationTransport(db));
+    locksReleased=true;
     enter('verify_production_readback');
-    await query('begin isolation level repeatable read read only');
+    // Match the existing per-statement SQL budget, including the catalog reader.
+    const readbackQuery=(statement,params)=>withConnectionDeadline(db,()=>query(statement,params),180000,watchMigrationTransport(db));
+    await readbackQuery('begin isolation level repeatable read read only');
     transaction=true;
-    await configureSnapshot(query);
-    verifyTarget(await readSnapshot(query,db),target,plan);
-    assert.deepEqual(await readCurrent429Registry(query,'after'),registryBefore);
-    const schedule=await readScheduleDay(query);
-    const week=await readCurrentWeek(query,{requireVersion2:true});
+    await configureSnapshot(readbackQuery);
+    verifyTarget(await readSnapshot(readbackQuery,{query:readbackQuery}),target,plan);
+    assert.deepEqual(await readCurrent429Registry(readbackQuery,'after'),registryBefore);
+    const schedule=await readScheduleDay(readbackQuery);
+    const week=await readCurrentWeek(readbackQuery,{requireVersion2:true});
     assert.equal(week.coverage.working_coverage,true,'Production Chicago week unavailable on commit readback');
-    await query('rollback');
+    await readbackQuery('rollback');
     transaction=false;
+    targetVerified=true;
     enter('probe_application_http_liveness');
     const response=await fetch('https://memphis-zoo-mcp.onrender.com/schedule-api/health',{redirect:'error',signal:AbortSignal.timeout(15000)});
     const healthy=response.ok&&(await response.json()).ok===true;
-    console.log(JSON.stringify({ok:healthy,production_committed:true,production_target_verified:true,
+    console.log(JSON.stringify({ok:healthy,production_committed:true,production_target_verified:targetVerified,application_locks_release_verified:locksReleased,postgres_transaction_id:xid,
       run_id:process.env.GITHUB_RUN_ID,run_attempt:process.env.GITHUB_RUN_ATTEMPT,
       candidate_commit:candidate,candidate_tree:tree,verified_rehearsal_receipt_sha256:sha(rehearsalReceipt),
       backup_run_id:current429.runId,archive_digest:current429.archiveDigest,plan_sha256:plan.plan_sha256,
@@ -226,13 +271,15 @@ async function apply(){
       elapsed_ms:Math.round(performance.now()-started)}));
     if(!healthy)process.exitCode=1;
   }catch(error){
-    if(transaction&&!committed)await db.query('rollback').catch(()=>{});
-    console.error(JSON.stringify({ok:false,stage,production_committed:committed?true:commitRequested?null:false,
+    if(transaction&&!commitRequested)await db.query('rollback').catch(()=>{});
+    console.error(JSON.stringify({ok:false,stage,production_committed:committed||readback==='COMMITTED'?true:readback==='ROLLED_BACK'||!commitRequested?false:null,
+      ...(commitRequested?{original_transaction_readback:readback,postgres_transaction_id:commitXid,retry_safe:false,
+        application_locks_release_verified:locksReleased,production_target_verified:targetVerified}:{}),
       stage_elapsed_ms:Math.round(performance.now()-stageStarted),elapsed_ms:Math.round(performance.now()-started),
       sqlstate:/^[0-9A-Z]{5}$/.test(error?.code??'')?error.code:null}));
     process.exitCode=1;
   }finally{
-    await db?.end().catch(()=>{});
+    if(db&&!originalClosed)await withConnectionDeadline(db,()=>db.end(),10000).catch(()=>{});
   }
 }
 

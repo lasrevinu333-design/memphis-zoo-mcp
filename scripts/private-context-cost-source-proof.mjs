@@ -1,3 +1,4 @@
+import {beforeCurrent429CommitReceipts} from './fixtures/current429-commit-receipt-workflow.mjs';
 // Complete byte inverse for a finite diagnostic. No target or effect port.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -53,6 +54,18 @@ export function removeRehearsalRevisions(name,source){
 }
 
 export function removeCurrent429Qualification(name,source){
+ if(name==='.github/workflows/production-backup-migration-rehearsal.yml')source=beforeCurrent429CommitReceipts(source);
+ // The later pg_cron repair passes the signed sequence counter through four
+ // initializer sites. Project only those exact bytes for this historical test.
+ if(name==='scripts/immutable-private-source-initializer.mjs' && sha(source)==='25135fac8792932e80d6195ebf5c7ec750f1a91c64550ab5fa2d225ca2b465c7'){
+  source=source.replaceAll(',sourceCounter:source.sourceBinding.summary.source_identity?.cron_jobid_counter','');
+  assert.equal(sha(source),'7c7cff9354850ab6e02e2fcbff4c0d162ff79f93f9724e7d60731b955b8dc5aa');
+ }
+ if(name==='.github/workflows/production-backup-migration-rehearsal.yml'){
+  const cleanup=readFileSync(new URL('./fixtures/rehearsal-plaintext-cleanup-source-inverse.json',import.meta.url),'utf8');
+  assert.equal(sha(cleanup),'221f7da25c689078b24b8473f89259386b3a02f20671118f2647f7434c21f9d2');
+  source=reverseExactFile(JSON.parse(cleanup),source);
+ }
  const vmRaw=readFileSync(new URL('../release/installed-source/current429-secondary-drive-vm-inverse.json',import.meta.url),'utf8');
  assert.equal(sha(vmRaw),'700d5ece93cec0735ae10e34f5f71ec92310328f2977c24f3f8dc50189dda841');
  const vm=JSON.parse(vmRaw);

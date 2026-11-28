@@ -1,6 +1,10 @@
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {EventEmitter} from 'node:events';
+import {prepareOriginalMigrationReceipt} from './original-release-migration-commit.mjs';
 import assert from 'node:assert/strict';
 import {assertCurrent429ForwardMetadata,current429,readCurrent429Plan,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';
 import {assertCurrent429CatalogDelta} from './current429-forward-readback.mjs';
@@ -8,7 +12,7 @@ import {verifyCurrent429Result} from './verify-current429-rehearsal.mjs';
 import {parseRehearsalScratchCapacity} from './run-private-backup-only-rehearsal.mjs';
 import {privateScratchVolumeName,assertPrivateScratchMount} from './run-official-local-storage-rehearsal.mjs';
 import {restoreCurrent429ProofBudgets,summarizeCurrentWeekCoverage} from './current428-rollback-target.mjs';
-import {beginCurrent429ApplyTransaction,releaseCurrent429ApplicationLocks,verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
+import {commitPreparedCurrent429,beginCurrent429ApplyTransaction,releaseCurrent429ApplicationLocks,verifySignedCurrent429Receipt} from './apply-current429-forward-plan.mjs';
 import {stableJson,signBinding,releaseMigrationRehearsalAttestationBinding} from './disaster-recovery-crypto.mjs';
 import {compileCurrent429RecurringReceiptSource,readVerifiedCurrent429RecurringReceiptSource,recurringReceiptIdentity} from './immutable-current429-recurring-receipt-source.mjs';
 import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
@@ -219,4 +223,30 @@ test('signing requires the successful scoped result, checked catalog and verifie
     mutate(changed);
     assert.throws(()=>verify(changed));
   }
+});
+
+test('lost 429 COMMIT acknowledges only an independent read of its original transaction', async t=>{
+ const attempt={schema:'custodial.current429-original-migration-commit.v1',postgres_transaction_id:'490',retry_safe:false};
+ const directory=mkdtempSync(join(tmpdir(),'custodial-429-commit-'));
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ prepareOriginalMigrationReceipt(attempt,directory);
+ const db=new EventEmitter(),submissions=[];
+ db.query=sql=>{submissions.push(sql);queueMicrotask(()=>db.emit('error',new Error('lost receipt')));return new Promise(()=>{});};
+ db.end=async()=>{};
+ let verified=false;
+ const observer={connect:async()=>{},end:async()=>{},query:async(sql,params)=>{
+   assert.ok(verified);assert.match(sql,/pg_xact_status/);assert.deepEqual(params,['490']);
+   return {rowCount:1,rows:[{status:'committed'}]};
+ }};
+ const result=await commitPreparedCurrent429({db,attempt,directory,createObserver:()=>observer,
+   assertIdentity:async(client,options)=>{assert.equal(client,observer);assert.equal(options.migrationAuthority,true);verified=true;}});
+ assert.deepEqual(submissions,['commit']);
+ assert.deepEqual(result,{acknowledged:false,readback:'COMMITTED'});
+ const saved=JSON.parse(readFileSync(join(directory,'current429-production-migration-commit-unknown.json')));
+ assert.equal(saved.original_transaction_readback,'COMMITTED');assert.equal(saved.retry_safe,false);
+});
+
+test('an acknowledged 429 COMMIT does not open an observer',async()=>{
+ const db={query:async(sql)=>{assert.equal(sql,'commit');return {command:'COMMIT'};}};
+ assert.deepEqual(await commitPreparedCurrent429({db,createObserver:()=>assert.fail('unexpected observer')}),{acknowledged:true,readback:null});
 });

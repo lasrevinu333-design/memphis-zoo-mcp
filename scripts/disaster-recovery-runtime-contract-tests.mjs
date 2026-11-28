@@ -2623,11 +2623,14 @@ if(process.argv.includes('--immutable-unknown-commit-source-only')||process.argv
   const run=async(name,body)=>{if(handoffOnly!==name.startsWith('ORIGINAL_STATUS_HANDOFF_NEW '))return;if(selected&&selected!==name)return;await body();cases.push(name);console.log(JSON.stringify({case:name,status:'PASS_SOURCE_RECORDING_ONLY'}));};
   try{
     const applyText=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
-    const start=applyText.lastIndexOf('\n} catch (error) {')+1,finallyStart=applyText.indexOf('\n} finally {',start),end=applyText.indexOf('\n}',finallyStart+'\n} finally {'.length)+2;
-    assert.ok(start>0&&finallyStart>start&&end>finallyStart,'Exact outer CLI catch/finally required');
+    const classifier=applyText.indexOf('  const outcomeUnknown = error?.outcome');
+    const start=applyText.lastIndexOf('\n} catch (error) {',classifier)+1;
+    const marker='\n  throw error;\n}';
+    const end=applyText.indexOf(marker,classifier)+marker.length;
+    assert.ok(start>0&&end>classifier,'Exact original DATA outcome classifier required');
     const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
     const settle=new AsyncFunction('originalError','prepared','restoreId','generation','archiveDigest','projectRef','restorePhase','restoreTable','mutationFenceHeld','setControl','recordEvent','db','console',
-      'try {throw originalError;\n'+applyText.slice(start,end));
+      'let freshFailureOutput; const freshPrivateDatabase=false,ordinaryDataCommitAcknowledged=false,tracePrivateRestore=()=>{}; try {throw originalError;\n'+applyText.slice(start,end));
     const original={restoreId:'11111111-2222-4333-8444-555555555555',generation:7,archiveDigest:'a'.repeat(64)};
     const invoke=async(error,prepared=true)=>{
       const writes=[],cleanup=[],logs=[];
@@ -2637,8 +2640,7 @@ if(process.argv.includes('--immutable-unknown-commit-source-only')||process.argv
         async(...args)=>{writes.push({control:args});},async(...args)=>{writes.push({event:args});},db,{error:line=>logs.push(JSON.parse(line))});}
       catch(failure){thrown=failure;}
       assert.equal(thrown,error,'Original error must survive catch/finally');assert.equal(logs.length,1);
-      assert.equal(cleanup.length,3);assert.ok(cleanup[0].sql.includes('memphis-zoo-production-restore'));
-      assert.ok(cleanup[1].sql.includes('memphis-zoo-application-mutation-fence'));assert.deepEqual(cleanup[2],{end:true});
+      assert.deepEqual(cleanup, [], 'Original outcome projection performs no SQL or connection disposal');
       return {writes,cleanup,log:logs[0]};
     };
     await run('UNKNOWN_COMMIT_NEW unknown prepared and unprepared preserve original identity without failure writes',async()=>{
@@ -2695,7 +2697,7 @@ if(process.argv.includes('--immutable-unknown-commit-source-only')||process.argv
           async()=>assert.fail('No failure-state write'),async()=>assert.fail('No failure event'),
           {query:async()=>cleanup.push('unlock'),end:async()=>cleanup.push('end')},{error:line=>logs.push(JSON.parse(line))}),e=>e===error);
         assert.equal(logs.length,1);assert.equal(Object.hasOwn(logs[0],'original_status_request'),false);
-        assert.deepEqual(cleanup,['unlock','unlock','end']);
+        assert.deepEqual(cleanup,[],'Original status projection performs no SQL');
       }
       for(const generation of ['7','9223372036854775807']){
         const logs=[],error=Object.assign(new Error('SYNTHETIC_UNKNOWN'),{code:'IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN',outcome:'UNKNOWN',retry_safe:false});
@@ -2729,7 +2731,7 @@ if(process.argv.includes('--immutable-unknown-commit-source-only')||process.argv
     assert.equal(typeof guard,'function','Actual sealed retry guard required');
     const issuerText=readFileSync(new URL('./create-production-restore-intent.mjs',import.meta.url),'utf8');
     const allowedRow=()=>({control_count:1,matching_control_count:1,manifest_count:1,matching_manifest_count:1,event_count:1,
-      failure_recorded:true,conflicting_events:false,unresolved_events:false,private_data_verified:false,contradictory_evidence:false});
+      failure_recorded:true,conflicting_events:false,unresolved_events:false,data_verified:false,contradictory_evidence:false});
     const denied=error=>error.code==='RESTORE_RETRY_RECONCILIATION_REQUIRED'&&error.outcome==='UNKNOWN'&&error.retry_safe===false;
     const port=(reply=()=>({rowCount:1,rows:[allowedRow()]}))=>{const calls=[];return {calls,db:{query:async(sql,args)=>{
       calls.push({sql,args});return reply(sql,args);
@@ -2739,21 +2741,21 @@ if(process.argv.includes('--immutable-unknown-commit-source-only')||process.argv
     const readOnly=({calls})=>{assert.equal(calls.length,1);const {sql,args}=calls[0];
       assert.ok(/^\s*with original_control as/.test(sql),'One fixed history query only');
       assert.deepEqual(args,[original.restoreId,'7']);assert.ok(!/\b(insert|update|delete|truncate|grant|revoke|set\s+role)\b/i.test(sql));};
-    await run('UNKNOWN_COMMIT_NEW unknown and committed-private history flags refuse without any write',async()=>{
-      for(const flag of ['unresolved_events','private_data_verified']){
+    await run('UNKNOWN_COMMIT_NEW unknown and committed DATA history flags refuse without any write',async()=>{
+      for(const flag of ['unresolved_events','data_verified']){
         const x=port(()=>({rowCount:1,rows:[{...allowedRow(),[flag]:true}]}));
         await assert.rejects(()=>guard(x.db,{restoreId:original.restoreId,generation:'7'}),denied);readOnly(x);
         const sql=x.calls[0].sql;
         assert.ok(sql.includes("outcome='UNKNOWN' or evidence_json->>'outcome'='UNKNOWN'"));
         assert.ok(sql.includes("evidence_json->'retry_safe'='false'::jsonb"));
-        assert.ok(sql.includes("database_verified=true and database_evidence ? 'original_data_import'"));
+        assert.ok(sql.includes("where database_verified=true) data_verified"));
         assert.ok(!/\blimit\b/i.test(sql),'Later/last events cannot hide the earlier history in this fixed query');
       }
     });
     await run('UNKNOWN_COMMIT_NEW missing foreign contradictory malformed and unavailable history all refuse',async()=>{
       for(const change of [{control_count:0},{control_count:2},{matching_control_count:0},{manifest_count:0},{matching_manifest_count:0},
         {event_count:0},{failure_recorded:false},{conflicting_events:true},{contradictory_evidence:true},
-        {control_count:'1'},{unresolved_events:'false'},{private_data_verified:null},{extra:false}]){
+        {control_count:'1'},{unresolved_events:'false'},{data_verified:null},{extra:false}]){
         const x=port(()=>({rowCount:1,rows:[{...allowedRow(),...change}]}));
         await assert.rejects(()=>guard(x.db,{restoreId:original.restoreId,generation:7}),denied);readOnly(x);
       }
@@ -2793,7 +2795,7 @@ if(process.argv.includes('--immutable-unknown-commit-source-only')||process.argv
       assert.ok(issuerText.indexOf('await refuseUnreconciledImmutableRetry')<issuerText.indexOf('signature: signBinding('));
     });
     await run('UNKNOWN_COMMIT_NEW private unsupported hold remains before client creation and connection',async()=>{
-      const hold=applyText.indexOf('if (privateImportBlocker !== null) {'),client=applyText.indexOf('const db = new Client('),connect=applyText.indexOf('await db.connect();',client);
+      const hold=applyText.indexOf('if (privateImportBlocker !== null && !freshPrivateDatabase) {'),client=applyText.indexOf('const db = new Client('),connect=applyText.indexOf('await db.connect();',client);
       assert.ok(hold>=0&&client>hold&&connect>client);
       const end=applyText.indexOf('\n}',hold);assert.ok(end>hold);
       assert.ok(applyText.slice(hold,end).includes('failure.code = privateImportBlocker;'));

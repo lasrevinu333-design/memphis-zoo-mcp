@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {readVerifiedArchiveSourceBinding} from './disaster-recovery-archive.mjs';
+import {projectDeferredOriginalIndex} from './immutable-current-live-data-source.mjs';
 import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
 
 export const current429BackupDigest='f305655a56e2538b41a21293f76750c752ec063196cac452ad11d9fe9865c489';
@@ -66,14 +67,20 @@ export function compileCurrent429RecurringReceiptSource() {
     identity:recipe.identity,definition_sha256:recipe.afterHash,security_definer:true,registry_identity:null,...metadata,
   });
   const tableCheck="'public.weekly_schedule_lunch_documents'::regclass)";
-  assert.equal(last.sql.split(tableCheck).length,2);
-  const matcherSql=last.sql.replace(tableCheck,()=>`${tableCheck.slice(0,-1)},'${qualifiedTable}'::regclass)`);
-  const installSql=appendProfile(matcherSql,'$current_original_guard_profiles$',{
-    identity:recipe.identity,install_before:before,install_before_body_sha256:recipe.beforeBodyHash,after,
-    after_body_sha256:recipe.afterBodyHash,security_definer:true,triggers:[metadata],
-  });
+  function installRecurring(sql) {
+    assert.equal(sql.split(tableCheck).length,2);
+    const matcher=sql.replace(tableCheck,()=>`${tableCheck.slice(0,-1)},'${qualifiedTable}'::regclass)`);
+    return appendProfile(matcher,'$current_original_guard_profiles$',{
+      identity:recipe.identity,install_before:before,install_before_body_sha256:recipe.beforeBodyHash,after,
+      after_body_sha256:recipe.afterBodyHash,security_definer:true,triggers:[metadata],
+    });
+  }
+  const historical=projectDeferredOriginalIndex({statements:[last]},true);
+  assert.ok(historical,'Exact indexed deferred-original predecessor required.');
+  assert.equal(sha(installRecurring(historical.statements[0].sql)),'01e7514e605d952ca4a42040943829e682351431234a17fba3d980af35985450');
+  const installSql=installRecurring(last.sql);
   assert.equal(sha(guardSql),'1cc900f72db4733af64ac51c9d0a83dbed04b5625d3575e37155ac3d80904806');
-  assert.equal(sha(installSql),'01e7514e605d952ca4a42040943829e682351431234a17fba3d980af35985450');
+  assert.equal(sha(installSql),'9d510a522289e899f83bad2948da6392cad659704034d712348b3e6b3d4f8460');
   statements[0]=Object.freeze({...first,sql:guardSql,sourceSha256:sha(guardSql)});
   statements[statements.length-1]=Object.freeze({...last,sql:installSql,sourceSha256:sha(installSql)});
   const assertCurrent=function() {

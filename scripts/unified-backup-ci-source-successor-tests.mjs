@@ -1,3 +1,4 @@
+import {withRehearsalContext} from './fixtures/rehearsal-shell-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -27,13 +28,25 @@ for(const row of document.workflows)test('complete genuine workflow predecessor 
  }
 });
 test('current rehearsal retains authenticated dependency probe and original private cleanup ownership',()=>{
- const source=readFileSync(new URL('.github/workflows/production-backup-migration-rehearsal.yml',root),'utf8');
+ const source=withRehearsalContext(readFileSync(new URL('.github/workflows/production-backup-migration-rehearsal.yml',root),'utf8'));
  assert.ok(source.includes('"$auth_dir/dependency-manager-authorization.header"'));
  const start=source.indexOf('          cleanup() {'),stop=source.indexOf('          trap cleanup EXIT',start);assert.ok(start>0&&stop>start);
- const cleanup=source.slice(start,stop),early='if test "${private_route_active:-false}" = true; then return "$status"; fi';
+ const cleanup=source.slice(start,stop),early='if test "${private_route_active:-false}" = true; then\n              trap - EXIT\n              exit "$status"\n            fi';
  assert.equal(cleanup.split(early).length,2);assert.ok(cleanup.indexOf(early)<cleanup.indexOf('for owned_pid'));
  assert.ok(cleanup.includes('rm -rf -- "$auth_dir"'));
  for(const mutant of [source.replace(early,''),source.replace('"$auth_dir/dependency-manager-authorization.header"','')])
   assert.equal(restoreUnifiedBackupWorkflow(mutant,'production-backup-migration-rehearsal.yml'),mutant);
  assert.equal(verifyUnifiedBackupCiInputs(root).release_admission,false);
+});
+
+test('the hosted rehearsal sources the reviewed shell in the same execution context', () => {
+  const name = 'production-backup-migration-rehearsal.yml';
+  const actual = readFileSync(new URL('.github/workflows/' + name, root), 'utf8');
+  const line = '          source scripts/prepare-backup-rehearsal-context.sh';
+  assert.equal(actual.split(line).length, 2);
+  assert.equal(sha(withRehearsalContext(actual)), '84ac722914db32f2631fb8dbe1f441a23ac0e9a48a8a6d284249710a13c20485');
+  const changed = actual.replace(line, '          bash scripts/prepare-backup-rehearsal-context.sh');
+  assert.equal(withRehearsalContext(changed), changed);
+  const reviewed = document.workflows.find(row => row.name === name);
+  assert.notEqual(sha(restoreUnifiedBackupWorkflow(changed, name)), reviewed.prior_sha256);
 });

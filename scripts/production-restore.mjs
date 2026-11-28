@@ -787,6 +787,7 @@ let restoreSuccessOutput;
 const restoreCleanupErrors = [];
 let freshCommitNeedsObservation = false;
 let freshDatabaseCommitAcknowledged = false;
+let ordinaryDataCommitAcknowledged = false;
 let freshAuthorityCommitInvoked = false, freshAuthorityCommitAcknowledged = false;
 let freshAuthorityOriginalRequest, freshAuthorityCommitNeedsObservation = false;
 let freshDataReadbackDisposition;
@@ -1765,6 +1766,7 @@ try {
     requireOrdinaryRestoreIntentFresh();
     dataCommitAttempted = true;
     await db.query("commit");
+    ordinaryDataCommitAcknowledged = !nativeTextDatabase && immutablePrivateDataEvidence === null;
   } catch (error) {
     await db.query("rollback").catch(() => {});
     if (dataCommitAttempted) {
@@ -1932,6 +1934,12 @@ try {
     : error instanceof Error ? error.message : String(error), ...uncertainty,
     ...(freshPrivateDatabase ? {database_only:true,complete_restore:false,
       retry_allowed:false,rerun_import_allowed:false,resume_allowed:false} : {}) };
+  if (!freshPrivateDatabase && ordinaryDataCommitAcknowledged) {
+    failureOutput.ordinary_data_commit = {
+      outcome: "COMMITTED", restore_id: restoreId, authority_generation: generation,
+      archive_digest: archiveDigest, target_project_ref: projectRef, rerun_import_allowed: false,
+    };
+  }
   if (freshPrivateDatabase) {
     delete failureOutput.original_status_request;
     delete failureOutput.authority_status_request;

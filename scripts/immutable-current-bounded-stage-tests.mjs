@@ -9,6 +9,7 @@ import {createInterface} from 'node:readline';
 import * as archiveApi from './disaster-recovery-archive.mjs';
 import {recordImmutableFreshFailure,recordImmutableFreshProgress} from './immutable-private-stage-diagnostic.mjs';
 import {currentBoundedOrdinaryStageSql,extendCurrentBoundedOrdinaryStage,removeCurrentBoundedOrdinaryStage,removeCurrentBoundedOrdinaryConsumerSource} from './immutable-current-bounded-stage-source.mjs';
+import {projectDeferredOriginalIndex} from './immutable-current-live-data-source.mjs';
 import {removeCurrentCatalogStability} from './immutable-current-catalog-stability-source.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const program=JSON.parse(readFileSync(new URL('../proposals/immutable-private-current-postgres-program.json',import.meta.url)));
@@ -62,7 +63,9 @@ test('whole fd53 predecessor and all51 guard definitions survive exactly',()=>{
  const bounded=removeCurrentCatalogStability(program);
  assert.deepEqual(extendCurrentBoundedOrdinaryStage(prior),bounded);assert.deepEqual(program.recipes,prior.recipes);
  assert.equal(program.statements.length,13);assert.equal(bounded.statements[0].sql.split(currentBoundedOrdinaryStageSql()).length,2);
- for(let i=1;i<13;i++)assert.deepEqual(program.statements[i],prior.statements[i]);
+ const beforeIndex=projectDeferredOriginalIndex(program,true);
+ assert.ok(beforeIndex);assert.deepEqual(projectDeferredOriginalIndex(beforeIndex,false),program);
+ for(let i=1;i<13;i++)assert.deepEqual(beforeIndex.statements[i],prior.statements[i]);
 });
 test('mutated predecessor or successor cannot pass the exact inverse',()=>{
  for(const mutate of [p=>p.recipes[0].after+=' ',p=>p.statements[0].sql=p.statements[0].sql.replace('after_last IS DISTINCT FROM prior_last+batch_count','false'),p=>p.statements[1].sql+=' ']){

@@ -1,0 +1,189 @@
+{
+  "package.json": {
+    "sha256": "e5a9a68367a1d81cdd0342be1c4db10b7b9d457f147fbf85726d4961c4a490ba",
+    "historical_sha256": "7f4bf9f7a56d68f231a57368c7447bd29dab89e0e963b16a70031295c756471f",
+    "edits": [
+      {
+        "at": 223,
+        "remove": 1,
+        "restore": []
+      }
+    ]
+  },
+  ".github/workflows/foundation-security-gate.yml": {
+    "sha256": "f7c4d2e3a34574fe3de588a98a2aa1286f5432ce35672822308b8779dd270770",
+    "historical_sha256": "7db6126493f9d7233907800900f54675e7d80a08dadfe95092f5974e06974726",
+    "edits": [
+      {
+        "at": 33,
+        "remove": 2,
+        "restore": [
+          "          7f4bf9f7a56d68f231a57368c7447bd29dab89e0e963b16a70031295c756471f  package.json\n",
+          "          3b9f30421adbcd7261d37756b533df03372403e633ed7073a9e7703c03ab4204  package-lock.json\n"
+        ]
+      }
+    ]
+  },
+  ".github/workflows/custodial-production-repair.yml": {
+    "sha256": "11ceed4359f23c705704c4e7892bc6bf09792ed1891e2b092a0e29a585048f0b",
+    "historical_sha256": "4ce0450fbf0026b97190f12359137827b60a9e0b748c4afed1170cee08c142b3",
+    "edits": [
+      {
+        "at": 36,
+        "remove": 2,
+        "restore": [
+          "          7f4bf9f7a56d68f231a57368c7447bd29dab89e0e963b16a70031295c756471f  package.json\n",
+          "          3b9f30421adbcd7261d37756b533df03372403e633ed7073a9e7703c03ab4204  package-lock.json\n"
+        ]
+      }
+    ]
+  },
+  ".github/workflows/production-backup-migration-rehearsal.yml": {
+    "sha256": "955f0a738adce02b5c342eb50e0c7a6cc808091c7f3a074a854c7aae57c2ceb0",
+    "historical_sha256": "27e22cc6d0e01ceff0952be23f399549e531c558c8c771a68bfeac4a1a2b5439",
+    "edits": [
+      {
+        "at": 24,
+        "remove": 35,
+        "restore": []
+      },
+      {
+        "at": 76,
+        "remove": 11,
+        "restore": [
+          "    runs-on: ubuntu-24.04\n",
+          "    timeout-minutes: 45\n"
+        ]
+      },
+      {
+        "at": 91,
+        "remove": 1,
+        "restore": []
+      },
+      {
+        "at": 100,
+        "remove": 3,
+        "restore": [
+          "          node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-current-restore-guard-cohort-tests.mjs scripts/immutable-current-cyclic-cohort-tests.mjs scripts/immutable-postgres-acl-qualification-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs\n"
+        ]
+      },
+      {
+        "at": 110,
+        "remove": 9,
+        "restore": []
+      },
+      {
+        "at": 131,
+        "remove": 5,
+        "restore": []
+      },
+      {
+        "at": 142,
+        "remove": 4,
+        "restore": [
+          "          REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET: ${{ secrets.CUSTODIAL_BACKEND_PROOF_SECRET }}\n",
+          "          REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET: ${{ secrets.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET }}\n",
+          "          REHEARSAL_DEVICE_CREDENTIAL_SECRET: ${{ secrets.DEVICE_CREDENTIAL_SECRET }}\n",
+          "          REHEARSAL_OPS_MANAGER_SESSION_SECRET: ${{ secrets.OPS_MANAGER_SESSION_SECRET }}\n"
+        ]
+      },
+      {
+        "at": 149,
+        "remove": 1,
+        "restore": []
+      },
+      {
+        "at": 155,
+        "remove": 6,
+        "restore": []
+      },
+      {
+        "at": 162,
+        "remove": 51,
+        "restore": [
+          "          test -n \"$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET\"\n",
+          "          test -n \"$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET\"\n",
+          "          test -n \"$REHEARSAL_DEVICE_CREDENTIAL_SECRET\"\n",
+          "          test -n \"$REHEARSAL_OPS_MANAGER_SESSION_SECRET\"\n"
+        ]
+      },
+      {
+        "at": 218,
+        "remove": 1,
+        "restore": [
+          "          backup_dir=\"${RUNNER_TEMP}/production-backup\"\n",
+          "          receipt=\"${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl\"\n",
+          "          postgres_log=\"${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log\"\n"
+        ]
+      },
+      {
+        "at": 221,
+        "remove": 25,
+        "restore": [
+          "            if test \"${private_route_active:-false}\" = true; then return \"$status\"; fi\n"
+        ]
+      },
+      {
+        "at": 258,
+        "remove": 2,
+        "restore": [
+          "            return \"$status\"\n"
+        ]
+      },
+      {
+        "at": 262,
+        "remove": 13,
+        "restore": []
+      },
+      {
+        "at": 276,
+        "remove": 4,
+        "restore": [
+          "          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in \"${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc\" -out \"${RUNNER_TEMP}/memphis-zoo-backup.tar.gz\" -pass env:BACKUP_ENCRYPTION_PASSPHRASE\n",
+          "          python3 scripts/extract-rehearsal-archive.py \"$RUNNER_TEMP/memphis-zoo-backup.tar.gz\" \"$backup_dir\"\n"
+        ]
+      },
+      {
+        "at": 293,
+        "remove": 1,
+        "restore": []
+      },
+      {
+        "at": 453,
+        "remove": 1,
+        "restore": [
+          "        if: inputs.rehearsal_scope == 'full_candidate'\n"
+        ]
+      },
+      {
+        "at": 455,
+        "remove": 1,
+        "restore": []
+      },
+      {
+        "at": 459,
+        "remove": 5,
+        "restore": [
+          "        run: npm run --silent release:migrations:attest-rehearsal > \"${RUNNER_TEMP}/production-backup-migration-rehearsal-attestation.json\"\n"
+        ]
+      },
+      {
+        "at": 467,
+        "remove": 1,
+        "restore": [
+          "          name: production-backup-migration-rehearsal-${{ github.run_id }}\n"
+        ]
+      },
+      {
+        "at": 471,
+        "remove": 1,
+        "restore": []
+      },
+      {
+        "at": 487,
+        "remove": 84,
+        "restore": []
+      }
+    ]
+  }
+}

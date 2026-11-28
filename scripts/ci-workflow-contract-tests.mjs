@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import {restoreUnifiedBackupWorkflow,verifyUnifiedBackupCiInputs,currentUnifiedPackageRegressionView} from './fixtures/unified-backup-ci-source-successor.mjs';
+import {withRehearsalContext} from './fixtures/rehearsal-shell-source.mjs';
+import {historicalInput,restoreUnifiedBackupWorkflow,verifyUnifiedBackupCiInputs,currentUnifiedPackageRegressionView} from './fixtures/unified-backup-ci-source-successor.mjs';
 import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
 import {verifyCurrentFoundationSource,currentFoundationReviewedRegressionView,restoreCurrentRepairWorkflowProof,restoreCurrentBuild52WorkflowProof} from './fixtures/current-foundation-source-successor.mjs';
 import {verifyFreshCurrentOwningWiring} from './current-system-fresh-owning-wiring.mjs';
@@ -1076,7 +1077,8 @@ assert.match(catalogReadOnlySource,/begin isolation level repeatable read read o
 assert.match(catalogReadOnlySource,/rejectUnauthorized:true/,"catalog preflight must retain TLS verification");
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
-const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+const productionBackupWorkflow = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+const productionBackupRehearsal = withRehearsalContext(productionBackupWorkflow);
 // This length reader is admitted only for these exact reviewed input bodies,
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
@@ -1091,7 +1093,10 @@ assert.equal(productionBackupRehearsal.split(cohortTestArgument).length, 2,
 assert.equal(createHash("sha256").update(reviewedBackupRehearsal.replace(cohortTestArgument, ""), "utf8").digest("hex"),
   "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
   "the complete reviewed workflow predecessor must survive the one source-test addition");
-assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
+assert.equal(createHash("sha256").update(productionBackupRehearsal).digest("hex"),
+  "84ac722914db32f2631fb8dbe1f441a23ac0e9a48a8a6d284249710a13c20485",
+  "reconstruct the complete reviewed shell before it was split out of the YAML");
+assert.equal(createHash("sha256").update(historicalInput(".github/workflows/production-backup-migration-rehearsal.yml", productionBackupRehearsal)).digest("hex"),
   "27e22cc6d0e01ceff0952be23f399549e531c558c8c771a68bfeac4a1a2b5439",
   "rehearsal length measurement requires the exact Main F08 caller candidate workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
@@ -1341,7 +1346,7 @@ const isolatedRehearsalBackendDependencies = readFileSync(resolve(root, "scripts
 const rehearsalJsonEndpointWaiter = readFileSync(resolve(root, "scripts/wait-rehearsal-json-endpoint.sh"), "utf8");
 const productionSourceRoleCatalog = readFileSync(resolve(root, "supabase/canonical/production-source-role-catalog.sql"), "utf8");
 const emptyDatabaseRebuild = readFileSync(resolve(root, "scripts/empty-database-rebuild-check.mjs"), "utf8");
-const productionBackupRehearsalJob = workflowJobs(productionBackupRehearsal).find(({ name }) => name === "rehearse");
+const productionBackupRehearsalJob = workflowJobs(productionBackupWorkflow).find(({ name }) => name === "rehearse");
 assert.ok(productionBackupRehearsalJob, "the production-backup rehearsal must retain its rehearse job");
 const maximumRehearsalRunCharacters = Math.max(...canonicalRunScalarsForLength(productionBackupRehearsalJob.source)
   .map((source) => source.length));

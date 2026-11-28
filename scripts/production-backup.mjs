@@ -10,13 +10,12 @@ import {
   mkdirSync,
   lstatSync,
   readFileSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import {createPrivateBackupDirectory,productionBackupConnection,readBackupFiles,requireOriginalStorageResponse} from "./production-backup-integrity.mjs";
-import { Readable } from "node:stream";
-import { finished, pipeline } from "node:stream/promises";
+import {createPrivateBackupDirectory,productionBackupConnection,readBackupFiles} from "./production-backup-integrity.mjs";
+import { captureBackupStorageObject } from "./backup-storage-object.mjs";
+import { finished } from "node:stream/promises";
 import { promisify, types } from "node:util";
 import pg from "pg";
 import { captureCronSequenceCounter } from "./disaster-recovery-cron.mjs";
@@ -544,37 +543,7 @@ for (const original of storageObjects) {
   const object = original.row;
   const file = storageObjectArchivePath(object.bucket_id, object.name);
   const outputPath = join(backupDir, file);
-  const segments = String(object.name).split("/");
-  if (segments.some(segment => segment === "." || segment === "..")) throw new Error("Storage object path cannot be encoded unambiguously.");
-  const encodedName = segments.map(encodeURIComponent).join("/");
-  const response = await fetch(`https://${projectRef}.supabase.co/storage/v1/object/authenticated/${encodeURIComponent(object.bucket_id)}/${encodedName}`, {
-    redirect: "error",
-    signal: AbortSignal.timeout(60_000),
-    headers: { apikey: secret, Authorization: `Bearer ${secret}` },
-  });
-  let expectedBytes;
-  try {
-    expectedBytes = requireOriginalStorageResponse(object, response);
-  } catch (error) {
-    await response.body?.cancel().catch(() => {});
-    throw error;
-  }
-  await pipeline(
-    Readable.fromWeb(response.body),
-    async function* boundStorageBytes(chunks) {
-      let written = 0;
-      for await (const chunk of chunks) {
-        written += chunk.length;
-        if (written > expectedBytes) throw new Error("Downloaded Storage bytes exceed the original object size.");
-        yield chunk;
-      }
-      if (written !== expectedBytes) throw new Error("Downloaded Storage bytes differ from the original object size.");
-    },
-    createWriteStream(outputPath, { flags: "wx", mode: 0o600 }),
-  );
-  chmodSync(outputPath, 0o600);
-  const capturedBytes = statSync(outputPath).size;
-  if (capturedBytes !== expectedBytes) throw new Error("Downloaded Storage bytes differ from the original object size.");
+  const capturedBytes = await captureBackupStorageObject({ projectRef, object, secret, outputPath });
   // Re-enter the original native text profile after the capture COMMIT.
   // SET LOCAL was intentionally transaction-only; session defaults may differ.
   // Mark the BEGIN attempt before its await so the existing outer finally
