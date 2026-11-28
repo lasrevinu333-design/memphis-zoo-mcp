@@ -1094,8 +1094,8 @@ assert.equal(createHash("sha256").update(reviewedBackupRehearsal.replace(cohortT
   "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
   "the complete reviewed workflow predecessor must survive the one source-test addition");
 assert.equal(createHash("sha256").update(productionBackupRehearsal).digest("hex"),
-  "84ac722914db32f2631fb8dbe1f441a23ac0e9a48a8a6d284249710a13c20485",
-  "reconstruct the complete reviewed shell before it was split out of the YAML");
+  "2c766a3d081399c9fd53004838f083c9ed987663fc7e050f44d332dc19639d47",
+  "expand the complete current shell including portable pagination");
 assert.equal(createHash("sha256").update(historicalInput(".github/workflows/production-backup-migration-rehearsal.yml", productionBackupRehearsal)).digest("hex"),
   "27e22cc6d0e01ceff0952be23f399549e531c558c8c771a68bfeac4a1a2b5439",
   "rehearsal length measurement requires the exact Main F08 caller candidate workflow");

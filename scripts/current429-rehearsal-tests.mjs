@@ -4,6 +4,7 @@ import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {EventEmitter} from 'node:events';
+import {spawnSync} from 'node:child_process';
 import {prepareOriginalMigrationReceipt} from './original-release-migration-commit.mjs';
 import assert from 'node:assert/strict';
 import {assertCurrent429ForwardMetadata,current429,readCurrent429Plan,readVerifiedCurrent429ForwardQualificationSource} from './current429-forward-qualification-source.mjs';
@@ -24,6 +25,38 @@ test('exact source plan binds four migrations to baseline 429',()=>{
   assert.equal(plan.pending.length,4);
   assert.ok(plan.pending.every(item=>item.version>current429.sourceHead&&!/^\s*begin;/i.test(item.body)));
   assert.throws(()=>readVerifiedCurrent429ForwardQualificationSource({...current429}));
+});
+
+test('backup lookup requires exactly one unexpired artifact across all GitHub CLI pages', () => {
+  const shell = readFileSync(new URL('./prepare-backup-rehearsal-context.sh', import.meta.url), 'utf8');
+  const lookup = shell.match(/^backup_artifact_id=.*?'\)"$/ms);
+  assert.ok(lookup, 'exercise the actual shell assignment');
+  const name = 'memphis-zoo-disaster-recovery-45645963579';
+  const live = {name, expired: false, id: 15039085011};
+  const expired = {...live, expired: true};
+  const other = {...live, name: 'backup-readback-receipt'};
+  const fakeCli = `gh() {
+    [[ "$#" = 3 && "$1" = api && "$2" = --paginate &&
+       "$3" = "repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID/artifacts?per_page=100" ]] || return 4
+    cat
+    return "$cli_status"
+  }`;
+  const select = (pages, cliStatus = 0) => spawnSync('bash', ['-eu', '-o', 'pipefail', '-c', [
+    fakeCli, 'art_name="$1"', 'cli_status="$2"', lookup[0], 'printf "%s" "$backup_artifact_id"'
+  ].join('\n'), 'lookup', name, String(cliStatus)], {
+    input: pages.map(artifacts => JSON.stringify({artifacts})).join('\n'),
+    env: {...process.env, BACKUP_RUN_ID: '45645963579', GITHUB_REPOSITORY: 'lasrevinu333-design/memphis-zoo-mcp'},
+    encoding: 'utf8'
+  });
+  for (const pages of [[[other], [expired, live]], [[live], [other]]]) {
+    const result = select(pages);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, String(live.id));
+  }
+  for (const pages of [[], [[other], [expired]], [[live], [live]], [[{...live, id: '123'}]]]) {
+    assert.notEqual(select(pages).status, 0);
+  }
+  assert.notEqual(select([[live]], 1).status, 0, 'incomplete pagination must fail');
 });
 
 test('backup 45645963579 admission checks the signed v2 migration head field',()=>{

@@ -44,7 +44,7 @@ test('the hosted rehearsal sources the reviewed shell in the same execution cont
   const actual = readFileSync(new URL('.github/workflows/' + name, root), 'utf8');
   const line = '          source scripts/prepare-backup-rehearsal-context.sh';
   assert.equal(actual.split(line).length, 2);
-  assert.equal(sha(withRehearsalContext(actual)), '84ac722914db32f2631fb8dbe1f441a23ac0e9a48a8a6d284249710a13c20485');
+  assert.equal(sha(withRehearsalContext(actual)), '2c766a3d081399c9fd53004838f083c9ed987663fc7e050f44d332dc19639d47');
   const changed = actual.replace(line, '          bash scripts/prepare-backup-rehearsal-context.sh');
   assert.equal(withRehearsalContext(changed), changed);
   const reviewed = document.workflows.find(row => row.name === name);

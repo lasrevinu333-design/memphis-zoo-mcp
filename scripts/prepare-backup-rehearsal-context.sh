@@ -8,8 +8,8 @@ backup_attempt="$(jq -er --arg id "$BACKUP_RUN_ID" --arg repo "$GITHUB_REPOSITOR
     .path == ".github/workflows/production-disaster-recovery-backup.yml") |
   .run_attempt | select(type == "number" and . >= 1)' <<<"$backup_run")"
 art_name="memphis-zoo-disaster-recovery-$BACKUP_RUN_ID"
-backup_artifact_id="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID/artifacts?per_page=100" |
-  jq -er --arg name "$art_name" '
+backup_artifact_id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID/artifacts?per_page=100" |
+  jq -ser --arg name "$art_name" '
     [.[] | .artifacts[] | select(.name == $name and .expired == false)] |
     select(length == 1) | .[0].id | select(type == "number" and . >= 1)')"
 readback_dir="$(mktemp -d "${RUNNER_TEMP}/producer-backup-readback.XXXXXXXX")"
